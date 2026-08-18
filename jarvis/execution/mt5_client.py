@@ -312,6 +312,46 @@ class MT5Client:
 
         return TimeoutGuard.run_sync(_close, timeout_sec=5.0, default={"status": "FAILED", "reason": "Timeout"}, task_name=f"MT5_Close_{ticket}")
 
+    def modify_position(self, ticket: int, sl: float, tp: float) -> Dict[str, Any]:
+        """Modifies Stop Loss and Take Profit of an open MT5 position."""
+        if self.mode == "paper" or not MT5_AVAILABLE or not self.is_connected:
+            logger.info(f"[PAPER] Modified position #{ticket} -> SL: {sl}, TP: {tp}")
+            return {"status": "MODIFIED", "ticket": ticket, "sl": sl, "tp": tp}
+
+        def _modify():
+            with self._lock:
+                positions = mt5.positions_get(ticket=ticket)
+                if not positions or len(positions) == 0:
+                    return {"status": "FAILED", "reason": f"Position #{ticket} not found on MT5"}
+
+                p = positions[0]
+                symbol = p.symbol
+                sym_info = mt5.symbol_info(symbol)
+                if not sym_info:
+                    return {"status": "FAILED", "reason": f"Symbol info unavailable for {symbol}"}
+
+                digits = sym_info.digits
+                request = {
+                    "action": getattr(mt5, "TRADE_ACTION_SLTP", 6),
+                    "position": ticket,
+                    "symbol": symbol,
+                    "sl": round(float(sl), digits),
+                    "tp": round(float(tp), digits),
+                    "magic": self.magic_number,
+                    "comment": "JARVIS_SLTP_MODIFY"
+                }
+
+                result = mt5.order_send(request)
+                if result is None or result.retcode not in [getattr(mt5, "TRADE_RETCODE_DONE", 10009), getattr(mt5, "TRADE_RETCODE_PLACED", 10008)]:
+                    err_msg = result.comment if result else str(mt5.last_error())
+                    logger.error(f"MT5 SL/TP Modify Failed for #{ticket}: {err_msg}")
+                    return {"status": "FAILED", "reason": err_msg}
+
+                logger.info(f"⚡ LIVE SL/TP MODIFIED: Ticket=#{ticket} {symbol} -> New SL={round(float(sl), digits)}, TP={round(float(tp), digits)}")
+                return {"status": "MODIFIED", "ticket": ticket, "sl": round(float(sl), digits), "tp": round(float(tp), digits)}
+
+        return TimeoutGuard.run_sync(_modify, timeout_sec=5.0, default={"status": "FAILED", "reason": "Timeout"}, task_name=f"MT5_Modify_{ticket}")
+
     def close_all_positions(self) -> List[Dict[str, Any]]:
         """Closes all currently open MT5 positions."""
         positions = self.get_open_positions()

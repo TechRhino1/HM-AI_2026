@@ -116,6 +116,19 @@ class JarvisOrchestrator:
         now_utc_hour = datetime.now(timezone.utc).hour
         is_asian_blackout = (1 <= now_utc_hour < 5)
 
+        # Active Open Position Trailing & Profit Lock Management
+        for pos in active_sym_positions:
+            try:
+                manage_res = self.order_manager.manage_position(pos, context)
+                if manage_res.get("modified"):
+                    self.mt5_client.modify_position(
+                        ticket=pos.ticket,
+                        sl=manage_res["new_sl"],
+                        tp=manage_res["new_tp"]
+                    )
+            except Exception as e:
+                logger.error(f"Error trailing position #{pos.ticket}: {e}", exc_info=True)
+
         if active_sym_positions and decision.decision == "EXECUTE":
             decision.decision = "WAIT"
             decision.execution_authorized = False
