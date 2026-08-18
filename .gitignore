@@ -39,8 +39,11 @@ env/
 # Local runtime data & logs
 logs/
 *.log
+*.db
+*.sqlite
 dashboard.log
 trades_log.db
+jarvis_trade_memory.db
 jarvis.lock
 system_diagnostics.json
 opportunities.json

@@ -1,0 +1,899 @@
+/* ==========================================================================
+   JARVIS AI 3.0 — Institutional Financial Trading Terminal CSS
+   Design System: Deep Dark Mode, Glassmorphism, Neon Telemetry, Mono Typography
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
+
+:root {
+    /* Color Palette */
+    --bg-base: #060910;
+    --bg-primary: #0a0e17;
+    --bg-surface: #0f172a;
+    --bg-panel: rgba(15, 23, 42, 0.75);
+    --bg-card: rgba(22, 32, 53, 0.7);
+    --bg-card-hover: rgba(30, 44, 70, 0.85);
+    --bg-accent-subtle: rgba(56, 189, 248, 0.08);
+
+    /* Borders & Glass */
+    --border-subtle: rgba(51, 65, 85, 0.45);
+    --border-bright: rgba(56, 189, 248, 0.35);
+    --border-glass: rgba(255, 255, 255, 0.08);
+    --glass-blur: blur(16px);
+    --card-radius: 6px;
+
+    /* Typography */
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Roboto Mono', 'SF Mono', Consolas, monospace;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-dim: #64748b;
+    --text-inverted: #020617;
+
+    /* High-Conviction Neon Accents */
+    --neon-bull: #00f59b;
+    --neon-bull-subtle: rgba(0, 245, 155, 0.12);
+    --neon-bull-glow: 0 0 14px rgba(0, 245, 155, 0.28);
+
+    --neon-bear: #ff3b5c;
+    --neon-bear-subtle: rgba(255, 59, 92, 0.12);
+    --neon-bear-glow: 0 0 14px rgba(255, 59, 92, 0.28);
+
+    --accent-cyan: #38bdf8;
+    --accent-cyan-subtle: rgba(56, 189, 248, 0.12);
+    --accent-cyan-glow: 0 0 14px rgba(56, 189, 248, 0.28);
+
+    --devil-amber: #f59e0b;
+    --devil-amber-subtle: rgba(245, 158, 11, 0.12);
+    --devil-crimson: #ef4444;
+    --devil-crimson-subtle: rgba(239, 68, 68, 0.15);
+    --devil-glow: 0 0 16px rgba(245, 158, 11, 0.22);
+
+    /* Transition & Depth */
+    --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-smooth: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    --panel-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
+}
+
+/* Reset & Global Scaffolding */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-base);
+    background-image: 
+        radial-gradient(circle at 50% 0%, rgba(14, 165, 233, 0.05) 0%, transparent 60%),
+        radial-gradient(circle at 100% 100%, rgba(0, 245, 155, 0.03) 0%, transparent 50%);
+    color: var(--text-primary);
+    font-family: var(--font-sans);
+    font-size: 12.5px;
+    line-height: 1.45;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Monospace Utilities */
+.mono-number {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(51, 65, 85, 0.6);
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.8);
+}
+
+/* ==========================================================================
+   Top Institutional HUD Header
+   ========================================================================== */
+header.terminal-hud {
+    background-color: var(--bg-surface);
+    backdrop-filter: var(--glass-blur);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 0 16px;
+    height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    z-index: 50;
+}
+
+.brand-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.brand-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+}
+
+.brand-icon {
+    width: 28px;
+    height: 28px;
+    background: linear-gradient(135deg, #0284c7, #00f59b);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 14px;
+    color: #000;
+    box-shadow: var(--accent-cyan-glow);
+}
+
+.brand-text {
+    font-family: var(--font-mono);
+    font-weight: 800;
+    font-size: 15px;
+    letter-spacing: 0.08em;
+    color: #ffffff;
+}
+
+.brand-text span {
+    color: var(--accent-cyan);
+}
+
+/* Badges */
+.badge {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.badge-live {
+    background: rgba(0, 245, 155, 0.12);
+    color: var(--neon-bull);
+    border: 1px solid rgba(0, 245, 155, 0.35);
+    box-shadow: var(--neon-bull-glow);
+}
+
+.badge-live .pulse-dot {
+    width: 6px;
+    height: 6px;
+    background-color: var(--neon-bull);
+    border-radius: 50%;
+    animation: pulse-glow 1.5s infinite;
+}
+
+.badge-mode {
+    background: rgba(30, 41, 59, 0.8);
+    color: var(--accent-cyan);
+    border: 1px solid var(--border-subtle);
+}
+
+.badge-safe {
+    background: var(--devil-amber-subtle);
+    color: var(--devil-amber);
+    border: 1px solid var(--devil-amber);
+}
+
+/* Header Telemetry Metrics */
+.hud-telemetry {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.hud-tile {
+    display: flex;
+    flex-direction: column;
+}
+
+.hud-tile-label {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.hud-tile-value {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.hud-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-terminal {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-terminal:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--accent-cyan);
+    color: #ffffff;
+}
+
+.btn-terminal.btn-warning {
+    background: var(--devil-amber-subtle);
+    border-color: var(--devil-amber);
+    color: var(--devil-amber);
+}
+
+.btn-terminal.btn-warning:hover {
+    background: rgba(245, 158, 11, 0.25);
+    box-shadow: var(--devil-glow);
+}
+
+/* ==========================================================================
+   Main Terminal Grid Workspace
+   ========================================================================== */
+.terminal-workspace {
+    display: grid;
+    grid-template-columns: 310px 1fr 370px;
+    grid-template-rows: 1fr 240px;
+    gap: 8px;
+    padding: 8px;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* Panel Containers */
+.terminal-panel {
+    background: var(--bg-panel);
+    backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--card-radius);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: var(--panel-shadow);
+    transition: border-color var(--transition-fast);
+}
+
+.terminal-panel:hover {
+    border-color: rgba(56, 189, 248, 0.25);
+}
+
+.panel-header {
+    background: rgba(22, 32, 53, 0.85);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+
+.panel-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.panel-title {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-secondary);
+}
+
+.panel-counter {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--accent-cyan);
+    background: var(--accent-cyan-subtle);
+    padding: 1px 6px;
+    border-radius: 10px;
+}
+
+.panel-content {
+    padding: 10px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+/* ==========================================================================
+   MODULE: Verified MT5 Account Details HUD
+   ========================================================================== */
+.account-hud-card {
+    background: rgba(10, 14, 23, 0.65);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 10px;
+    margin-bottom: 10px;
+    border-left: 3px solid var(--accent-cyan);
+}
+
+.account-hud-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(51, 65, 85, 0.4);
+    padding-bottom: 6px;
+    margin-bottom: 8px;
+}
+
+.account-name-tag {
+    font-weight: 700;
+    color: #ffffff;
+    font-size: 12px;
+}
+
+.account-leverage-tag {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 700;
+    color: var(--accent-cyan);
+    background: var(--accent-cyan-subtle);
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.account-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.account-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.account-item-lbl {
+    font-size: 9px;
+    font-weight: 500;
+    color: var(--text-dim);
+    text-transform: uppercase;
+}
+
+.account-item-val {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+/* ==========================================================================
+   MODULE B: Upcoming Trades & Scanner Radar
+   ========================================================================== */
+.scanner-radar-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.radar-opportunity-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 9px;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    position: relative;
+    overflow: hidden;
+}
+
+.radar-opportunity-card:hover,
+.radar-opportunity-card.active {
+    background: var(--bg-card-hover);
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.12);
+}
+
+.radar-opportunity-card.active::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 3px;
+    background: var(--accent-cyan);
+}
+
+.radar-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+}
+
+.radar-symbol {
+    font-family: var(--font-mono);
+    font-weight: 800;
+    font-size: 13px;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.radar-timeframe-tag {
+    font-size: 9.5px;
+    color: var(--text-dim);
+    background: rgba(0, 0, 0, 0.3);
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+
+.radar-action-pill {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 800;
+    padding: 2px 7px;
+    border-radius: 3px;
+    text-transform: uppercase;
+}
+
+.radar-action-buy {
+    background: var(--neon-bull-subtle);
+    color: var(--neon-bull);
+    border: 1px solid rgba(0, 245, 155, 0.3);
+}
+
+.radar-action-sell {
+    background: var(--neon-bear-subtle);
+    color: var(--neon-bear);
+    border: 1px solid rgba(255, 59, 92, 0.3);
+}
+
+.radar-action-wait {
+    background: var(--devil-amber-subtle);
+    color: var(--devil-amber);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.radar-meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+.radar-setup-name {
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.radar-status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 5px;
+    padding-top: 4px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.radar-status-indicator .status-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+}
+
+/* ==========================================================================
+   Central Chart Stage
+   ========================================================================== */
+.chart-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.chart-symbol-info {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+}
+
+.active-symbol-title {
+    font-family: var(--font-mono);
+    font-size: 15px;
+    font-weight: 800;
+    color: #ffffff;
+}
+
+.active-regime-pill {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: var(--accent-cyan-subtle);
+    color: var(--accent-cyan);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.chart-live-price {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--neon-bull);
+}
+
+.timeframe-selector {
+    display: flex;
+    gap: 3px;
+}
+
+.tf-btn {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.tf-btn:hover {
+    color: #ffffff;
+    border-color: var(--accent-cyan);
+}
+
+.tf-btn.active {
+    background: var(--accent-cyan);
+    color: #000000;
+    font-weight: 800;
+    border-color: var(--accent-cyan);
+}
+
+.chart-viewport {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    position: relative;
+    background: #080c14;
+    overflow: hidden;
+}
+
+#chart-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* ==========================================================================
+   MODULE C: The Devil's Advocate & Adversarial Risk Panel
+   ========================================================================== */
+.devil-panel {
+    border-color: rgba(245, 158, 11, 0.35);
+    background: radial-gradient(circle at 100% 0%, rgba(245, 158, 11, 0.06) 0%, rgba(15, 23, 42, 0.85) 60%);
+}
+
+.devil-panel:hover {
+    border-color: rgba(245, 158, 11, 0.55);
+}
+
+.devil-header-badge {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--devil-amber);
+    border: 1px solid var(--devil-amber);
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+.devil-gauges-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.devil-gauge-card {
+    background: rgba(10, 14, 23, 0.7);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: 6px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+}
+
+.gauge-lbl {
+    font-size: 9px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+}
+
+.gauge-val {
+    font-family: var(--font-mono);
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--devil-amber);
+    margin: 2px 0 4px 0;
+}
+
+.gauge-bar-track {
+    height: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.gauge-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #f59e0b, #ef4444);
+    border-radius: 2px;
+    transition: width var(--transition-smooth);
+}
+
+/* Invalidation "Change My Mind" Container */
+.invalidation-box {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px dashed rgba(239, 68, 68, 0.45);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+}
+
+.invalidation-box-title {
+    font-size: 9.5px;
+    font-weight: 800;
+    color: var(--neon-bear);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 4px;
+}
+
+.invalidation-box-content {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-primary);
+    line-height: 1.4;
+}
+
+/* Threat Vectors List */
+.threat-vector-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 10px;
+}
+
+.threat-item {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-left: 3px solid var(--devil-amber);
+    padding: 5px 8px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+.threat-item span.threat-bullet {
+    color: var(--devil-amber);
+    font-weight: 800;
+}
+
+/* Decision Quality Gate Section */
+.decision-gate-summary {
+    background: rgba(10, 14, 23, 0.6);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 8px;
+}
+
+.gate-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    padding: 2px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.gate-pass {
+    color: var(--neon-bull);
+    font-weight: 700;
+}
+
+.gate-fail {
+    color: var(--neon-bear);
+    font-weight: 700;
+}
+
+/* ==========================================================================
+   MODULE A: Active Trades (Live Positions HUD)
+   ========================================================================== */
+.positions-hud-container {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.positions-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-align: left;
+}
+
+.positions-table th {
+    background: rgba(22, 32, 53, 0.9);
+    color: var(--text-dim);
+    font-size: 9.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border-subtle);
+    white-space: nowrap;
+}
+
+.positions-table td {
+    padding: 8px;
+    border-bottom: 1px solid rgba(51, 65, 85, 0.25);
+    white-space: nowrap;
+}
+
+.positions-table tr:hover {
+    background: rgba(30, 44, 70, 0.4);
+}
+
+/* Position Proximity Progress Bar */
+.position-progress-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 120px;
+}
+
+.progress-track {
+    height: 5px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
+    position: relative;
+    overflow: hidden;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--neon-bear), #f59e0b, var(--neon-bull));
+    border-radius: 3px;
+    transition: width var(--transition-fast);
+}
+
+.progress-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 8.5px;
+    color: var(--text-dim);
+}
+
+/* Flash Animations on Number Update */
+@keyframes flash-green {
+    0% { background-color: rgba(0, 245, 155, 0.35); }
+    100% { background-color: transparent; }
+}
+
+@keyframes flash-red {
+    0% { background-color: rgba(255, 59, 92, 0.35); }
+    100% { background-color: transparent; }
+}
+
+@keyframes pulse-glow {
+    0% { transform: scale(0.95); opacity: 0.8; }
+    50% { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+.flash-up {
+    animation: flash-green 0.8s ease-out;
+}
+
+.flash-down {
+    animation: flash-red 0.8s ease-out;
+}
+
+/* ==========================================================================
+   AI Copilot Chat Dock
+   ========================================================================== */
+.copilot-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.copilot-messages {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-right: 4px;
+}
+
+.copilot-bubble {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 11.5px;
+    line-height: 1.45;
+}
+
+.copilot-bubble.user {
+    background: rgba(56, 189, 248, 0.12);
+    border-color: rgba(56, 189, 248, 0.35);
+    align-self: flex-end;
+    color: #ffffff;
+}
+
+.copilot-input-bar {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.copilot-input {
+    flex: 1;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-family: var(--font-sans);
+    font-size: 11.5px;
+    outline: none;
+    transition: border-color var(--transition-fast);
+}
+
+.copilot-input:focus {
+    border-color: var(--accent-cyan);
+}
