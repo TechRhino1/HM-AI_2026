@@ -258,6 +258,64 @@ class MT5Client:
 
         return TimeoutGuard.run_sync(_send, timeout_sec=5.0, default={"status": "FAILED", "reason": "Timeout"}, task_name=f"MT5_SendOrder_{symbol}")
 
+    def close_position(self, ticket: int) -> Dict[str, Any]:
+        """Closes a specific open MT5 position by ticket."""
+        if self.mode == "paper" or not MT5_AVAILABLE or not self.is_connected:
+            logger.info(f"[PAPER] Closed simulated position #{ticket}")
+            return {"status": "CLOSED", "ticket": ticket}
+
+        def _close():
+            with self._lock:
+                positions = mt5.positions_get(ticket=ticket)
+                if not positions or len(positions) == 0:
+                    return {"status": "FAILED", "reason": f"Position #{ticket} not found on MT5"}
+
+                p = positions[0]
+                symbol = p.symbol
+                tick = mt5.symbol_info_tick(symbol)
+                sym_info = mt5.symbol_info(symbol)
+                if not tick or not sym_info:
+                    return {"status": "FAILED", "reason": f"Tick info unavailable for {symbol}"}
+
+                # Opposite order type
+                is_buy = p.type == getattr(mt5, "POSITION_TYPE_BUY", 0)
+                order_type = getattr(mt5, "ORDER_TYPE_SELL", 1) if is_buy else getattr(mt5, "ORDER_TYPE_BUY", 0)
+                price = tick.bid if is_buy else tick.ask
+
+                request = {
+                    "action": getattr(mt5, "TRADE_ACTION_DEAL", 1),
+                    "position": ticket,
+                    "symbol": symbol,
+                    "volume": float(p.volume),
+                    "type": order_type,
+                    "price": round(price, sym_info.digits),
+                    "deviation": 50,
+                    "magic": self.magic_number,
+                    "comment": f"Close #{ticket}",
+                    "type_time": getattr(mt5, "ORDER_TIME_GTC", 0),
+                    "type_filling": getattr(mt5, "ORDER_FILLING_IOC", 1)
+                }
+
+                result = mt5.order_send(request)
+                if result is None or result.retcode != getattr(mt5, "TRADE_RETCODE_DONE", 10009):
+                    err_msg = result.comment if result else str(mt5.last_error())
+                    logger.error(f"MT5 Close Order Failed for #{ticket}: {err_msg}")
+                    return {"status": "FAILED", "reason": err_msg}
+
+                logger.info(f"LIVE POSITION CLOSED: Ticket=#{ticket} {symbol} @ {result.price}")
+                return {"status": "CLOSED", "ticket": ticket, "price": result.price}
+
+        return TimeoutGuard.run_sync(_close, timeout_sec=5.0, default={"status": "FAILED", "reason": "Timeout"}, task_name=f"MT5_Close_{ticket}")
+
+    def close_all_positions(self) -> List[Dict[str, Any]]:
+        """Closes all currently open MT5 positions."""
+        positions = self.get_open_positions()
+        results = []
+        for p in positions:
+            res = self.close_position(p.ticket)
+            results.append(res)
+        return results
+
     def shutdown(self):
         if MT5_AVAILABLE and mt5 and self.is_connected and self.mode != "paper":
             try:

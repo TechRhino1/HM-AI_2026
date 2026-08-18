@@ -82,13 +82,14 @@
          ========================================================================== -->
     <main class="terminal-workspace">
         
-        <!-- LEFT COLUMN: Verified Account Card & MODULE B (Scanner Radar) -->
+        <!-- LEFT COLUMN: Verified Account Card + Radar / News Switcher Tabs -->
         <aside class="terminal-panel" style="grid-row: 1 / 3;">
             <div class="panel-header">
-                <div class="panel-title-wrap">
-                    <span class="panel-title">Scanner Radar & Account</span>
+                <div class="tab-switcher">
+                    <button id="tab-btn-radar" class="tab-btn active" onclick="switchLeftTab('radar')">📡 Setups Radar</button>
+                    <button id="tab-btn-news" class="tab-btn" onclick="switchLeftTab('news')">📰 Macro News</button>
                 </div>
-                <span id="radar-count" class="panel-counter">5 Monitored</span>
+                <span id="left-panel-counter" class="panel-counter">5 Monitored</span>
             </div>
             <div class="panel-content">
                 <!-- Verified MT5 Account Card -->
@@ -100,7 +101,7 @@
                     <div class="account-grid">
                         <div class="account-item">
                             <span class="account-item-lbl">Broker</span>
-                            <span id="acc-company" class="account-item-val" style="font-size:11px;">XM Global</span>
+                            <span id="acc-company" class="account-item-val">XM Global</span>
                         </div>
                         <div class="account-item">
                             <span class="account-item-lbl">Account #</span>
@@ -116,31 +117,37 @@
                         </div>
                         <div class="account-item">
                             <span class="account-item-lbl">Floating PnL</span>
-                            <span id="acc-profit" class="account-item-val" style="color:var(--neon-bear);">-$0.44</span>
-                        </div>
-                        <div class="account-item">
-                            <span class="account-item-lbl">Margin Used</span>
-                            <span id="acc-margin" class="account-item-val">$3.71</span>
+                            <span id="acc-profit" class="account-item-val" style="color:var(--neon-bull);">+$4.89</span>
                         </div>
                         <div class="account-item">
                             <span class="account-item-lbl">Free Margin</span>
                             <span id="acc-free-margin" class="account-item-val">$97.99</span>
                         </div>
-                        <div class="account-item">
-                            <span class="account-item-lbl">Trading Access</span>
-                            <span id="acc-trade-allowed" class="account-item-val" style="color:var(--neon-bull); font-size:10.5px;">YES (Full)</span>
-                        </div>
                     </div>
                 </section>
 
-                <!-- MODULE B: Upcoming Trades & Scanner Radar -->
-                <div style="font-size:10px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
-                    <span>Upcoming AI Setups</span>
-                    <span style="color:var(--accent-cyan); font-size:9px;">MULTI-TIMEFRAME</span>
+                <!-- TAB 1: MODULE B (Upcoming Trades & Scanner Radar) -->
+                <div id="tab-content-radar">
+                    <div style="font-size:9.5px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+                        <span>High-Probability Radar</span>
+                        <span style="color:var(--neon-bull); font-size:9px;">1-CLICK LOAD</span>
+                    </div>
+                    <div id="radar-list" class="scanner-radar-list">
+                        <!-- Rendered by terminal.js -->
+                    </div>
                 </div>
-                <div id="radar-list" class="scanner-radar-list">
-                    <!-- Dynamic Radar Cards rendered by terminal.js -->
+
+                <!-- TAB 2: Live Macroeconomic News & Event Shock Calendar -->
+                <div id="tab-content-news" style="display:none;">
+                    <div style="font-size:9.5px; font-weight:700; color:var(--devil-amber); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+                        <span>Live Economic Calendar</span>
+                        <span style="font-size:9px; color:var(--text-dim);">HIGH-IMPACT</span>
+                    </div>
+                    <div id="news-feed-list" class="news-feed-list">
+                        <!-- Rendered by terminal.js -->
+                    </div>
                 </div>
+
             </div>
         </aside>
 
@@ -189,30 +196,60 @@
             </div>
         </section>
 
-        <!-- RIGHT COLUMN: MODULE C (The Devil's Advocate & Risk Panel) + Decision Intelligence -->
+        <!-- RIGHT COLUMN: Manual 1-Click Execution Desk + MODULE C (The Devil's Advocate & Risk) -->
         <aside class="terminal-panel devil-panel" style="grid-row: 1 / 3;">
             <div class="panel-header">
                 <div class="panel-title-wrap">
-                    <span class="panel-title" style="color:var(--devil-amber);">The Devil's Advocate & Risk</span>
+                    <span class="panel-title" style="color:var(--devil-amber);">The Devil's Advocate & Desk</span>
                 </div>
-                <span class="devil-header-badge">ADVERSARIAL COGNITION</span>
+                <span class="devil-header-badge">LIVE COGNITION</span>
             </div>
             <div class="panel-content">
                 
+                <!-- MANUAL 1-CLICK TRADE DESK -->
+                <section class="manual-trade-desk">
+                    <div class="desk-header">
+                        <span class="desk-title">⚡ 1-Click Execution Desk</span>
+                        <span id="desk-active-symbol" class="mono-number" style="font-weight:800; color:#fff;">XAUUSD</span>
+                    </div>
+                    <div class="desk-inputs-grid">
+                        <div class="desk-field">
+                            <span class="desk-field-lbl">Volume (Lots)</span>
+                            <input id="desk-lots" class="desk-input mono-number" type="number" step="0.01" value="0.01" min="0.01">
+                        </div>
+                        <div class="desk-field">
+                            <span class="desk-field-lbl">Win Probability</span>
+                            <input id="desk-win-prob" class="desk-input mono-number" value="73%" readonly style="color:var(--neon-bull); font-weight:700;">
+                        </div>
+                        <div class="desk-field">
+                            <span class="desk-field-lbl">Stop Loss ($)</span>
+                            <input id="desk-sl" class="desk-input mono-number" type="number" step="0.1" placeholder="Auto SL">
+                        </div>
+                        <div class="desk-field">
+                            <span class="desk-field-lbl">Take Profit ($)</span>
+                            <input id="desk-tp" class="desk-input mono-number" type="number" step="0.1" placeholder="Auto TP">
+                        </div>
+                    </div>
+                    <div class="desk-action-buttons">
+                        <button class="btn-desk-buy" onclick="executeManualTrade('BUY')">BUY / LONG</button>
+                        <button class="btn-desk-sell" onclick="executeManualTrade('SELL')">SELL / SHORT</button>
+                    </div>
+                </section>
+
                 <!-- Decision Execution State Badge -->
                 <div id="decision-badge-container" style="margin-bottom:8px;">
-                    <div class="decision-badge badge-wait">WAIT FOR CONFIRMATION</div>
+                    <div class="decision-badge badge-buy">EXECUTE: BUY (TREND_PULLBACK)</div>
                 </div>
 
                 <!-- Dialectical Probability & EV Strip -->
-                <div style="background:rgba(10,14,23,0.7); border:1px solid var(--border-subtle); border-radius:6px; padding:8px; margin-bottom:10px;">
-                    <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:12px; margin-bottom:4px;">
-                        <span>Win Prob: <b id="decision-win-prob" style="color:var(--neon-bull);">72%</b></span>
-                        <span>Expected Value: <b id="decision-ev" style="color:var(--accent-cyan);">$48.50</b></span>
+                <div style="background:rgba(10,14,23,0.7); border:1px solid var(--border-subtle); border-radius:6px; padding:8px; margin-bottom:8px;">
+                    <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:11.5px; margin-bottom:3px;">
+                        <span>Win Prob: <b id="decision-win-prob" style="color:var(--neon-bull);">73%</b></span>
+                        <span>Expected Value: <b id="decision-ev" style="color:var(--accent-cyan);">+$1.34</b></span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:11px; color:var(--text-secondary);">
-                        <span>Risk/Reward: <b id="decision-rr" style="color:#fff;">1:2.80</b></span>
-                        <span>Hurdle Requirement: <b style="color:var(--neon-bull);">EV > $0</b></span>
+                    <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:10.5px; color:var(--text-secondary);">
+                        <span>Risk/Reward: <b id="decision-rr" style="color:#fff;">1:2.50</b></span>
+                        <span>Quality Gate: <b style="color:var(--neon-bull);">PASSED (9/9)</b></span>
                     </div>
                 </div>
 
@@ -220,16 +257,16 @@
                 <div class="devil-gauges-grid">
                     <div class="devil-gauge-card">
                         <span class="gauge-lbl">Adversarial Penalty</span>
-                        <span id="devil-penalty-score" class="gauge-val">15.0 / 50.0</span>
+                        <span id="devil-penalty-score" class="gauge-val">0.0 / 50.0</span>
                         <div class="gauge-bar-track">
-                            <div id="devil-penalty-fill" class="gauge-bar-fill" style="width:30%;"></div>
+                            <div id="devil-penalty-fill" class="gauge-bar-fill" style="width:0%;"></div>
                         </div>
                     </div>
                     <div class="devil-gauge-card">
                         <span class="gauge-lbl">Invalidation Risk Coeff</span>
-                        <span id="devil-risk-coeff" class="gauge-val" style="color:var(--accent-cyan);">0.85x Multiplier</span>
+                        <span id="devil-risk-coeff" class="gauge-val" style="color:var(--accent-cyan);">1.00x Multiplier</span>
                         <div class="gauge-bar-track">
-                            <div id="devil-risk-fill" class="gauge-bar-fill" style="width:85%; background:linear-gradient(90deg, #38bdf8, #00f59b);"></div>
+                            <div id="devil-risk-fill" class="gauge-bar-fill" style="width:100%; background:linear-gradient(90deg, #38bdf8, #00f59b);"></div>
                         </div>
                     </div>
                 </div>
@@ -246,33 +283,36 @@
                 </div>
 
                 <!-- MODULE C: Threat Assessment Vector -->
-                <div style="font-size:10px; font-weight:700; color:var(--devil-amber); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:5px;">
+                <div style="font-size:9.5px; font-weight:700; color:var(--devil-amber); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:4px;">
                     Threat Assessment Vectors
                 </div>
                 <div id="threat-vector-list" class="threat-vector-list">
-                    <!-- Dynamic threats rendered by terminal.js -->
+                    <!-- Rendered by terminal.js -->
                 </div>
 
                 <!-- 14-Point Trade Quality Gate -->
-                <div style="font-size:10px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:5px; margin-top:8px;">
+                <div style="font-size:9.5px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:4px; margin-top:6px;">
                     14-Point Quality Gate Checks
                 </div>
                 <div class="decision-gate-summary">
                     <div id="gate-checks-list">
-                        <!-- Dynamic checks rendered by terminal.js -->
+                        <!-- Rendered by terminal.js -->
                     </div>
                 </div>
 
             </div>
         </aside>
 
-        <!-- CENTER BOTTOM: MODULE A (Active Trades HUD) — Full 100% Width -->
+        <!-- CENTER BOTTOM: MODULE A (Active Trades HUD with 1-Click Close) — Full 100% Width -->
         <section class="terminal-panel">
             <div class="panel-header">
                 <div class="panel-title-wrap">
                     <span class="panel-title">Active Trades (Live Positions HUD)</span>
+                    <span id="pos-count" class="panel-counter">0 Open</span>
                 </div>
-                <span id="pos-count" class="panel-counter">0 Open</span>
+                <button class="btn-terminal btn-danger" style="font-size:10px; padding:2px 8px;" onclick="closeAllPositions()">
+                    ✕ Close All Positions
+                </button>
             </div>
             <div class="panel-content positions-hud-container" style="padding:0;">
                 <table class="positions-table">
@@ -288,10 +328,11 @@
                             <th>Take Profit</th>
                             <th>Floating PnL</th>
                             <th>TP / SL Proximity</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody id="positions-tbody">
-                        <tr><td colspan="10" style="text-align:center; color:var(--text-dim); padding:20px;">No Active Positions Open</td></tr>
+                        <tr><td colspan="11" style="text-align:center; color:var(--text-dim); padding:20px;">No Active Positions Open</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -318,17 +359,17 @@
         <div class="copilot-body">
             <div id="copilot-messages" class="copilot-messages">
                 <div class="copilot-bubble">
-                    🤖 <b>JARVIS AI 3.0:</b> Standing by. Double-click any chart candle to analyze order flow, or ask about market regimes, risk exposure, and live invalidations.
+                    🤖 <b>JARVIS AI 3.0:</b> Standing by. Ask me about real-time market regimes, economic news shocks, or click any opportunity in the Radar to trade manually.
                 </div>
             </div>
             <div class="copilot-input-bar">
-                <input id="copilot-input" class="copilot-input" placeholder="Ask JARVIS (e.g. Why no trade on Gold?)..." onkeydown="handleChatKey(event)">
-                <button class="btn-terminal" style="padding:5px 12px;" onclick="sendChatMessage()">Send</button>
+                <input id="copilot-input" class="copilot-input" placeholder="Ask JARVIS (e.g. Analyze Gold pullback setup)..." onkeydown="handleChatKey(event)">
+                <button class="btn-terminal" style="padding:4px 10px;" onclick="sendChatMessage()">Send</button>
             </div>
         </div>
     </div>
 
-    <!-- Floating Chat Head FAB (Shown when Copilot is minimized) -->
+    <!-- Floating Chat Head FAB -->
     <div id="copilot-fab" class="copilot-fab" title="Open JARVIS AI Copilot" onclick="toggleCopilotMinimize(false)">
         🤖
     </div>
@@ -340,10 +381,10 @@
         <div class="command-palette-modal">
             <div class="command-palette-search">
                 <span class="command-palette-icon">⚡</span>
-                <input id="command-palette-input" class="command-palette-input" placeholder="Type a command or search (e.g. /analyze-xauusd, /m15, /safe)..." autocomplete="off" spellcheck="false">
+                <input id="command-palette-input" class="command-palette-input" placeholder="Type a command (e.g. /buy, /sell, /close-all, /news, /safe)..." autocomplete="off" spellcheck="false">
             </div>
             <div id="command-palette-results" class="command-palette-results">
-                <!-- Populated dynamically by terminal.js -->
+                <!-- Rendered by terminal.js -->
             </div>
         </div>
     </div>

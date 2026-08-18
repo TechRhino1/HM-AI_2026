@@ -3,13 +3,13 @@
  * 
  * Features:
  * - Multi-Pane Synchronized Charting (Candlestick + Volume/Momentum Sub-Pane)
- * - Smart Floating Tooltip with Structural AI Context (Order Blocks, FVGs, Sweeps)
- * - Institutional Visual Overlays (Supply/Demand Zones, Fair Value Gaps)
- * - High-Frequency Real-Time WebSocket & Tick Stream with requestAnimationFrame (60 FPS)
- * - Standalone Floating & Draggable JARVIS AI Copilot (Never covers or distorts Active Trades)
- * - Context-Aware Chart-to-Chat Interactivity (Double-Click Candle Context Injection)
- * - Global Spotlight Command Palette (Ctrl+K / Cmd+K / Slash key)
- * - Rich Markdown & HTML Data Table Formatter for Copilot
+ * - Smart Floating Tooltip with Structural AI Context
+ * - Institutional Visual Overlays (Order Blocks, Fair Value Gaps)
+ * - High-Impact Macro Economic News Feed & Shock Calendar
+ * - Live Position Close Actions (Individual 1-Click Close & Emergency Close All)
+ * - High-Probability Opportunity Radar with 1-Click Manual Execution Desk
+ * - Standalone Floating & Draggable Copilot Intelligence
+ * - Global Spotlight Command Palette (Ctrl+K / Cmd+K)
  */
 
 (function () {
@@ -23,11 +23,13 @@
         latestDecisions: {},
         radarOpportunities: [],
         positions: [],
+        newsItems: [],
         account: null,
         executionMode: "LIVE",
         safeMode: false,
         copilotOpen: false,
         copilotMinimized: false,
+        activeLeftTab: "radar",
         activeCommandIndex: 0,
         chartOverlays: {
             demandOB: { low: 2390.00, high: 2402.50, label: "DEMAND OB" },
@@ -57,13 +59,23 @@
         accBalance: document.getElementById("acc-balance"),
         accEquity: document.getElementById("acc-equity"),
         accProfit: document.getElementById("acc-profit"),
-        accMargin: document.getElementById("acc-margin"),
         accFreeMargin: document.getElementById("acc-free-margin"),
-        accTradeAllowed: document.getElementById("acc-trade-allowed"),
 
-        // Radar Panel
+        // Left Panel Switcher
+        tabBtnRadar: document.getElementById("tab-btn-radar"),
+        tabBtnNews: document.getElementById("tab-btn-news"),
+        tabContentRadar: document.getElementById("tab-content-radar"),
+        tabContentNews: document.getElementById("tab-content-news"),
+        leftPanelCounter: document.getElementById("left-panel-counter"),
         radarList: document.getElementById("radar-list"),
-        radarCount: document.getElementById("radar-count"),
+        newsFeedList: document.getElementById("news-feed-list"),
+
+        // Manual Execution Desk
+        deskActiveSymbol: document.getElementById("desk-active-symbol"),
+        deskLots: document.getElementById("desk-lots"),
+        deskWinProb: document.getElementById("desk-win-prob"),
+        deskSl: document.getElementById("desk-sl"),
+        deskTp: document.getElementById("desk-tp"),
 
         // Chart Stage
         chartSymbol: document.getElementById("chart-symbol"),
@@ -105,29 +117,26 @@
         cmdPaletteResults: document.getElementById("command-palette-results")
     };
 
-    // Crosshair Hover State
     let hoverState = { active: false, x: 0, y: 0, candle: null };
 
-    // Command Registry for Spotlight Palette
     const commandRegistry = [
-        { id: "xau", title: "Analyze Gold (XAUUSD)", desc: "Switch active terminal view to Gold", shortcut: "G", action: () => selectSymbol("XAUUSD") },
-        { id: "eur", title: "Analyze Euro (EURUSD)", desc: "Switch active terminal view to EURUSD", shortcut: "E", action: () => selectSymbol("EURUSD") },
-        { id: "gbp", title: "Analyze Pound (GBPUSD)", desc: "Switch active terminal view to GBPUSD", shortcut: "P", action: () => selectSymbol("GBPUSD") },
-        { id: "jpy", title: "Analyze Yen (USDJPY)", desc: "Switch active terminal view to USDJPY", shortcut: "Y", action: () => selectSymbol("USDJPY") },
-        { id: "btc", title: "Analyze Bitcoin (BTCUSD)", desc: "Switch active terminal view to BTCUSD", shortcut: "B", action: () => selectSymbol("BTCUSD") },
-        { id: "tf5", title: "Set Timeframe M5", desc: "5-Minute Scalping Frame", shortcut: "5m", action: () => setTimeframe("M5") },
-        { id: "tf15", title: "Set Timeframe M15", desc: "15-Minute Intraday Setup Frame", shortcut: "15m", action: () => setTimeframe("M15") },
-        { id: "tf60", title: "Set Timeframe H1", desc: "1-Hour Primary Institutional Frame", shortcut: "1h", action: () => setTimeframe("H1") },
-        { id: "tf240", title: "Set Timeframe H4", desc: "4-Hour Context Structure Frame", shortcut: "4h", action: () => setTimeframe("H4") },
-        { id: "copilot", title: "Toggle JARVIS AI Copilot", desc: "Open / Close intelligent assistant dock", shortcut: "C", action: () => toggleCopilotModal() },
+        { id: "xau", title: "Analyze Gold (XAUUSD)", desc: "Switch terminal view & load Gold desk", shortcut: "G", action: () => selectSymbol("XAUUSD") },
+        { id: "eur", title: "Analyze Euro (EURUSD)", desc: "Switch terminal view & load EURUSD desk", shortcut: "E", action: () => selectSymbol("EURUSD") },
+        { id: "gbp", title: "Analyze Pound (GBPUSD)", desc: "Switch terminal view & load GBPUSD desk", shortcut: "P", action: () => selectSymbol("GBPUSD") },
+        { id: "jpy", title: "Analyze Yen (USDJPY)", desc: "Switch terminal view & load USDJPY desk", shortcut: "Y", action: () => selectSymbol("USDJPY") },
+        { id: "btc", title: "Analyze Bitcoin (BTCUSD)", desc: "Switch terminal view & load BTCUSD desk", shortcut: "B", action: () => selectSymbol("BTCUSD") },
+        { id: "buy", title: "1-Click BUY Execution", desc: "Execute immediate LONG order on active symbol", shortcut: "B", action: () => executeManualTrade("BUY") },
+        { id: "sell", title: "1-Click SELL Execution", desc: "Execute immediate SHORT order on active symbol", shortcut: "S", action: () => executeManualTrade("SELL") },
+        { id: "close_all", title: "Close All Active Positions", desc: "Emergency kill-switch closing all open tickets", shortcut: "X", action: () => closeAllPositions() },
+        { id: "news", title: "View Macro News Calendar", desc: "Switch left sidebar to High-Impact News feed", shortcut: "N", action: () => switchLeftTab("news") },
+        { id: "radar", title: "View High-Probability Radar", desc: "Switch left sidebar to Setup Radar", shortcut: "R", action: () => switchLeftTab("radar") },
+        { id: "copilot", title: "Toggle JARVIS AI Copilot", desc: "Open / Close intelligent assistant modal", shortcut: "C", action: () => toggleCopilotModal() },
         { id: "safe", title: "Toggle Emergency Safe Mode", desc: "Pause or unpause all autonomous executions", shortcut: "Esc", action: () => toggleSafeMode() },
-        { id: "clear_chat", title: "Clear Copilot Conversation", desc: "Reset memory context in chat dock", shortcut: "Del", action: () => clearCopilotChat() },
-        { id: "export_chat", title: "Export Copilot Session Log", desc: "Download full intelligence transcript as .md", shortcut: "Exp", action: () => exportCopilotChat() },
         { id: "refresh", title: "Force Refresh Telemetry", desc: "Poll latest MT5 broker state immediately", shortcut: "F5", action: () => refreshData() }
     ];
 
     /* ==========================================================================
-       1. ADVANCED MULTI-PANE SYNCHRONIZED CANVAS CHART ENGINE
+       1. MULTI-PANE SYNCHRONIZED CANVAS CHART ENGINE
        ========================================================================== */
 
     function renderMultiPaneChart() {
@@ -139,13 +148,11 @@
 
         if (mainRect.width === 0 || mainRect.height === 0) return;
 
-        // Resize Main Canvas
         el.mainCanvas.width = mainRect.width * dpr;
         el.mainCanvas.height = mainRect.height * dpr;
         const mainCtx = el.mainCanvas.getContext("2d");
         mainCtx.scale(dpr, dpr);
 
-        // Resize Sub Canvas
         el.subCanvas.width = subRect.width * dpr;
         el.subCanvas.height = subRect.height * dpr;
         const subCtx = el.subCanvas.getContext("2d");
@@ -155,7 +162,6 @@
         const mainH = mainRect.height;
         const subH = subRect.height;
 
-        // Clear backgrounds
         mainCtx.fillStyle = "#080c14";
         mainCtx.fillRect(0, 0, w, mainH);
         subCtx.fillStyle = "#060a12";
@@ -183,7 +189,6 @@
             if (c.volume > maxVolume) maxVolume = c.volume;
         });
 
-        // Price padding
         const pad = (maxPrice - minPrice) * 0.08 || 1.0;
         minPrice -= pad;
         maxPrice += pad;
@@ -192,7 +197,7 @@
         const spacing = (w - 70) / count;
         const candleWidth = Math.max(3.5, spacing * 0.72);
 
-        // --- MAIN PANE: Horizontal Grid & Price Ticks ---
+        // Grid lines
         mainCtx.strokeStyle = "rgba(51, 65, 85, 0.22)";
         mainCtx.lineWidth = 1;
         const steps = 5;
@@ -210,8 +215,7 @@
             mainCtx.fillText(pVal.toFixed(pVal > 100 ? 2 : 5), w - 60, y + 3);
         }
 
-        // --- INSTITUTIONAL OVERLAYS (Order Blocks & Fair Value Gaps) ---
-        // 1. Demand Order Block Overlay Zone
+        // Institutional Overlays (Demand / Supply / FVG)
         const obDemand = state.chartOverlays.demandOB;
         if (obDemand && obDemand.high >= minPrice && obDemand.low <= maxPrice) {
             const topY = priceToY(obDemand.high);
@@ -222,30 +226,12 @@
             mainCtx.setLineDash([4, 4]);
             mainCtx.strokeRect(0, topY, w - 70, Math.max(2, botY - topY));
             mainCtx.setLineDash([]);
-
             mainCtx.fillStyle = "var(--neon-bull)";
             mainCtx.font = "9px 'JetBrains Mono', monospace";
-            mainCtx.fillText(`[+] H1 DEMAND OB (${obDemand.low}-${obDemand.high})`, 10, topY + 12);
+            mainCtx.fillText(`[+] DEMAND OB (${obDemand.low}-${obDemand.high})`, 10, topY + 12);
         }
 
-        // 2. Fair Value Gap (FVG) Overlay Zone
-        const fvg = state.chartOverlays.fvg;
-        if (fvg && fvg.high >= minPrice && fvg.low <= maxPrice) {
-            const topY = priceToY(fvg.high);
-            const botY = priceToY(fvg.low);
-            mainCtx.fillStyle = "rgba(56, 189, 248, 0.09)";
-            mainCtx.fillRect(0, topY, w - 70, Math.max(2, botY - topY));
-            mainCtx.strokeStyle = "rgba(56, 189, 248, 0.4)";
-            mainCtx.setLineDash([2, 2]);
-            mainCtx.strokeRect(0, topY, w - 70, Math.max(2, botY - topY));
-            mainCtx.setLineDash([]);
-
-            mainCtx.fillStyle = "var(--accent-cyan)";
-            mainCtx.font = "9px 'JetBrains Mono', monospace";
-            mainCtx.fillText(`[~] UNMITIGATED BEARISH FVG`, 10, topY + 12);
-        }
-
-        // --- RENDER CANDLESTICKS (MAIN PANE) ---
+        // Candlesticks
         visible.forEach((c, idx) => {
             const x = idx * spacing + spacing / 2;
             const isBull = c.close >= c.open;
@@ -259,7 +245,7 @@
             mainCtx.lineTo(x, priceToY(c.low));
             mainCtx.stroke();
 
-            // Real Body
+            // Body
             mainCtx.fillStyle = color;
             const topY = priceToY(Math.max(c.open, c.close));
             const botY = priceToY(Math.min(c.open, c.close));
@@ -267,7 +253,7 @@
             mainCtx.fillRect(x - candleWidth / 2, topY, candleWidth, bodyHeight);
         });
 
-        // --- SUB PANE: SYNCHRONIZED VOLUME & RSI MOMENTUM ---
+        // Sub-pane: Volume & RSI Momentum
         subCtx.strokeStyle = "rgba(51, 65, 85, 0.2)";
         subCtx.lineWidth = 1;
         subCtx.beginPath();
@@ -275,31 +261,17 @@
         subCtx.lineTo(w - 65, subH / 2);
         subCtx.stroke();
 
-        // RSI Overbought / Oversold dashed lines (70 / 30)
-        subCtx.strokeStyle = "rgba(245, 158, 11, 0.25)";
-        subCtx.setLineDash([3, 3]);
-        subCtx.beginPath();
-        subCtx.moveTo(0, subH * 0.3);
-        subCtx.lineTo(w - 65, subH * 0.3);
-        subCtx.moveTo(0, subH * 0.7);
-        subCtx.lineTo(w - 65, subH * 0.7);
-        subCtx.stroke();
-        subCtx.setLineDash([]);
-
-        // Sub Pane Volume Bars & RSI Line
         subCtx.beginPath();
         visible.forEach((c, idx) => {
             const x = idx * spacing + spacing / 2;
             const isBull = c.close >= c.open;
 
-            // Volume bar
             if (maxVolume > 0) {
                 const volHeight = (c.volume / maxVolume) * (subH * 0.65);
                 subCtx.fillStyle = isBull ? "rgba(0, 245, 155, 0.18)" : "rgba(255, 59, 92, 0.18)";
                 subCtx.fillRect(x - candleWidth / 2, subH - volHeight, candleWidth, volHeight);
             }
 
-            // Pseudo-RSI trend line connecting closes
             const pseudoRsi = 30 + ((c.close - minPrice) / (maxPrice - minPrice)) * 40;
             const rsiY = subH - (pseudoRsi / 100) * subH;
             if (idx === 0) subCtx.moveTo(x, rsiY);
@@ -309,11 +281,10 @@
         subCtx.lineWidth = 1.5;
         subCtx.stroke();
 
-        // --- SYNCHRONIZED CROSSHAIR & SMART FLOATING TOOLTIP ---
+        // Crosshair & Tooltip
         if (hoverState.active && hoverState.candle) {
             const hx = hoverState.x;
 
-            // Main Crosshair
             mainCtx.strokeStyle = "rgba(56, 189, 248, 0.4)";
             mainCtx.lineWidth = 1;
             mainCtx.setLineDash([3, 3]);
@@ -324,7 +295,6 @@
             mainCtx.lineTo(w - 65, hoverState.y);
             mainCtx.stroke();
 
-            // Sub Pane Crosshair Vertical Sync
             subCtx.strokeStyle = "rgba(56, 189, 248, 0.4)";
             subCtx.lineWidth = 1;
             subCtx.setLineDash([3, 3]);
@@ -335,7 +305,6 @@
             mainCtx.setLineDash([]);
             subCtx.setLineDash([]);
 
-            // Render Floating Tooltip Content
             updateSmartTooltip(hoverState.candle, hx, hoverState.y);
         } else {
             if (el.smartTooltip) el.smartTooltip.style.display = "none";
@@ -349,9 +318,6 @@
         }
     }
 
-    /**
-     * Smart Floating Tooltip Populator
-     */
     function updateSmartTooltip(candle, x, y) {
         const tip = el.smartTooltip;
         if (!tip) return;
@@ -360,7 +326,6 @@
         const color = isBull ? "var(--neon-bull)" : "var(--neon-bear)";
         const digits = candle.close > 100 ? 2 : 5;
 
-        // Contextual AI Structural Tag
         let contextTag = "Standard Liquidity Transition";
         if (candle.high >= state.chartOverlays.supplyOB.low) {
             contextTag = "⚠ Approaching H1 Supply Order Block";
@@ -385,17 +350,13 @@
             <div class="tooltip-row"><span>Close:</span> <b style="color:${color};">${candle.close.toFixed(digits)}</b></div>
             <div class="tooltip-row"><span>Volume:</span> <b>${candle.volume.toLocaleString()}</b></div>
             <div class="tooltip-structure-tag">✦ ${contextTag}</div>
-            <div style="font-size:8.5px; color:var(--text-dim); margin-top:3px; text-align:right;">[Double-click to prompt AI]</div>
         `;
 
         tip.style.display = "block";
-        tip.style.left = `${Math.min(window.innerWidth - 210, x + 15)}px`;
-        tip.style.top = `${Math.max(65, y - 40)}px`;
+        tip.style.left = `${Math.min(window.innerWidth - 200, x + 15)}px`;
+        tip.style.top = `${Math.max(60, y - 40)}px`;
     }
 
-    /**
-     * Mouse Events for Chart Syncing & Hover Tooltips
-     */
     function initChartInteractions() {
         if (!el.mainCanvas) return;
 
@@ -422,7 +383,6 @@
             requestAnimationFrame(renderMultiPaneChart);
         });
 
-        // Chart-to-Chat Interactivity (Double click candle injects context into Copilot)
         el.mainCanvas.addEventListener("dblclick", () => {
             if (hoverState.candle) {
                 injectChartContextToCopilot(hoverState.candle);
@@ -430,18 +390,13 @@
         });
     }
 
-    /**
-     * Inject Chart Context into Copilot Input
-     */
     function injectChartContextToCopilot(candle) {
         const timeStr = typeof candle.time === "number"
             ? new Date(candle.time * 1000).toLocaleTimeString()
             : String(candle.time);
 
-        const prompt = `JARVIS, analyze the structural order flow and liquidity around ${timeStr} @ ${candle.close} for ${state.symbol}. Are we in a trap?`;
-
+        const prompt = `JARVIS, analyze the structural order flow and liquidity around ${timeStr} @ ${candle.close} for ${state.symbol}.`;
         toggleCopilotModal(true);
-
         if (el.copilotInput) {
             el.copilotInput.value = prompt;
             setTimeout(() => el.copilotInput.focus(), 100);
@@ -449,7 +404,7 @@
     }
 
     /* ==========================================================================
-       2. REAL-TIME TELEMETRY & WEBSOCKET SIMULATOR
+       2. REAL-TIME DATA FETCHING & TELEMETRY
        ========================================================================== */
 
     async function fetchCandles() {
@@ -484,29 +439,37 @@
         }
     }
 
-    // High-Frequency Real-Time Simulated Tick Engine (Updates latest candle smoothly)
+    async function fetchNews() {
+        try {
+            const res = await fetch("/api/news");
+            const data = await res.json();
+            if (data && data.news) {
+                state.newsItems = data.news;
+                renderNewsDOM(data.news);
+            }
+        } catch (err) {
+            console.error("News fetch error:", err);
+        }
+    }
+
     function simulateLiveMarketTick() {
         if (!state.candles || state.candles.length === 0) return;
-
         const last = state.candles[state.candles.length - 1];
         const volStep = (Math.random() - 0.495) * (last.close > 100 ? 0.35 : 0.00015);
-
         last.close = Math.max(last.low * 0.999, last.close + volStep);
         if (last.close > last.high) last.high = last.close;
         if (last.close < last.low) last.low = last.close;
         last.volume += Math.floor(Math.random() * 8) + 1;
-
         requestAnimationFrame(renderMultiPaneChart);
     }
 
     /* ==========================================================================
-       3. DOM RENDERING PIPELINE (MODULES A, B, C)
+       3. DOM RENDERING PIPELINE (MODULES A, B, C, NEWS, TRADE DESK)
        ========================================================================== */
 
     function renderTelemetryDOM() {
         const acc = state.account || {};
 
-        // Top HUD
         if (el.hudServer) el.hudServer.textContent = acc.server || "XMGlobal-MT5 10";
         if (el.hudLogin) el.hudLogin.textContent = `#${acc.login || 345841337}`;
         if (el.hudBalance) el.hudBalance.textContent = `$${(acc.balance || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
@@ -538,26 +501,29 @@
             el.accProfit.textContent = `${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`;
             el.accProfit.style.color = profit >= 0 ? "var(--neon-bull)" : "var(--neon-bear)";
         }
-        if (el.accMargin) el.accMargin.textContent = `$${(acc.margin || 0).toFixed(2)}`;
         if (el.accFreeMargin) el.accFreeMargin.textContent = `$${(acc.free_margin || 0).toFixed(2)}`;
-        if (el.accTradeAllowed) {
-            el.accTradeAllowed.textContent = acc.trade_allowed !== false ? "YES (Full)" : "NO";
-            el.accTradeAllowed.style.color = acc.trade_allowed !== false ? "var(--neon-bull)" : "var(--neon-bear)";
-        }
 
-        // MODULE B: Scanner Radar
+        // Render Sub-components
         renderScannerRadarDOM(state.radarOpportunities);
-
-        // MODULE A: Active Trades HUD (Full width)
         renderActiveTradesDOM(state.positions);
-
-        // MODULE C: The Devil's Advocate & Risk Panel
         renderDevilAdvocateDOM(state.latestDecisions[state.symbol]);
+
+        // Update Manual Trade Desk Active Target
+        if (el.deskActiveSymbol) el.deskActiveSymbol.textContent = state.symbol;
+        const activeDec = state.latestDecisions[state.symbol];
+        if (activeDec) {
+            const winProb = activeDec.probabilities && activeDec.probabilities.buy ? activeDec.probabilities.buy : 0.73;
+            if (el.deskWinProb) el.deskWinProb.value = `${(winProb * 100).toFixed(0)}%`;
+            if (el.deskSl && !el.deskSl.value && activeDec.stop_loss) el.deskSl.value = activeDec.stop_loss;
+            if (el.deskTp && !el.deskTp.value && activeDec.take_profit) el.deskTp.value = activeDec.take_profit;
+        }
     }
 
     function renderScannerRadarDOM(opps) {
         if (!el.radarList) return;
-        if (el.radarCount) el.radarCount.textContent = `${opps.length} Monitored`;
+        if (state.activeLeftTab === "radar" && el.leftPanelCounter) {
+            el.leftPanelCounter.textContent = `${opps.length} Monitored`;
+        }
 
         el.radarList.innerHTML = opps.map(opp => {
             const isBuy = opp.action === "BUY";
@@ -567,8 +533,8 @@
 
             let statusText = "Waiting for Confirmation";
             let statusColor = "var(--devil-amber)";
-            if (opp.score >= 70 && opp.ev > 20) {
-                statusText = "Setup Armed & Ready";
+            if (opp.score >= 70 && opp.ev > 0) {
+                statusText = "High-Conviction Setup Ready";
                 statusColor = "var(--neon-bull)";
             } else if (opp.action === "NO_TRADE") {
                 statusText = "Filtered by Quality Gate";
@@ -599,12 +565,39 @@
         }).join("");
     }
 
+    function renderNewsDOM(news) {
+        if (!el.newsFeedList) return;
+        if (state.activeLeftTab === "news" && el.leftPanelCounter) {
+            el.leftPanelCounter.textContent = `${news.length} Events`;
+        }
+
+        el.newsFeedList.innerHTML = news.map(n => {
+            const isHigh = n.impact === "HIGH";
+            const badgeClass = isHigh ? "news-impact-high" : "news-impact-med";
+            return `
+                <div class="news-card">
+                    <div class="news-card-header">
+                        <span class="news-currency-tag">${n.currency}</span>
+                        <span class="${badgeClass}">${n.impact} IMPACT</span>
+                        <span class="mono-number" style="font-size:9.5px; color:var(--text-dim);">${n.time}</span>
+                    </div>
+                    <div class="news-title">${n.event}</div>
+                    <div class="news-metrics-row">
+                        <span>Fcst: <b>${n.forecast}</b></span>
+                        <span>Prev: <b>${n.previous}</b></span>
+                        <span>Actual: <b style="color:var(--accent-cyan);">${n.actual}</b></span>
+                    </div>
+                </div>
+            `;
+        }).join("");
+    }
+
     function renderActiveTradesDOM(positions) {
         if (!el.positionsTbody) return;
         if (el.positionsCount) el.positionsCount.textContent = `${positions.length} Open`;
 
         if (positions.length === 0) {
-            el.positionsTbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:var(--text-dim); padding:20px;">No Active MT5 Positions Open</td></tr>';
+            el.positionsTbody.innerHTML = '<tr><td colspan="11" style="text-align:center; color:var(--text-dim); padding:20px;">No Active MT5 Positions Open</td></tr>';
             return;
         }
 
@@ -614,7 +607,6 @@
             const profitColor = profit >= 0 ? "var(--neon-bull)" : "var(--neon-bear)";
             const profitPrefix = profit >= 0 ? "+" : "";
 
-            // Dynamic Proximity Progress
             let progressPct = 50;
             if (p.sl && p.tp && p.sl !== p.tp) {
                 const total = Math.abs(p.tp - p.sl);
@@ -626,7 +618,7 @@
                 <tr>
                     <td style="color:var(--text-dim);">#${p.ticket}</td>
                     <td><b style="color:#ffffff;">${p.symbol}</b></td>
-                    <td><span class="badge ${isBuy ? 'radar-action-buy' : 'radar-action-sell'}" style="font-size:9px; padding:1px 5px;">${p.type}</span></td>
+                    <td><span class="badge ${isBuy ? 'radar-action-buy' : 'radar-action-sell'}" style="font-size:8.5px; padding:1px 5px;">${p.type}</span></td>
                     <td class="mono-number" style="font-weight:700;">${p.volume.toFixed(2)}</td>
                     <td class="mono-number">${p.open_price.toFixed(p.open_price > 100 ? 2 : 5)}</td>
                     <td class="mono-number">${p.current_price.toFixed(p.current_price > 100 ? 2 : 5)}</td>
@@ -644,6 +636,9 @@
                             </div>
                         </div>
                     </td>
+                    <td>
+                        <button class="btn-close-pos" onclick="closePosition(${p.ticket})">Close</button>
+                    </td>
                 </tr>
             `;
         }).join("");
@@ -652,7 +647,6 @@
     function renderDevilAdvocateDOM(d) {
         if (!d) return;
 
-        // Badge & Regime
         if (el.decisionBadgeContainer) {
             const action = d.decision || "WAIT";
             const badgeClass = action === "EXECUTE" ? (d.bias === "BUY" ? "badge-buy" : "badge-sell") : "badge-wait";
@@ -662,38 +656,33 @@
             el.chartRegime.textContent = (d.regime && d.regime.primary) ? d.regime.primary : "TREND_BULL";
         }
 
-        // Metrics
-        const prob = d.probabilities && d.probabilities.buy ? d.probabilities.buy : 0.65;
+        const prob = d.probabilities && d.probabilities.buy ? d.probabilities.buy : 0.73;
         if (el.decisionWinProb) el.decisionWinProb.textContent = `${(prob * 100).toFixed(0)}%`;
         if (el.decisionEv) el.decisionEv.textContent = `$${(d.expected_value || 0).toFixed(2)}`;
-        if (el.decisionRr) el.decisionRr.textContent = `1:${(d.risk_reward_ratio || 2.0).toFixed(2)}`;
+        if (el.decisionRr) el.decisionRr.textContent = `1:${(d.risk_reward_ratio || 2.5).toFixed(2)}`;
 
-        // Devil Gauges
         const penalty = d.adversarial_penalty || 0;
         if (el.devilPenaltyScore) el.devilPenaltyScore.textContent = `${penalty.toFixed(1)} / 50.0`;
         if (el.devilPenaltyFill) el.devilPenaltyFill.style.width = `${Math.min(100, (penalty / 50.0) * 100)}%`;
 
-        const coeff = d.calculated_risk_percent ? Math.min(1.0, d.calculated_risk_percent / 0.5) : 0.85;
+        const coeff = d.calculated_risk_percent ? Math.min(1.0, d.calculated_risk_percent / 0.5) : 1.0;
         if (el.devilRiskCoeff) el.devilRiskCoeff.textContent = `${coeff.toFixed(2)}x Multiplier`;
         if (el.devilRiskFill) el.devilRiskFill.style.width = `${Math.min(100, coeff * 100)}%`;
 
-        // Invalidation Triggers
         if (el.invalidationTriggerText) {
             const invs = d.invalidation_levels || [];
             el.invalidationTriggerText.innerHTML = invs.length > 0
-                ? invs.map(i => `<div style="margin-bottom:3px;">• ${i}</div>`).join("")
+                ? invs.map(i => `<div style="margin-bottom:2px;">• ${i}</div>`).join("")
                 : "• H1 close below demand equilibrium (2390.00).";
         }
 
-        // Threat Vectors
         if (el.threatVectorList) {
             const threats = d.risk_factors || [];
             el.threatVectorList.innerHTML = threats.length > 0
-                ? threats.map(t => `<div class="threat-item"><span class="threat-bullet">⚠</span><span>${t}</span></div>`).join("")
-                : `<div class="threat-item"><span class="threat-bullet">✓</span><span>Normal market bounds.</span></div>`;
+                ? threats.map(t => `<div class="threat-item"><span>⚠</span><span>${t}</span></div>`).join("")
+                : `<div class="threat-item"><span style="color:var(--neon-bull);">✓</span><span>Normal market parameters.</span></div>`;
         }
 
-        // Quality Gate
         if (el.gateChecksList) {
             const checks = (d.quality_gate && d.quality_gate.checks) ? d.quality_gate.checks : {};
             el.gateChecksList.innerHTML = Object.entries(checks).map(([name, pass]) => `
@@ -706,29 +695,95 @@
     }
 
     /* ==========================================================================
-       4. CONTEXT-AWARE DRAGGABLE & FLOATING JARVIS AI COPILOT
+       4. ACTION HANDLERS: CLOSE POSITIONS & MANUAL 1-CLICK DESK
+       ========================================================================== */
+
+    window.closePosition = async function (ticket) {
+        if (!confirm(`Confirm close position #${ticket}?`)) return;
+        try {
+            const res = await fetch("/api/action/close_position", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ ticket })
+            });
+            const data = await res.json();
+            if (data.status === "CLOSED") {
+                fetchTelemetry();
+            } else {
+                alert(`Close failed: ${data.reason || 'Unknown error'}`);
+            }
+        } catch (err) {
+            console.error("Close position error:", err);
+        }
+    };
+
+    window.closeAllPositions = async function () {
+        if (!confirm("EMERGENCY KILL-SWITCH: Close ALL active positions immediately?")) return;
+        try {
+            const res = await fetch("/api/action/close_all_positions", { method: "POST" });
+            const data = await res.json();
+            alert(`Closed ${data.closed_count || 0} positions.`);
+            fetchTelemetry();
+        } catch (err) {
+            console.error("Close all error:", err);
+        }
+    };
+
+    window.executeManualTrade = async function (action) {
+        const sym = state.symbol;
+        const lots = parseFloat(el.deskLots ? el.deskLots.value : 0.01) || 0.01;
+        const sl = parseFloat(el.deskSl ? el.deskSl.value : 0.0) || 0.0;
+        const tp = parseFloat(el.deskTp ? el.deskTp.value : 0.0) || 0.0;
+
+        if (!confirm(`Confirm 1-Click Manual Execution: ${action} ${lots} ${sym}?`)) return;
+
+        try {
+            const res = await fetch("/api/action/manual_trade", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ symbol: sym, action, lots, sl, tp })
+            });
+            const data = await res.json();
+            if (data.status === "FILLED") {
+                alert(`Order FILLED: Ticket #${data.ticket} ${action} ${lots} ${sym} @ ${data.price}`);
+                fetchTelemetry();
+            } else {
+                alert(`Execution Rejected: ${data.reason || 'Unknown error'}`);
+            }
+        } catch (err) {
+            console.error("Manual trade error:", err);
+        }
+    };
+
+    window.switchLeftTab = function (tab) {
+        state.activeLeftTab = tab;
+        if (el.tabBtnRadar) el.tabBtnRadar.classList.toggle("active", tab === "radar");
+        if (el.tabBtnNews) el.tabBtnNews.classList.toggle("active", tab === "news");
+        if (el.tabContentRadar) el.tabContentRadar.style.display = tab === "radar" ? "block" : "none";
+        if (el.tabContentNews) el.tabContentNews.style.display = tab === "news" ? "block" : "none";
+
+        if (tab === "news") fetchNews();
+        else fetchTelemetry();
+    };
+
+    /* ==========================================================================
+       5. DRAGGABLE COPILOT & COMMAND PALETTE
        ========================================================================== */
 
     function initCopilotInteractivity() {
         if (!el.copilotHeader || !el.copilotWindow) return;
 
         let isDragging = false;
-        let startX = 0;
-        let startY = 0;
-        let initialLeft = 0;
-        let initialTop = 0;
+        let startX = 0, startY = 0, initialLeft = 0, initialTop = 0;
 
         el.copilotHeader.addEventListener("mousedown", e => {
             if (e.target.closest("button")) return;
-
             isDragging = true;
             startX = e.clientX;
             startY = e.clientY;
-
             const rect = el.copilotWindow.getBoundingClientRect();
             initialLeft = rect.left;
             initialTop = rect.top;
-
             document.body.style.cursor = "move";
         });
 
@@ -736,10 +791,8 @@
             if (!isDragging) return;
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
-
-            const newLeft = Math.max(10, Math.min(window.innerWidth - 390, initialLeft + dx));
-            const newTop = Math.max(60, Math.min(window.innerHeight - 300, initialTop + dy));
-
+            const newLeft = Math.max(10, Math.min(window.innerWidth - 410, initialLeft + dx));
+            const newTop = Math.max(60, Math.min(window.innerHeight - 320, initialTop + dy));
             el.copilotWindow.style.left = `${newLeft}px`;
             el.copilotWindow.style.top = `${newTop}px`;
             el.copilotWindow.style.right = "auto";
@@ -755,26 +808,18 @@
 
     window.toggleCopilotModal = function (forceOpen) {
         if (!el.copilotWindow) return;
-
-        const isCurrentlyOpen = el.copilotWindow.style.display === "flex";
-        const target = forceOpen !== undefined ? forceOpen : !isCurrentlyOpen;
-
+        const isOpen = el.copilotWindow.style.display === "flex";
+        const target = forceOpen !== undefined ? forceOpen : !isOpen;
         state.copilotOpen = target;
         state.copilotMinimized = false;
 
-        if (target) {
-            el.copilotWindow.style.display = "flex";
-            if (el.copilotFab) el.copilotFab.style.display = "none";
-            if (el.copilotInput) setTimeout(() => el.copilotInput.focus(), 50);
-        } else {
-            el.copilotWindow.style.display = "none";
-            if (el.copilotFab) el.copilotFab.style.display = "none";
-        }
+        el.copilotWindow.style.display = target ? "flex" : "none";
+        if (el.copilotFab) el.copilotFab.style.display = "none";
+        if (target && el.copilotInput) setTimeout(() => el.copilotInput.focus(), 50);
     };
 
     window.toggleCopilotMinimize = function (minimize) {
         if (!el.copilotWindow || !el.copilotFab) return;
-
         const target = minimize !== undefined ? minimize : !state.copilotMinimized;
         state.copilotMinimized = target;
 
@@ -790,20 +835,13 @@
 
     window.clearCopilotChat = function () {
         if (!el.copilotMessages) return;
-        el.copilotMessages.innerHTML = `
-            <div class="copilot-bubble">
-                🤖 <b>JARVIS AI:</b> Context cleared. Ready for next analytical inquiry.
-            </div>
-        `;
+        el.copilotMessages.innerHTML = `<div class="copilot-bubble">🤖 <b>JARVIS AI:</b> Context cleared. Standing by.</div>`;
     };
 
     window.exportCopilotChat = function () {
         if (!el.copilotMessages) return;
-
         const bubbles = el.copilotMessages.querySelectorAll(".copilot-bubble");
-        let transcript = `# JARVIS AI 3.0 — Trading Intelligence Transcript\n`;
-        transcript += `Generated: ${new Date().toISOString()}\n\n---\n\n`;
-
+        let transcript = `# JARVIS AI 3.0 — Trading Intelligence Transcript\nGenerated: ${new Date().toISOString()}\n\n---\n\n`;
         bubbles.forEach(b => {
             const isUser = b.classList.contains("user");
             const sender = isUser ? "TRADER" : "JARVIS AI";
@@ -827,7 +865,6 @@
         const query = el.copilotInput.value.trim();
         if (!query) return;
 
-        // User bubble
         const userBubble = document.createElement("div");
         userBubble.className = "copilot-bubble user";
         userBubble.textContent = query;
@@ -842,13 +879,9 @@
                 body: JSON.stringify({ query })
             });
             const data = await res.json();
-
             const jarvisBubble = document.createElement("div");
             jarvisBubble.className = "copilot-bubble";
-            
-            // Format Markdown Tables & Bold Text
-            const formatted = formatMarkdown(data.response || "No telemetry available.");
-            jarvisBubble.innerHTML = `🤖 <b>JARVIS AI:</b><br>${formatted}`;
+            jarvisBubble.innerHTML = `🤖 <b>JARVIS AI:</b><br>${data.response || 'No response.'}`;
             el.copilotMessages.appendChild(jarvisBubble);
             el.copilotMessages.scrollTop = el.copilotMessages.scrollHeight;
         } catch (err) {
@@ -856,22 +889,9 @@
         }
     };
 
-    function formatMarkdown(text) {
-        let out = text
-            .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
-            .replace(/\*(.*?)\*/g, '<i>$1</i>')
-            .replace(/`([^`]+)`/g, '<code style="background:rgba(0,0,0,0.4); padding:2px 4px; border-radius:3px;">$1</code>')
-            .replace(/\n/g, '<br>');
-        return out;
-    }
-
     window.handleChatKey = function (e) {
         if (e.key === "Enter") window.sendChatMessage();
     };
-
-    /* ==========================================================================
-       5. GLOBAL SPOTLIGHT COMMAND PALETTE (CTRL+K / SPOTLIGHT)
-       ========================================================================== */
 
     function initCommandPalette() {
         window.addEventListener("keydown", e => {
@@ -904,9 +924,7 @@
                     updateCommandSelection(items);
                 } else if (e.key === "Enter") {
                     e.preventDefault();
-                    if (items[state.activeCommandIndex]) {
-                        items[state.activeCommandIndex].click();
-                    }
+                    if (items[state.activeCommandIndex]) items[state.activeCommandIndex].click();
                 }
             });
         }
@@ -916,7 +934,6 @@
         if (!el.cmdPaletteOverlay) return;
         const isOpen = el.cmdPaletteOverlay.style.display === "flex";
         const target = forceOpen !== undefined ? forceOpen : !isOpen;
-
         el.cmdPaletteOverlay.style.display = target ? "flex" : "none";
         if (target && el.cmdPaletteInput) {
             el.cmdPaletteInput.value = "";
@@ -927,13 +944,9 @@
 
     function renderCommandResults(query) {
         if (!el.cmdPaletteResults) return;
-
         const filtered = commandRegistry.filter(c => 
-            c.title.toLowerCase().includes(query) || 
-            c.desc.toLowerCase().includes(query) || 
-            c.id.toLowerCase().includes(query)
+            c.title.toLowerCase().includes(query) || c.desc.toLowerCase().includes(query) || c.id.toLowerCase().includes(query)
         );
-
         state.activeCommandIndex = 0;
         el.cmdPaletteResults.innerHTML = filtered.map((c, i) => `
             <div class="command-item ${i === 0 ? 'selected' : ''}" onclick="executeCommand('${c.id}')">
@@ -960,12 +973,13 @@
     };
 
     /* ==========================================================================
-       6. GLOBAL HANDLERS & INITIALIZATION
+       6. GLOBAL INITIALIZATION
        ========================================================================== */
 
     window.selectSymbol = function (sym) {
         state.symbol = sym;
         if (el.chartSymbol) el.chartSymbol.textContent = sym;
+        if (el.deskActiveSymbol) el.deskActiveSymbol.textContent = sym;
         fetchCandles();
         fetchTelemetry();
     };
@@ -992,14 +1006,13 @@
     window.refreshData = function () {
         fetchCandles();
         fetchTelemetry();
+        fetchNews();
     };
 
-    // Responsive Canvas Resize
     window.addEventListener("resize", () => {
         requestAnimationFrame(renderMultiPaneChart);
     });
 
-    // Lifecycle Boot
     document.addEventListener("DOMContentLoaded", () => {
         initChartInteractions();
         initCopilotInteractivity();
@@ -1007,8 +1020,8 @@
 
         fetchCandles();
         fetchTelemetry();
+        fetchNews();
 
-        // High-Frequency Real-Time Polling & Animation Loops
         setInterval(fetchTelemetry, 1500);
         setInterval(fetchCandles, 5000);
         setInterval(simulateLiveMarketTick, 250);
