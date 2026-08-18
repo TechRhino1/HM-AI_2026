@@ -31,19 +31,27 @@ class OrderManager:
         if position.type == "BUY":
             profit_pips = (c_price - position.open_price)
             
-            # Micro Account 3-Stage Breakeven Protocol
+            # Micro Account 3-Stage Breakeven & Profit Lock Protocol
             if is_micro_pos:
-                # Stage 1: Move SL to Break-Even + Buffer at +1.0 ATR
-                if profit_pips >= atr * 1.0 and position.sl < position.open_price:
-                    new_sl = position.open_price + (atr * 0.15)
-                    modified = True
-                    logger.info(f"⚡ [MICRO] Position #{position.ticket} BUY: Stage 1 Breakeven Lock at {new_sl:.2f}")
+                # Stage 3: Lock in 60% of Floating Profit at >= 2.0 ATR / +15 pts
+                if profit_pips >= atr * 2.0:
+                    lock_60_sl = position.open_price + (profit_pips * 0.60)
+                    if lock_60_sl > new_sl:
+                        new_sl = lock_60_sl
+                        modified = True
+                        logger.info(f"⚡ [MICRO] Position #{position.ticket} BUY: Stage 3 (60% Profit Lock) at {new_sl:.2f}")
 
                 # Stage 2: Lock in +0.75R profit at +1.6 ATR
                 elif profit_pips >= atr * 1.6 and position.sl < position.open_price + (atr * 0.6):
                     new_sl = position.open_price + (atr * 0.6)
                     modified = True
                     logger.info(f"⚡ [MICRO] Position #{position.ticket} BUY: Stage 2 Profit Lock at {new_sl:.2f}")
+
+                # Stage 1: Move SL to Break-Even + Buffer at +1.0 ATR
+                elif profit_pips >= atr * 1.0 and position.sl < position.open_price:
+                    new_sl = position.open_price + (atr * 0.15)
+                    modified = True
+                    logger.info(f"⚡ [MICRO] Position #{position.ticket} BUY: Stage 1 Breakeven Lock at {new_sl:.2f}")
 
             # Standard Institutional Trailing (>= $100 Accounts - UNTOUCHED)
             else:
@@ -61,19 +69,27 @@ class OrderManager:
         elif position.type == "SELL":
             profit_pips = (position.open_price - c_price)
             
-            # Micro Account 3-Stage Breakeven Protocol
+            # Micro Account 3-Stage Breakeven & Profit Lock Protocol
             if is_micro_pos:
-                # Stage 1: Move SL to Break-Even - Buffer at +1.0 ATR
-                if profit_pips >= atr * 1.0 and (position.sl > position.open_price or position.sl == 0):
-                    new_sl = position.open_price - (atr * 0.15)
-                    modified = True
-                    logger.info(f"⚡ [MICRO] Position #{position.ticket} SELL: Stage 1 Breakeven Lock at {new_sl:.2f}")
+                # Stage 3: Lock in 60% of Floating Profit at >= 2.0 ATR / +15 pts
+                if profit_pips >= atr * 2.0:
+                    lock_60_sl = position.open_price - (profit_pips * 0.60)
+                    if lock_60_sl < new_sl or new_sl == 0:
+                        new_sl = lock_60_sl
+                        modified = True
+                        logger.info(f"⚡ [MICRO] Position #{position.ticket} SELL: Stage 3 (60% Profit Lock) at {new_sl:.2f}")
 
                 # Stage 2: Lock in +0.75R profit at +1.6 ATR
                 elif profit_pips >= atr * 1.6 and (position.sl > position.open_price - (atr * 0.6) or position.sl == 0):
                     new_sl = position.open_price - (atr * 0.6)
                     modified = True
                     logger.info(f"⚡ [MICRO] Position #{position.ticket} SELL: Stage 2 Profit Lock at {new_sl:.2f}")
+
+                # Stage 1: Move SL to Break-Even - Buffer at +1.0 ATR
+                elif profit_pips >= atr * 1.0 and (position.sl > position.open_price or position.sl == 0):
+                    new_sl = position.open_price - (atr * 0.15)
+                    modified = True
+                    logger.info(f"⚡ [MICRO] Position #{position.ticket} SELL: Stage 1 Breakeven Lock at {new_sl:.2f}")
 
             # Standard Institutional Trailing (>= $100 Accounts - UNTOUCHED)
             else:
