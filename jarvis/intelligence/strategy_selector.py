@@ -1,12 +1,14 @@
 """
-JARVIS AI 3.0 — Strategy Selection Engine.
-Maps causal market regimes, fast structure shifts, and macro catalysts to strategy suitability probability distributions.
+JARVIS AI 3.0 — Dynamic Context-Aware Strategy Selection Engine.
+Features:
+- Full Market Context Synthesis (Structure, Momentum, Volatility, Liquidity, MTF)
+- Real-time Strategy Differentiation (Breakouts, CHoCH Reversals, Liquidity Sweeps, Mean Reversion, Trend Runs)
 """
-from typing import Dict, Any, List
-from jarvis.data.schemas import MarketRegime, RegimeOutput
+from typing import Dict, Any, List, Optional
+from jarvis.data.schemas import MarketRegime, RegimeOutput, MarketContext
 
 class StrategySelector:
-    """Selects and ranks candidate trading strategies based on current market regime & structure."""
+    """Selects and ranks candidate trading strategies with dynamic context awareness."""
     
     STRATEGIES = [
         "TREND_FOLLOWING",
@@ -17,59 +19,80 @@ class StrategySelector:
         "CHOCH_STRUCTURAL_REVERSAL"
     ]
 
-    def select_strategy_probabilities(self, regime: RegimeOutput) -> Dict[str, float]:
+    def select_strategy_probabilities(
+        self,
+        regime: RegimeOutput,
+        context: Optional[MarketContext] = None
+    ) -> Dict[str, float]:
         r = regime.primary_regime
 
         weights = {
-            "TREND_FOLLOWING": 0.10,
-            "TREND_PULLBACK": 0.10,
-            "BREAKOUT_EXPANSION": 0.10,
-            "LIQUIDITY_SWEEP_REVERSAL": 0.10,
-            "RANGE_MEAN_REVERSION": 0.10,
-            "CHOCH_STRUCTURAL_REVERSAL": 0.10
+            "TREND_FOLLOWING": 0.15,
+            "TREND_PULLBACK": 0.15,
+            "BREAKOUT_EXPANSION": 0.15,
+            "LIQUIDITY_SWEEP_REVERSAL": 0.15,
+            "RANGE_MEAN_REVERSION": 0.20,
+            "CHOCH_STRUCTURAL_REVERSAL": 0.20
         }
 
-        if r == MarketRegime.TREND_BULL or r == MarketRegime.TREND_BEAR:
-            weights["TREND_PULLBACK"] = 0.40
-            weights["TREND_FOLLOWING"] = 0.30
-            weights["BREAKOUT_EXPANSION"] = 0.15
-            weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.10
-            weights["LIQUIDITY_SWEEP_REVERSAL"] = 0.03
-            weights["RANGE_MEAN_REVERSION"] = 0.02
+        # 1. Evaluate Dynamic Context if available
+        if context:
+            st = context.structure
+            mom = context.momentum
+            vol = context.volatility
+            liq = context.liquidity
 
-        elif r == MarketRegime.BREAKOUT:
-            weights["BREAKOUT_EXPANSION"] = 0.60
-            weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.20
-            weights["TREND_FOLLOWING"] = 0.15
-            weights["TREND_PULLBACK"] = 0.05
-            weights["LIQUIDITY_SWEEP_REVERSAL"] = 0.00
-            weights["RANGE_MEAN_REVERSION"] = 0.00
+            # A. Structural Inversion (CHoCH) -> Priority #1
+            if st.choch:
+                weights["CHOCH_STRUCTURAL_REVERSAL"] += 0.55
+                weights["BREAKOUT_EXPANSION"] += 0.25
+                weights["TREND_PULLBACK"] = 0.05
+                weights["TREND_FOLLOWING"] = 0.05
 
-        elif r == MarketRegime.REVERSAL or r == MarketRegime.TRANSITION:
-            # Immediate capture of breakdowns and structural flips
-            weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.50
-            weights["LIQUIDITY_SWEEP_REVERSAL"] = 0.30
-            weights["BREAKOUT_EXPANSION"] = 0.15
-            weights["RANGE_MEAN_REVERSION"] = 0.05
-            weights["TREND_PULLBACK"] = 0.00
-            weights["TREND_FOLLOWING"] = 0.00
+            # B. Break of Structure / High Momentum Acceleration -> Breakout Expansion
+            elif st.bos or (mom.adx >= 28 and abs(mom.trend_score) >= 55):
+                weights["BREAKOUT_EXPANSION"] += 0.50
+                weights["TREND_FOLLOWING"] += 0.30
+                weights["TREND_PULLBACK"] = 0.10
+                weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.05
 
-        elif r == MarketRegime.RANGE or r == MarketRegime.LOW_VOLATILITY:
-            weights["RANGE_MEAN_REVERSION"] = 0.50
-            weights["LIQUIDITY_SWEEP_REVERSAL"] = 0.30
-            weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.10
-            weights["TREND_PULLBACK"] = 0.05
-            weights["TREND_FOLLOWING"] = 0.03
-            weights["BREAKOUT_EXPANSION"] = 0.02
+            # C. Institutional Liquidity Sweep -> Sweep Reversal
+            elif liq.sweep_detected or (st.discount_premium_zone == "PREMIUM" and mom.rsi > 70) or (st.discount_premium_zone == "DISCOUNT" and mom.rsi < 30):
+                weights["LIQUIDITY_SWEEP_REVERSAL"] += 0.50
+                weights["CHOCH_STRUCTURAL_REVERSAL"] += 0.25
+                weights["RANGE_MEAN_REVERSION"] += 0.15
+                weights["TREND_PULLBACK"] = 0.05
 
-        elif r == MarketRegime.HIGH_VOLATILITY or r == MarketRegime.EVENT_RISK:
-            # High-volatility news breakdown mode
-            weights["BREAKOUT_EXPANSION"] = 0.45
-            weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.35
-            weights["LIQUIDITY_SWEEP_REVERSAL"] = 0.10
-            weights["TREND_FOLLOWING"] = 0.10
-            weights["TREND_PULLBACK"] = 0.00
-            weights["RANGE_MEAN_REVERSION"] = 0.00
+            # D. Volatility Compression / Low ADX Range -> Range Mean Reversion
+            elif vol.state == "COMPRESSION" or mom.adx < 18 or r == MarketRegime.RANGE:
+                weights["RANGE_MEAN_REVERSION"] += 0.55
+                weights["LIQUIDITY_SWEEP_REVERSAL"] += 0.25
+                weights["TREND_PULLBACK"] = 0.10
+                weights["BREAKOUT_EXPANSION"] = 0.05
+
+            # E. Smooth Sustained Trend -> Trend Following vs Trend Pullback
+            elif r in [MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR]:
+                if abs(mom.trend_score) > 40:
+                    weights["TREND_FOLLOWING"] += 0.45
+                    weights["TREND_PULLBACK"] += 0.35
+                else:
+                    weights["TREND_PULLBACK"] += 0.45
+                    weights["TREND_FOLLOWING"] += 0.35
+        else:
+            # Fallback to regime mapping if context not supplied
+            if r in [MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR]:
+                weights["TREND_FOLLOWING"] = 0.40
+                weights["TREND_PULLBACK"] = 0.35
+                weights["BREAKOUT_EXPANSION"] = 0.15
+            elif r == MarketRegime.BREAKOUT:
+                weights["BREAKOUT_EXPANSION"] = 0.60
+                weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.20
+            elif r in [MarketRegime.REVERSAL, MarketRegime.TRANSITION]:
+                weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.50
+                weights["LIQUIDITY_SWEEP_REVERSAL"] = 0.30
+            elif r in [MarketRegime.RANGE, MarketRegime.LOW_VOLATILITY]:
+                weights["RANGE_MEAN_REVERSION"] = 0.55
+                weights["LIQUIDITY_SWEEP_REVERSAL"] = 0.25
 
         total = sum(weights.values())
         return {k: round(v / total, 3) for k, v in weights.items()}

@@ -64,8 +64,8 @@ class DecisionEngine:
         else:
             tentative_bias = "HOLD"
 
-        # 2. Strategy Selection
-        strategy_probs = self.strategy_selector.select_strategy_probabilities(regime)
+        # 2. Dynamic Context-Aware Strategy Selection
+        strategy_probs = self.strategy_selector.select_strategy_probabilities(regime, context=context)
         best_strategy = max(strategy_probs.items(), key=lambda x: x[1])[0]
 
         # 3. Calculate SL, TP, Risk-Reward
