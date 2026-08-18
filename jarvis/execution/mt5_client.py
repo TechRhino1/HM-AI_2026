@@ -212,8 +212,8 @@ class MT5Client:
 
         def _send():
             with self._lock:
-                tick = mt5.symbol_info_tick(resolved)
                 sym_info = mt5.symbol_info(resolved)
+                tick = mt5.symbol_info_tick(resolved)
                 if not tick or not sym_info:
                     return {"status": "FAILED", "reason": f"Tick or symbol metadata unavailable for {resolved}"}
 
@@ -236,18 +236,23 @@ class MT5Client:
                     "type_filling": getattr(mt5, "ORDER_FILLING_IOC", 1)
                 }
 
-                # Pre-flight check
-                check_res = mt5.order_check(request)
-                if check_res and "filling" in str(check_res.comment).lower():
-                    request["type_filling"] = getattr(mt5, "ORDER_FILLING_FOK", 0)
-
+                # Direct fast execution with instant filling fallback
                 result = mt5.order_send(request)
-                if result is None or result.retcode != getattr(mt5, "TRADE_RETCODE_DONE", 10009):
+                if result is None or result.retcode not in [getattr(mt5, "TRADE_RETCODE_DONE", 10009), getattr(mt5, "TRADE_RETCODE_PLACED", 10008)]:
+                    # If filling type rejected, immediately retry with FOK / RETURN
+                    if result and result.retcode in [10030, 10031]:
+                        request["type_filling"] = getattr(mt5, "ORDER_FILLING_FOK", 0)
+                        result = mt5.order_send(request)
+                        if result and result.retcode in [10030, 10031]:
+                            request["type_filling"] = getattr(mt5, "ORDER_FILLING_RETURN", 2)
+                            result = mt5.order_send(request)
+
+                if result is None or result.retcode not in [getattr(mt5, "TRADE_RETCODE_DONE", 10009), getattr(mt5, "TRADE_RETCODE_PLACED", 10008)]:
                     err_msg = result.comment if result else str(mt5.last_error())
                     logger.error(f"MT5 Order Send Failed for {resolved}: {err_msg}")
                     return {"status": "FAILED", "reason": err_msg}
 
-                logger.info(f"LIVE ORDER FILLED: Ticket={result.order} {order_type} {volume} {resolved} @ {result.price}")
+                logger.info(f"⚡ ULTRA-FAST ORDER FILLED: Ticket={result.order} {order_type} {volume} {resolved} @ {result.price}")
                 return {
                     "status": "FILLED",
                     "ticket": result.order,

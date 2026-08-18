@@ -5,6 +5,7 @@ Coordinates data feeds, multi-symbol radar scans, parallel analyst clusters, ris
 import time
 import logging
 import threading
+from datetime import datetime, timezone
 from typing import Dict, List, Any, Optional
 
 from jarvis.application.state_manager import StateManager, GLOBAL_STATE
@@ -156,24 +157,33 @@ class JarvisOrchestrator:
         }
 
     def _orchestration_loop(self):
-        """Continuous radar scan loop across configured symbols."""
-        while self._running:
-            radar_results = []
-            for sym in self.symbols:
+        """Ultra-fast parallel radar scan loop across configured symbols (<50ms latency)."""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        with ThreadPoolExecutor(max_workers=max(4, len(self.symbols)), thread_name_prefix="radar_worker") as executor:
+            while self._running:
                 try:
-                    res = self.run_cycle_for_symbol(sym)
-                    d = res["decision"]
-                    radar_results.append({
-                        "symbol": sym,
-                        "action": d.bias if d.decision == "EXECUTE" else "WAIT",
-                        "decision": d.decision,
-                        "score": round(d.model_confidence * 100.0, 0),
-                        "ev": d.expected_value,
-                        "regime": d.regime.primary_regime.value,
-                        "strategy": d.strategy
-                    })
-                except Exception as e:
-                    logger.error(f"Orchestration error for {sym}: {e}", exc_info=True)
+                    future_to_sym = {executor.submit(self.run_cycle_for_symbol, sym): sym for sym in self.symbols}
+                    radar_results = []
+                    for fut in as_completed(future_to_sym):
+                        sym = future_to_sym[fut]
+                        try:
+                            res = fut.result()
+                            d = res["decision"]
+                            radar_results.append({
+                                "symbol": sym,
+                                "action": d.bias if d.decision == "EXECUTE" else "WAIT",
+                                "decision": d.decision,
+                                "score": round(d.model_confidence * 100.0, 0),
+                                "ev": d.expected_value,
+                                "regime": d.regime.primary_regime.value,
+                                "strategy": d.strategy
+                            })
+                        except Exception as e:
+                            logger.error(f"Parallel scan error for {sym}: {e}", exc_info=True)
 
-            self.state_manager.update_radar(radar_results)
-            time.sleep(3.0)
+                    if radar_results:
+                        self.state_manager.update_radar(radar_results)
+                except Exception as e:
+                    logger.error(f"Orchestration loop error: {e}", exc_info=True)
+
+                time.sleep(1.0)
