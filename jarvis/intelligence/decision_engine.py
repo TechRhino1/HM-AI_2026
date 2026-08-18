@@ -74,15 +74,17 @@ class DecisionEngine:
 
         if tentative_bias == "BUY":
             entry_price = round(context.ask, digits)
-            # SL placed below demand zone or 1.5 ATR
-            sl_price = round(min(entry_price - (atr * 1.5), st.demand_zone[0]) if st.demand_zone[0] > 0 else entry_price - (atr * 1.5), digits)
+            # SL placed at 1.8 ATR or local demand (capped at 2.5 ATR max)
+            sl_dist = min(atr * 2.5, max(atr * 1.5, entry_price - st.demand_zone[0])) if (st.demand_zone[0] > 0 and entry_price > st.demand_zone[0]) else (atr * 1.8)
+            sl_price = round(entry_price - sl_dist, digits)
             risk_dist = abs(entry_price - sl_price)
             tp_price = round(entry_price + (risk_dist * 2.5), digits)
             rr_ratio = round(abs(tp_price - entry_price) / (risk_dist + 1e-9), 2)
         elif tentative_bias == "SELL":
             entry_price = round(context.bid, digits)
-            # SL placed above supply zone or 1.5 ATR
-            sl_price = round(max(entry_price + (atr * 1.5), st.supply_zone[1]) if st.supply_zone[1] > 0 else entry_price + (atr * 1.5), digits)
+            # SL placed at 1.8 ATR or local supply (capped at 2.5 ATR max)
+            sl_dist = min(atr * 2.5, max(atr * 1.5, st.supply_zone[1] - entry_price)) if (st.supply_zone[1] > 0 and st.supply_zone[1] > entry_price) else (atr * 1.8)
+            sl_price = round(entry_price + sl_dist, digits)
             risk_dist = abs(sl_price - entry_price)
             tp_price = round(entry_price - (risk_dist * 2.5), digits)
             rr_ratio = round(abs(entry_price - tp_price) / (risk_dist + 1e-9), 2)
@@ -117,18 +119,22 @@ class DecisionEngine:
         ev = (calibrated_win_p * planned_win_dollars) - (loss_p * planned_risk_dollars) - spread_cost - expected_slippage
         ev = round(float(ev), 2)
 
-        # 6. Trade Quality Gate Validation (Premium/Discount Zone + Sizing + EV Guard)
+        # 6. Trade Quality Gate Validation (Momentum Breakout & Dynamic EV Hurdle)
+        # In strong momentum breakouts (Trend Score >= 60 or <= -60), allow directional continuation
         premium_discount_valid = True
-        if tentative_bias == "BUY" and st.discount_premium_zone == "PREMIUM":
+        if tentative_bias == "BUY" and st.discount_premium_zone == "PREMIUM" and mom.trend_score < 60:
             premium_discount_valid = False
-        elif tentative_bias == "SELL" and st.discount_premium_zone == "DISCOUNT":
+        elif tentative_bias == "SELL" and st.discount_premium_zone == "DISCOUNT" and mom.trend_score > -60:
             premium_discount_valid = False
+
+        # Scale minimum EV hurdle dynamically to account balance size
+        effective_min_ev = max(0.10, min(self.min_ev_hurdle, planned_risk_dollars * 0.5))
 
         gate_checks = {
             "Regime Viability": regime.primary_regime != MarketRegime.EVENT_RISK,
             "Directional Bias": tentative_bias in ["BUY", "SELL"],
             "Risk/Reward >= 1.5": rr_ratio >= 1.5,
-            "Positive Expected Value": ev > 0 and ev >= self.min_ev_hurdle,
+            "Positive Expected Value": ev > 0 and ev >= effective_min_ev,
             "Spread Protection": not vol.is_excessive_spread,
             "Devil Penalty Guard": devil_report.penalty_score <= self.max_devil_penalty,
             "Calibrated Probability >= 55%": calibrated_win_p >= 0.55,
