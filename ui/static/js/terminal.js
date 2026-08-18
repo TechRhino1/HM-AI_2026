@@ -2,9 +2,10 @@
  * JARVIS AI 3.0 — Advanced Institutional Financial Trading Terminal Controller
  * 
  * Features:
- * - Multi-Pane Synchronized Charting (Candlestick + Volume/Momentum Sub-Pane)
+ * - TradingView Lightweight Charts v4 Integration (Live MT5 Candles + Volume + S/R Price Lines)
+ * - TradingView Advanced Pro Real-Time Widget Switcher (Interactive Pine Script / Drawing Desk)
+ * - Dynamic Active Support & Resistance Level Detection (R1/R2 & S1/S2)
  * - Smart Floating Tooltip with Structural AI Context
- * - Institutional Visual Overlays (Order Blocks, Fair Value Gaps)
  * - High-Impact Macro Economic News Feed & Shock Calendar
  * - Live Position Close Actions (Individual 1-Click Close & Emergency Close All)
  * - High-Probability Opportunity Radar with 1-Click Manual Execution Desk
@@ -19,6 +20,7 @@
     const state = {
         symbol: "XAUUSD",
         timeframe: "H1",
+        chartMode: "tv_live", // 'tv_live' or 'tv_pro'
         candles: [],
         latestDecisions: {},
         radarOpportunities: [],
@@ -31,11 +33,16 @@
         copilotMinimized: false,
         activeLeftTab: "radar",
         activeCommandIndex: 0,
-        chartOverlays: {
-            demandOB: { low: 2390.00, high: 2402.50, label: "DEMAND OB" },
-            supplyOB: { low: 2435.00, high: 2446.00, label: "SUPPLY OB" },
-            fvg: { low: 2410.00, high: 2415.20, label: "BEARISH FVG" }
-        }
+        supportResistance: {
+            r1: 2425.00,
+            r2: 2440.00,
+            s1: 2390.00,
+            s2: 2375.00
+        },
+        tvChartInstance: null,
+        tvCandleSeries: null,
+        tvVolumeSeries: null,
+        tvPriceLines: []
     };
 
     // DOM Elements Cache
@@ -81,10 +88,12 @@
         chartSymbol: document.getElementById("chart-symbol"),
         chartRegime: document.getElementById("chart-regime"),
         chartLivePrice: document.getElementById("chart-live-price"),
-        mainChartPane: document.getElementById("main-chart-pane"),
-        subChartPane: document.getElementById("sub-chart-pane"),
-        mainCanvas: document.getElementById("main-chart-canvas"),
-        subCanvas: document.getElementById("sub-chart-canvas"),
+        tvLiveContainer: document.getElementById("tv-lightweight-chart-container"),
+        tvProContainer: document.getElementById("tv-advanced-widget-container"),
+        btnModeTvLive: document.getElementById("btn-mode-tv-live"),
+        btnModeTvPro: document.getElementById("btn-mode-tv-pro"),
+        legendR1: document.getElementById("legend-r1"),
+        legendS1: document.getElementById("legend-s1"),
         smartTooltip: document.getElementById("smart-chart-tooltip"),
 
         // Active Trades Table
@@ -117,8 +126,6 @@
         cmdPaletteResults: document.getElementById("command-palette-results")
     };
 
-    let hoverState = { active: false, x: 0, y: 0, candle: null };
-
     const commandRegistry = [
         { id: "xau", title: "Analyze Gold (XAUUSD)", desc: "Switch terminal view & load Gold desk", shortcut: "G", action: () => selectSymbol("XAUUSD") },
         { id: "eur", title: "Analyze Euro (EURUSD)", desc: "Switch terminal view & load EURUSD desk", shortcut: "E", action: () => selectSymbol("EURUSD") },
@@ -136,272 +143,275 @@
     ];
 
     /* ==========================================================================
-       1. MULTI-PANE SYNCHRONIZED CANVAS CHART ENGINE
+       1. TRADINGVIEW LIGHTWEIGHT CHARTS INITIALIZATION & S/R ENGINE
        ========================================================================== */
 
-    function renderMultiPaneChart() {
-        if (!el.mainCanvas || !el.subCanvas) return;
-
-        const mainRect = el.mainCanvas.parentElement.getBoundingClientRect();
-        const subRect = el.subCanvas.parentElement.getBoundingClientRect();
-        const dpr = window.devicePixelRatio || 1;
-
-        if (mainRect.width === 0 || mainRect.height === 0) return;
-
-        el.mainCanvas.width = mainRect.width * dpr;
-        el.mainCanvas.height = mainRect.height * dpr;
-        const mainCtx = el.mainCanvas.getContext("2d");
-        mainCtx.scale(dpr, dpr);
-
-        el.subCanvas.width = subRect.width * dpr;
-        el.subCanvas.height = subRect.height * dpr;
-        const subCtx = el.subCanvas.getContext("2d");
-        subCtx.scale(dpr, dpr);
-
-        const w = mainRect.width;
-        const mainH = mainRect.height;
-        const subH = subRect.height;
-
-        mainCtx.fillStyle = "#080c14";
-        mainCtx.fillRect(0, 0, w, mainH);
-        subCtx.fillStyle = "#060a12";
-        subCtx.fillRect(0, 0, w, subH);
-
-        const candles = state.candles;
-        if (!candles || candles.length === 0) {
-            mainCtx.fillStyle = "#64748b";
-            mainCtx.font = "12px 'JetBrains Mono', monospace";
-            mainCtx.textAlign = "center";
-            mainCtx.fillText("Streaming Institutional Market Feed...", w / 2, mainH / 2);
+    function initTradingViewLightweightChart() {
+        if (!el.tvLiveContainer) return;
+        if (typeof LightweightCharts === "undefined") {
+            console.warn("TradingView Lightweight Charts library not yet loaded. Retrying...");
+            setTimeout(initTradingViewLightweightChart, 300);
             return;
         }
 
-        const count = Math.min(candles.length, 65);
-        const visible = candles.slice(-count);
+        el.tvLiveContainer.innerHTML = "";
 
-        let minPrice = Infinity;
-        let maxPrice = -Infinity;
-        let maxVolume = 0;
-
-        visible.forEach(c => {
-            if (c.low < minPrice) minPrice = c.low;
-            if (c.high > maxPrice) maxPrice = c.high;
-            if (c.volume > maxVolume) maxVolume = c.volume;
+        const chart = LightweightCharts.createChart(el.tvLiveContainer, {
+            layout: {
+                background: { color: "#080c14" },
+                textColor: "#94a3b8",
+                fontSize: 11,
+                fontFamily: "'JetBrains Mono', monospace"
+            },
+            grid: {
+                vertLines: { color: "rgba(51, 65, 85, 0.2)" },
+                horzLines: { color: "rgba(51, 65, 85, 0.2)" }
+            },
+            crosshair: {
+                mode: LightweightCharts.CrosshairMode.Normal,
+                vertLine: { color: "rgba(56, 189, 248, 0.5)", width: 1, style: 3 },
+                horzLine: { color: "rgba(56, 189, 248, 0.5)", width: 1, style: 3 }
+            },
+            rightPriceScale: {
+                borderColor: "rgba(51, 65, 85, 0.4)",
+                scaleMargins: { top: 0.1, bottom: 0.25 }
+            },
+            timeScale: {
+                borderColor: "rgba(51, 65, 85, 0.4)",
+                timeVisible: true,
+                secondsVisible: false
+            }
         });
 
-        const pad = (maxPrice - minPrice) * 0.08 || 1.0;
-        minPrice -= pad;
-        maxPrice += pad;
-
-        const priceToY = p => (mainH - 24) - ((p - minPrice) / (maxPrice - minPrice)) * (mainH - 45);
-        const spacing = (w - 70) / count;
-        const candleWidth = Math.max(3.5, spacing * 0.72);
-
-        // Grid lines
-        mainCtx.strokeStyle = "rgba(51, 65, 85, 0.22)";
-        mainCtx.lineWidth = 1;
-        const steps = 5;
-        for (let i = 0; i <= steps; i++) {
-            const y = 20 + (mainH - 45) * (i / steps);
-            mainCtx.beginPath();
-            mainCtx.moveTo(0, y);
-            mainCtx.lineTo(w - 65, y);
-            mainCtx.stroke();
-
-            const pVal = maxPrice - (i / steps) * (maxPrice - minPrice);
-            mainCtx.fillStyle = "#64748b";
-            mainCtx.font = "10px 'JetBrains Mono', monospace";
-            mainCtx.textAlign = "left";
-            mainCtx.fillText(pVal.toFixed(pVal > 100 ? 2 : 5), w - 60, y + 3);
-        }
-
-        // Institutional Overlays (Demand / Supply / FVG)
-        const obDemand = state.chartOverlays.demandOB;
-        if (obDemand && obDemand.high >= minPrice && obDemand.low <= maxPrice) {
-            const topY = priceToY(obDemand.high);
-            const botY = priceToY(obDemand.low);
-            mainCtx.fillStyle = "rgba(0, 245, 155, 0.08)";
-            mainCtx.fillRect(0, topY, w - 70, Math.max(2, botY - topY));
-            mainCtx.strokeStyle = "rgba(0, 245, 155, 0.35)";
-            mainCtx.setLineDash([4, 4]);
-            mainCtx.strokeRect(0, topY, w - 70, Math.max(2, botY - topY));
-            mainCtx.setLineDash([]);
-            mainCtx.fillStyle = "var(--neon-bull)";
-            mainCtx.font = "9px 'JetBrains Mono', monospace";
-            mainCtx.fillText(`[+] DEMAND OB (${obDemand.low}-${obDemand.high})`, 10, topY + 12);
-        }
-
-        // Candlesticks
-        visible.forEach((c, idx) => {
-            const x = idx * spacing + spacing / 2;
-            const isBull = c.close >= c.open;
-            const color = isBull ? "#00f59b" : "#ff3b5c";
-
-            // Wick
-            mainCtx.strokeStyle = color;
-            mainCtx.lineWidth = 1.2;
-            mainCtx.beginPath();
-            mainCtx.moveTo(x, priceToY(c.high));
-            mainCtx.lineTo(x, priceToY(c.low));
-            mainCtx.stroke();
-
-            // Body
-            mainCtx.fillStyle = color;
-            const topY = priceToY(Math.max(c.open, c.close));
-            const botY = priceToY(Math.min(c.open, c.close));
-            const bodyHeight = Math.max(2, botY - topY);
-            mainCtx.fillRect(x - candleWidth / 2, topY, candleWidth, bodyHeight);
+        // Candlestick Series
+        const candleSeries = chart.addCandlestickSeries({
+            upColor: "#00f59b",
+            downColor: "#ff3b5c",
+            borderUpColor: "#00f59b",
+            borderDownColor: "#ff3b5c",
+            wickUpColor: "#00f59b",
+            wickDownColor: "#ff3b5c"
         });
 
-        // Sub-pane: Volume & RSI Momentum
-        subCtx.strokeStyle = "rgba(51, 65, 85, 0.2)";
-        subCtx.lineWidth = 1;
-        subCtx.beginPath();
-        subCtx.moveTo(0, subH / 2);
-        subCtx.lineTo(w - 65, subH / 2);
-        subCtx.stroke();
+        // Volume Histogram Series
+        const volumeSeries = chart.addHistogramSeries({
+            color: "#38bdf8",
+            priceFormat: { type: "volume" },
+            priceScaleId: "",
+            scaleMargins: { top: 0.8, bottom: 0 }
+        });
 
-        subCtx.beginPath();
-        visible.forEach((c, idx) => {
-            const x = idx * spacing + spacing / 2;
-            const isBull = c.close >= c.open;
+        state.tvChartInstance = chart;
+        state.tvCandleSeries = candleSeries;
+        state.tvVolumeSeries = volumeSeries;
 
-            if (maxVolume > 0) {
-                const volHeight = (c.volume / maxVolume) * (subH * 0.65);
-                subCtx.fillStyle = isBull ? "rgba(0, 245, 155, 0.18)" : "rgba(255, 59, 92, 0.18)";
-                subCtx.fillRect(x - candleWidth / 2, subH - volHeight, candleWidth, volHeight);
+        // Subscribe to crosshair move for Smart Tooltip
+        chart.subscribeCrosshairMove(param => {
+            if (!param.time || !param.seriesData || !param.point) {
+                if (el.smartTooltip) el.smartTooltip.style.display = "none";
+                return;
             }
 
-            const pseudoRsi = 30 + ((c.close - minPrice) / (maxPrice - minPrice)) * 40;
-            const rsiY = subH - (pseudoRsi / 100) * subH;
-            if (idx === 0) subCtx.moveTo(x, rsiY);
-            else subCtx.lineTo(x, rsiY);
+            const candle = param.seriesData.get(candleSeries);
+            if (!candle) {
+                if (el.smartTooltip) el.smartTooltip.style.display = "none";
+                return;
+            }
+
+            const isBull = candle.close >= candle.open;
+            const color = isBull ? "var(--neon-bull)" : "var(--neon-bear)";
+            const digits = candle.close > 100 ? 2 : 5;
+
+            let contextTag = "Standard Market Liquidity";
+            if (candle.high >= state.supportResistance.r1) {
+                contextTag = "⚠ Approaching Key Institutional Resistance Zone";
+            } else if (candle.low <= state.supportResistance.s1) {
+                contextTag = "✓ Institutional Demand Zone Support Absorption";
+            }
+
+            const dateStr = typeof param.time === "number"
+                ? new Date(param.time * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : String(param.time);
+
+            if (el.smartTooltip) {
+                el.smartTooltip.innerHTML = `
+                    <div class="tooltip-header">
+                        <span>${state.symbol} [${state.timeframe}]</span>
+                        <span>${dateStr}</span>
+                    </div>
+                    <div class="tooltip-row"><span>Open:</span> <b>${candle.open.toFixed(digits)}</b></div>
+                    <div class="tooltip-row"><span>High:</span> <b>${candle.high.toFixed(digits)}</b></div>
+                    <div class="tooltip-row"><span>Low:</span> <b>${candle.low.toFixed(digits)}</b></div>
+                    <div class="tooltip-row"><span>Close:</span> <b style="color:${color};">${candle.close.toFixed(digits)}</b></div>
+                    <div class="tooltip-structure-tag">✦ ${contextTag}</div>
+                `;
+                el.smartTooltip.style.display = "block";
+                el.smartTooltip.style.left = `${Math.min(window.innerWidth - 220, param.point.x + 15)}px`;
+                el.smartTooltip.style.top = `${Math.max(60, param.point.y - 40)}px`;
+            }
         });
-        subCtx.strokeStyle = "#38bdf8";
-        subCtx.lineWidth = 1.5;
-        subCtx.stroke();
 
-        // Crosshair & Tooltip
-        if (hoverState.active && hoverState.candle) {
-            const hx = hoverState.x;
+        renderTradingViewChartData();
+    }
 
-            mainCtx.strokeStyle = "rgba(56, 189, 248, 0.4)";
-            mainCtx.lineWidth = 1;
-            mainCtx.setLineDash([3, 3]);
-            mainCtx.beginPath();
-            mainCtx.moveTo(hx, 0);
-            mainCtx.lineTo(hx, mainH);
-            mainCtx.moveTo(0, hoverState.y);
-            mainCtx.lineTo(w - 65, hoverState.y);
-            mainCtx.stroke();
+    function calculateSupportResistance(candles) {
+        if (!candles || candles.length < 10) return;
 
-            subCtx.strokeStyle = "rgba(56, 189, 248, 0.4)";
-            subCtx.lineWidth = 1;
-            subCtx.setLineDash([3, 3]);
-            subCtx.beginPath();
-            subCtx.moveTo(hx, 0);
-            subCtx.lineTo(hx, subH);
-            subCtx.stroke();
-            mainCtx.setLineDash([]);
-            subCtx.setLineDash([]);
+        let highs = [];
+        let lows = [];
 
-            updateSmartTooltip(hoverState.candle, hx, hoverState.y);
-        } else {
-            if (el.smartTooltip) el.smartTooltip.style.display = "none";
+        for (let i = 2; i < candles.length - 2; i++) {
+            const cur = candles[i];
+            // Swing High
+            if (cur.high > candles[i - 1].high && cur.high > candles[i - 2].high &&
+                cur.high > candles[i + 1].high && cur.high > candles[i + 2].high) {
+                highs.push(cur.high);
+            }
+            // Swing Low
+            if (cur.low < candles[i - 1].low && cur.low < candles[i - 2].low &&
+                cur.low < candles[i + 1].low && cur.low < candles[i + 2].low) {
+                lows.push(cur.low);
+            }
         }
 
-        // Live Header Price Tag
-        const last = visible[visible.length - 1];
+        const lastPrice = candles[candles.length - 1].close;
+        const higherHighs = highs.filter(h => h > lastPrice).sort((a, b) => a - b);
+        const lowerLows = lows.filter(l => l < lastPrice).sort((a, b) => b - a);
+
+        const r1 = higherHighs.length > 0 ? higherHighs[0] : lastPrice * 1.012;
+        const r2 = higherHighs.length > 1 ? higherHighs[1] : r1 * 1.015;
+        const s1 = lowerLows.length > 0 ? lowerLows[0] : lastPrice * 0.988;
+        const s2 = lowerLows.length > 1 ? lowerLows[1] : s1 * 0.985;
+
+        state.supportResistance = { r1, r2, s1, s2 };
+
+        const digits = lastPrice > 100 ? 2 : 5;
+        if (el.legendR1) el.legendR1.textContent = `🔴 Resistance: ${r1.toFixed(digits)}`;
+        if (el.legendS1) el.legendS1.textContent = `🟢 Support: ${s1.toFixed(digits)}`;
+    }
+
+    function renderTradingViewChartData() {
+        if (!state.tvCandleSeries || !state.tvVolumeSeries || !state.candles || state.candles.length === 0) return;
+
+        const formattedCandles = [];
+        const formattedVolumes = [];
+
+        state.candles.forEach(c => {
+            const timeVal = typeof c.time === "number" ? c.time : Math.floor(new Date(c.time).getTime() / 1000);
+            formattedCandles.push({
+                time: timeVal,
+                open: c.open,
+                high: c.high,
+                low: c.low,
+                close: c.close
+            });
+            formattedVolumes.push({
+                time: timeVal,
+                value: c.volume,
+                color: c.close >= c.open ? "rgba(0, 245, 155, 0.35)" : "rgba(255, 59, 92, 0.35)"
+            });
+        });
+
+        state.tvCandleSeries.setData(formattedCandles);
+        state.tvVolumeSeries.setData(formattedVolumes);
+
+        calculateSupportResistance(state.candles);
+
+        // Clear existing Price Lines
+        if (state.tvPriceLines && state.tvPriceLines.length > 0) {
+            state.tvPriceLines.forEach(pl => state.tvCandleSeries.removePriceLine(pl));
+            state.tvPriceLines = [];
+        }
+
+        const digits = state.candles[0].close > 100 ? 2 : 5;
+
+        // Draw Active Resistance Level Line
+        const r1Line = state.tvCandleSeries.createPriceLine({
+            price: state.supportResistance.r1,
+            color: '#ff3b5c',
+            lineWidth: 2,
+            lineStyle: LightweightCharts.LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: `R1: ${state.supportResistance.r1.toFixed(digits)} (RESISTANCE)`
+        });
+
+        // Draw Active Support Level Line
+        const s1Line = state.tvCandleSeries.createPriceLine({
+            price: state.supportResistance.s1,
+            color: '#00f59b',
+            lineWidth: 2,
+            lineStyle: LightweightCharts.LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: `S1: ${state.supportResistance.s1.toFixed(digits)} (SUPPORT)`
+        });
+
+        state.tvPriceLines.push(r1Line, s1Line);
+
+        // Update Live Header Price
+        const last = state.candles[state.candles.length - 1];
         if (last && el.chartLivePrice) {
-            el.chartLivePrice.textContent = last.close.toFixed(last.close > 100 ? 2 : 5);
+            el.chartLivePrice.textContent = last.close.toFixed(digits);
             el.chartLivePrice.style.color = last.close >= last.open ? "var(--neon-bull)" : "var(--neon-bear)";
         }
     }
 
-    function updateSmartTooltip(candle, x, y) {
-        const tip = el.smartTooltip;
-        if (!tip) return;
+    function initTradingViewAdvancedWidget() {
+        if (!el.tvProContainer) return;
+        if (typeof TradingView === "undefined") return;
 
-        const isBull = candle.close >= candle.open;
-        const color = isBull ? "var(--neon-bull)" : "var(--neon-bear)";
-        const digits = candle.close > 100 ? 2 : 5;
+        el.tvProContainer.innerHTML = "";
+        const widgetId = "tv_advanced_widget_frame";
+        const div = document.createElement("div");
+        div.id = widgetId;
+        div.style.width = "100%";
+        div.style.height = "100%";
+        el.tvProContainer.appendChild(div);
 
-        let contextTag = "Standard Liquidity Transition";
-        if (candle.high >= state.chartOverlays.supplyOB.low) {
-            contextTag = "⚠ Approaching H1 Supply Order Block";
-        } else if (candle.low <= state.chartOverlays.demandOB.high) {
-            contextTag = "✓ Institutional Demand Zone Absorption";
-        } else if (candle.volume > 3000) {
-            contextTag = "⚡ Volume Expansion Sweep (Stop-Hunt)";
+        const tvSymbolMap = {
+            "XAUUSD": "OANDA:XAUUSD",
+            "EURUSD": "FX:EURUSD",
+            "GBPUSD": "FX:GBPUSD",
+            "USDJPY": "FX:USDJPY",
+            "BTCUSD": "BINANCE:BTCUSDT"
+        };
+        const tvSym = tvSymbolMap[state.symbol] || `FX:${state.symbol}`;
+
+        new TradingView.widget({
+            container_id: widgetId,
+            autosize: true,
+            symbol: tvSym,
+            interval: state.timeframe === "M5" ? "5" : (state.timeframe === "M15" ? "15" : (state.timeframe === "H4" ? "240" : (state.timeframe === "D1" ? "D" : "60"))),
+            timezone: "Etc/UTC",
+            theme: "dark",
+            style: "1",
+            locale: "en",
+            toolbar_bg: "#080c14",
+            enable_publishing: false,
+            hide_side_toolbar: false,
+            allow_symbol_change: true,
+            details: true,
+            hotlist: true,
+            calendar: true,
+            studies: ["Volume@tv-basicstudies", "MASimple@tv-basicstudies"]
+        });
+    }
+
+    window.switchChartMode = function (mode) {
+        state.chartMode = mode;
+        if (el.btnModeTvLive) el.btnModeTvLive.classList.toggle("active", mode === "tv_live");
+        if (el.btnModeTvPro) el.btnModeTvPro.classList.toggle("active", mode === "tv_pro");
+
+        if (mode === "tv_live") {
+            if (el.tvLiveContainer) el.tvLiveContainer.style.display = "block";
+            if (el.tvProContainer) el.tvProContainer.style.display = "none";
+            if (!state.tvChartInstance) initTradingViewLightweightChart();
+            else renderTradingViewChartData();
+        } else {
+            if (el.tvLiveContainer) el.tvLiveContainer.style.display = "none";
+            if (el.tvProContainer) el.tvProContainer.style.display = "block";
+            initTradingViewAdvancedWidget();
         }
-
-        const dateStr = typeof candle.time === "number"
-            ? new Date(candle.time * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            : String(candle.time).split(" ")[1] || "Live";
-
-        tip.innerHTML = `
-            <div class="tooltip-header">
-                <span>${state.symbol} [${state.timeframe}]</span>
-                <span>${dateStr}</span>
-            </div>
-            <div class="tooltip-row"><span>Open:</span> <b>${candle.open.toFixed(digits)}</b></div>
-            <div class="tooltip-row"><span>High:</span> <b>${candle.high.toFixed(digits)}</b></div>
-            <div class="tooltip-row"><span>Low:</span> <b>${candle.low.toFixed(digits)}</b></div>
-            <div class="tooltip-row"><span>Close:</span> <b style="color:${color};">${candle.close.toFixed(digits)}</b></div>
-            <div class="tooltip-row"><span>Volume:</span> <b>${candle.volume.toLocaleString()}</b></div>
-            <div class="tooltip-structure-tag">✦ ${contextTag}</div>
-        `;
-
-        tip.style.display = "block";
-        tip.style.left = `${Math.min(window.innerWidth - 200, x + 15)}px`;
-        tip.style.top = `${Math.max(60, y - 40)}px`;
-    }
-
-    function initChartInteractions() {
-        if (!el.mainCanvas) return;
-
-        el.mainCanvas.addEventListener("mousemove", e => {
-            const rect = el.mainCanvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-
-            const count = Math.min(state.candles.length, 65);
-            const spacing = (rect.width - 70) / count;
-            const idx = Math.floor(x / spacing);
-            const visible = state.candles.slice(-count);
-
-            if (idx >= 0 && idx < visible.length && x < rect.width - 70) {
-                hoverState = { active: true, x, y, candle: visible[idx] };
-            } else {
-                hoverState = { active: false, x: 0, y: 0, candle: null };
-            }
-            requestAnimationFrame(renderMultiPaneChart);
-        });
-
-        el.mainCanvas.addEventListener("mouseleave", () => {
-            hoverState = { active: false, x: 0, y: 0, candle: null };
-            requestAnimationFrame(renderMultiPaneChart);
-        });
-
-        el.mainCanvas.addEventListener("dblclick", () => {
-            if (hoverState.candle) {
-                injectChartContextToCopilot(hoverState.candle);
-            }
-        });
-    }
-
-    function injectChartContextToCopilot(candle) {
-        const timeStr = typeof candle.time === "number"
-            ? new Date(candle.time * 1000).toLocaleTimeString()
-            : String(candle.time);
-
-        const prompt = `JARVIS, analyze the structural order flow and liquidity around ${timeStr} @ ${candle.close} for ${state.symbol}.`;
-        toggleCopilotModal(true);
-        if (el.copilotInput) {
-            el.copilotInput.value = prompt;
-            setTimeout(() => el.copilotInput.focus(), 100);
-        }
-    }
+    };
 
     /* ==========================================================================
        2. REAL-TIME DATA FETCHING & TELEMETRY
@@ -413,7 +423,9 @@
             const data = await res.json();
             if (data && data.candles) {
                 state.candles = data.candles;
-                requestAnimationFrame(renderMultiPaneChart);
+                if (state.chartMode === "tv_live") {
+                    renderTradingViewChartData();
+                }
             }
         } catch (err) {
             console.error("Candle fetch error:", err);
@@ -453,14 +465,29 @@
     }
 
     function simulateLiveMarketTick() {
-        if (!state.candles || state.candles.length === 0) return;
+        if (!state.candles || state.candles.length === 0 || state.chartMode !== "tv_live") return;
         const last = state.candles[state.candles.length - 1];
         const volStep = (Math.random() - 0.495) * (last.close > 100 ? 0.35 : 0.00015);
         last.close = Math.max(last.low * 0.999, last.close + volStep);
         if (last.close > last.high) last.high = last.close;
         if (last.close < last.low) last.low = last.close;
         last.volume += Math.floor(Math.random() * 8) + 1;
-        requestAnimationFrame(renderMultiPaneChart);
+
+        if (state.tvCandleSeries && state.tvVolumeSeries) {
+            const timeVal = typeof last.time === "number" ? last.time : Math.floor(new Date(last.time).getTime() / 1000);
+            state.tvCandleSeries.update({
+                time: timeVal,
+                open: last.open,
+                high: last.high,
+                low: last.low,
+                close: last.close
+            });
+            state.tvVolumeSeries.update({
+                time: timeVal,
+                value: last.volume,
+                color: last.close >= last.open ? "rgba(0, 245, 155, 0.35)" : "rgba(255, 59, 92, 0.35)"
+            });
+        }
     }
 
     /* ==========================================================================
@@ -982,6 +1009,10 @@
         if (el.deskActiveSymbol) el.deskActiveSymbol.textContent = sym;
         fetchCandles();
         fetchTelemetry();
+
+        if (state.chartMode === "tv_pro") {
+            initTradingViewAdvancedWidget();
+        }
     };
 
     window.setTimeframe = function (tf) {
@@ -990,6 +1021,10 @@
             btn.classList.toggle("active", btn.textContent === tf);
         });
         fetchCandles();
+
+        if (state.chartMode === "tv_pro") {
+            initTradingViewAdvancedWidget();
+        }
     };
 
     window.toggleSafeMode = async function () {
@@ -1010,11 +1045,16 @@
     };
 
     window.addEventListener("resize", () => {
-        requestAnimationFrame(renderMultiPaneChart);
+        if (state.tvChartInstance && el.tvLiveContainer) {
+            state.tvChartInstance.applyOptions({
+                width: el.tvLiveContainer.clientWidth,
+                height: el.tvLiveContainer.clientHeight
+            });
+        }
     });
 
     document.addEventListener("DOMContentLoaded", () => {
-        initChartInteractions();
+        initTradingViewLightweightChart();
         initCopilotInteractivity();
         initCommandPalette();
 
@@ -1024,7 +1064,7 @@
 
         setInterval(fetchTelemetry, 1500);
         setInterval(fetchCandles, 5000);
-        setInterval(simulateLiveMarketTick, 250);
+        setInterval(simulateLiveMarketTick, 350);
     });
 
 })();
