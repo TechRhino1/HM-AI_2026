@@ -65,6 +65,9 @@
             <button class="cmd-hint-btn" onclick="toggleCommandPalette(true)">
                 <span>⌘K</span> / <span>Palette</span>
             </button>
+            <button class="btn-terminal" onclick="toggleCopilotModal()">
+                <span style="color:var(--accent-cyan);">🤖</span> Copilot
+            </button>
             <button id="btn-safe-mode" class="btn-terminal btn-warning" onclick="toggleSafeMode()">
                 🛡️ Safe Mode
             </button>
@@ -263,72 +266,69 @@
             </div>
         </aside>
 
-        <!-- CENTER BOTTOM: MODULE A (Active Trades HUD) & Dockable AI Copilot -->
-        <section class="terminal-panel" style="display:grid; grid-template-columns: 1fr 350px; gap:0;">
-            
-            <!-- MODULE A: Active Trades (Live Positions HUD) -->
-            <div style="display:flex; flex-direction:column; overflow:hidden; border-right:1px solid var(--border-subtle);">
-                <div class="panel-header">
-                    <div class="panel-title-wrap">
-                        <span class="panel-title">Active Trades (Live Positions HUD)</span>
-                    </div>
-                    <span id="pos-count" class="panel-counter">0 Open</span>
+        <!-- CENTER BOTTOM: MODULE A (Active Trades HUD) — Full 100% Width -->
+        <section class="terminal-panel">
+            <div class="panel-header">
+                <div class="panel-title-wrap">
+                    <span class="panel-title">Active Trades (Live Positions HUD)</span>
                 </div>
-                <div class="panel-content positions-hud-container" style="padding:0;">
-                    <table class="positions-table">
-                        <thead>
-                            <tr>
-                                <th>Ticket</th>
-                                <th>Symbol</th>
-                                <th>Side</th>
-                                <th>Lots</th>
-                                <th>Entry</th>
-                                <th>Current</th>
-                                <th>SL</th>
-                                <th>TP</th>
-                                <th>Floating PnL</th>
-                                <th>TP/SL Proximity</th>
-                            </tr>
-                        </thead>
-                        <tbody id="positions-tbody">
-                            <tr><td colspan="10" style="text-align:center; color:var(--text-dim); padding:16px;">No Active Positions Open</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+                <span id="pos-count" class="panel-counter">0 Open</span>
             </div>
-
-            <!-- DOCKABLE / DRAGGABLE / MINIMIZABLE JARVIS AI COPILOT WINDOW -->
-            <div id="copilot-window" class="copilot-window docked">
-                <div id="copilot-header" class="copilot-header">
-                    <div class="copilot-header-title">
-                        <span>🤖</span>
-                        <span>JARVIS Copilot</span>
-                    </div>
-                    <div class="copilot-header-actions">
-                        <button class="copilot-action-btn" title="Clear Context" onclick="clearCopilotChat()">🗑️</button>
-                        <button class="copilot-action-btn" title="Export Chat (.md)" onclick="exportCopilotChat()">📥</button>
-                        <button class="copilot-action-btn" title="Toggle Float / Dock" onclick="toggleCopilotFloating()">⛶</button>
-                        <button class="copilot-action-btn" title="Minimize to Chat Head" onclick="toggleCopilotMinimize(true)">−</button>
-                    </div>
-                </div>
-                <div class="copilot-body">
-                    <div id="copilot-messages" class="copilot-messages">
-                        <div class="copilot-bubble">
-                            🤖 <b>JARVIS AI 3.0:</b> Standing by. Double-click any chart candle to analyze order flow, or ask about market regimes, risk exposure, and live invalidations.
-                        </div>
-                    </div>
-                    <div class="copilot-input-bar">
-                        <input id="copilot-input" class="copilot-input" placeholder="Ask JARVIS (e.g. Why no trade on Gold?)..." onkeydown="handleChatKey(event)">
-                        <button class="btn-terminal" style="padding:5px 10px;" onclick="sendChatMessage()">Send</button>
-                    </div>
-                </div>
+            <div class="panel-content positions-hud-container" style="padding:0;">
+                <table class="positions-table">
+                    <thead>
+                        <tr>
+                            <th>Ticket</th>
+                            <th>Symbol</th>
+                            <th>Side</th>
+                            <th>Lots</th>
+                            <th>Entry Price</th>
+                            <th>Live Price</th>
+                            <th>Stop Loss</th>
+                            <th>Take Profit</th>
+                            <th>Floating PnL</th>
+                            <th>TP / SL Proximity</th>
+                        </tr>
+                    </thead>
+                    <tbody id="positions-tbody">
+                        <tr><td colspan="10" style="text-align:center; color:var(--text-dim); padding:20px;">No Active Positions Open</td></tr>
+                    </tbody>
+                </table>
             </div>
-
         </section>
 
     </main>
 
-    <!-- Floating Chat Head FAB (Shown when minimized) -->
+    <!-- ==========================================================================
+         FLOATING & DRAGGABLE JARVIS AI COPILOT WINDOW
+         ========================================================================== -->
+    <div id="copilot-window" class="copilot-window floating" style="display:none;">
+        <div id="copilot-header" class="copilot-header">
+            <div class="copilot-header-title">
+                <span>🤖</span>
+                <span>JARVIS Copilot Intelligence</span>
+            </div>
+            <div class="copilot-header-actions">
+                <button class="copilot-action-btn" title="Clear Context" onclick="clearCopilotChat()">🗑️</button>
+                <button class="copilot-action-btn" title="Export Chat (.md)" onclick="exportCopilotChat()">📥</button>
+                <button class="copilot-action-btn" title="Minimize" onclick="toggleCopilotMinimize(true)">−</button>
+                <button class="copilot-action-btn" title="Close" onclick="toggleCopilotModal(false)">✕</button>
+            </div>
+        </div>
+        <div class="copilot-body">
+            <div id="copilot-messages" class="copilot-messages">
+                <div class="copilot-bubble">
+                    🤖 <b>JARVIS AI 3.0:</b> Standing by. Double-click any chart candle to analyze order flow, or ask about market regimes, risk exposure, and live invalidations.
+                </div>
+            </div>
+            <div class="copilot-input-bar">
+                <input id="copilot-input" class="copilot-input" placeholder="Ask JARVIS (e.g. Why no trade on Gold?)..." onkeydown="handleChatKey(event)">
+                <button class="btn-terminal" style="padding:5px 12px;" onclick="sendChatMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Chat Head FAB (Shown when Copilot is minimized) -->
     <div id="copilot-fab" class="copilot-fab" title="Open JARVIS AI Copilot" onclick="toggleCopilotMinimize(false)">
         🤖
     </div>

@@ -6,7 +6,7 @@
  * - Smart Floating Tooltip with Structural AI Context (Order Blocks, FVGs, Sweeps)
  * - Institutional Visual Overlays (Supply/Demand Zones, Fair Value Gaps)
  * - High-Frequency Real-Time WebSocket & Tick Stream with requestAnimationFrame (60 FPS)
- * - Dockable, Draggable & Minimized Floating JARVIS AI Copilot
+ * - Standalone Floating & Draggable JARVIS AI Copilot (Never covers or distorts Active Trades)
  * - Context-Aware Chart-to-Chat Interactivity (Double-Click Candle Context Injection)
  * - Global Spotlight Command Palette (Ctrl+K / Cmd+K / Slash key)
  * - Rich Markdown & HTML Data Table Formatter for Copilot
@@ -26,8 +26,8 @@
         account: null,
         executionMode: "LIVE",
         safeMode: false,
-        copilotOpen: true,
-        copilotMode: "docked", // "docked", "floating", "minimized"
+        copilotOpen: false,
+        copilotMinimized: false,
         activeCommandIndex: 0,
         chartOverlays: {
             demandOB: { low: 2390.00, high: 2402.50, label: "DEMAND OB" },
@@ -119,10 +119,10 @@
         { id: "tf15", title: "Set Timeframe M15", desc: "15-Minute Intraday Setup Frame", shortcut: "15m", action: () => setTimeframe("M15") },
         { id: "tf60", title: "Set Timeframe H1", desc: "1-Hour Primary Institutional Frame", shortcut: "1h", action: () => setTimeframe("H1") },
         { id: "tf240", title: "Set Timeframe H4", desc: "4-Hour Context Structure Frame", shortcut: "4h", action: () => setTimeframe("H4") },
+        { id: "copilot", title: "Toggle JARVIS AI Copilot", desc: "Open / Close intelligent assistant dock", shortcut: "C", action: () => toggleCopilotModal() },
         { id: "safe", title: "Toggle Emergency Safe Mode", desc: "Pause or unpause all autonomous executions", shortcut: "Esc", action: () => toggleSafeMode() },
         { id: "clear_chat", title: "Clear Copilot Conversation", desc: "Reset memory context in chat dock", shortcut: "Del", action: () => clearCopilotChat() },
         { id: "export_chat", title: "Export Copilot Session Log", desc: "Download full intelligence transcript as .md", shortcut: "Exp", action: () => exportCopilotChat() },
-        { id: "float_copilot", title: "Float / Dock Copilot Window", desc: "Switch between pinned and floating window", shortcut: "F", action: () => toggleCopilotFloating() },
         { id: "refresh", title: "Force Refresh Telemetry", desc: "Poll latest MT5 broker state immediately", shortcut: "F5", action: () => refreshData() }
     ];
 
@@ -136,6 +136,8 @@
         const mainRect = el.mainCanvas.parentElement.getBoundingClientRect();
         const subRect = el.subCanvas.parentElement.getBoundingClientRect();
         const dpr = window.devicePixelRatio || 1;
+
+        if (mainRect.width === 0 || mainRect.height === 0) return;
 
         // Resize Main Canvas
         el.mainCanvas.width = mainRect.width * dpr;
@@ -438,20 +440,17 @@
 
         const prompt = `JARVIS, analyze the structural order flow and liquidity around ${timeStr} @ ${candle.close} for ${state.symbol}. Are we in a trap?`;
 
+        toggleCopilotModal(true);
+
         if (el.copilotInput) {
             el.copilotInput.value = prompt;
-            el.copilotInput.focus();
-        }
-
-        // Open Copilot if minimized
-        if (state.copilotMode === "minimized") {
-            toggleCopilotMinimize(false);
+            setTimeout(() => el.copilotInput.focus(), 100);
         }
     }
 
     /* ==========================================================================
        2. REAL-TIME TELEMETRY & WEBSOCKET SIMULATOR
-       ========================================================================= */
+       ========================================================================== */
 
     async function fetchCandles() {
         try {
@@ -549,7 +548,7 @@
         // MODULE B: Scanner Radar
         renderScannerRadarDOM(state.radarOpportunities);
 
-        // MODULE A: Active Trades HUD
+        // MODULE A: Active Trades HUD (Full width)
         renderActiveTradesDOM(state.positions);
 
         // MODULE C: The Devil's Advocate & Risk Panel
@@ -605,7 +604,7 @@
         if (el.positionsCount) el.positionsCount.textContent = `${positions.length} Open`;
 
         if (positions.length === 0) {
-            el.positionsTbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:var(--text-dim); padding:16px;">No Active MT5 Positions Open</td></tr>';
+            el.positionsTbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:var(--text-dim); padding:20px;">No Active MT5 Positions Open</td></tr>';
             return;
         }
 
@@ -683,7 +682,7 @@
             const invs = d.invalidation_levels || [];
             el.invalidationTriggerText.innerHTML = invs.length > 0
                 ? invs.map(i => `<div style="margin-bottom:3px;">• ${i}</div>`).join("")
-                : "• H1 close below swing structure boundary.";
+                : "• H1 close below demand equilibrium (2390.00).";
         }
 
         // Threat Vectors
@@ -707,7 +706,7 @@
     }
 
     /* ==========================================================================
-       4. CONTEXT-AWARE DRAGGABLE & DOCKABLE JARVIS AI COPILOT
+       4. CONTEXT-AWARE DRAGGABLE & FLOATING JARVIS AI COPILOT
        ========================================================================== */
 
     function initCopilotInteractivity() {
@@ -720,7 +719,6 @@
         let initialTop = 0;
 
         el.copilotHeader.addEventListener("mousedown", e => {
-            if (state.copilotMode !== "floating") return;
             if (e.target.closest("button")) return;
 
             isDragging = true;
@@ -748,44 +746,45 @@
         });
 
         window.addEventListener("mouseup", () => {
-            isDragging = false;
-            document.body.style.cursor = "default";
+            if (isDragging) {
+                isDragging = false;
+                document.body.style.cursor = "default";
+            }
         });
     }
 
-    window.toggleCopilotFloating = function () {
+    window.toggleCopilotModal = function (forceOpen) {
         if (!el.copilotWindow) return;
 
-        if (state.copilotMode === "docked") {
-            state.copilotMode = "floating";
-            el.copilotWindow.classList.remove("docked");
-            el.copilotWindow.classList.add("floating");
+        const isCurrentlyOpen = el.copilotWindow.style.display === "flex";
+        const target = forceOpen !== undefined ? forceOpen : !isCurrentlyOpen;
+
+        state.copilotOpen = target;
+        state.copilotMinimized = false;
+
+        if (target) {
             el.copilotWindow.style.display = "flex";
+            if (el.copilotFab) el.copilotFab.style.display = "none";
+            if (el.copilotInput) setTimeout(() => el.copilotInput.focus(), 50);
         } else {
-            state.copilotMode = "docked";
-            el.copilotWindow.classList.remove("floating");
-            el.copilotWindow.classList.add("docked");
-            el.copilotWindow.style.left = "";
-            el.copilotWindow.style.top = "";
-            el.copilotWindow.style.display = "flex";
+            el.copilotWindow.style.display = "none";
+            if (el.copilotFab) el.copilotFab.style.display = "none";
         }
     };
 
-    window.toggleCopilotMinimize = function (forceMinimize) {
+    window.toggleCopilotMinimize = function (minimize) {
         if (!el.copilotWindow || !el.copilotFab) return;
 
-        const minimize = forceMinimize !== undefined ? forceMinimize : state.copilotMode !== "minimized";
+        const target = minimize !== undefined ? minimize : !state.copilotMinimized;
+        state.copilotMinimized = target;
 
-        if (minimize) {
-            state.copilotMode = "minimized";
+        if (target) {
             el.copilotWindow.style.display = "none";
             el.copilotFab.style.display = "flex";
         } else {
-            state.copilotMode = "floating";
-            el.copilotWindow.classList.remove("docked");
-            el.copilotWindow.classList.add("floating");
             el.copilotWindow.style.display = "flex";
             el.copilotFab.style.display = "none";
+            if (el.copilotInput) setTimeout(() => el.copilotInput.focus(), 50);
         }
     };
 
