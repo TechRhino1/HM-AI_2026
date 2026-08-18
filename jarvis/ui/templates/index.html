@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JARVIS AI 3.0 — Institutional Trading Terminal</title>
+    <title>JARVIS AI 3.0 — Institutional Financial Trading Terminal</title>
     <!-- Google Fonts: Inter & JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- Terminal Stylesheet -->
     <link rel="stylesheet" href="/static/css/terminal.css">
 </head>
@@ -28,7 +28,7 @@
             <div id="exec-mode-badge" class="badge badge-mode">LIVE</div>
         </div>
 
-        <!-- Header Telemetry Metrics -->
+        <!-- Real-Time Broker Telemetry Metrics -->
         <div class="hud-telemetry">
             <div class="hud-tile">
                 <span class="hud-tile-label">Broker Server</span>
@@ -62,6 +62,9 @@
 
         <!-- Header Action Controls -->
         <div class="hud-actions">
+            <button class="cmd-hint-btn" onclick="toggleCommandPalette(true)">
+                <span>⌘K</span> / <span>Palette</span>
+            </button>
             <button id="btn-safe-mode" class="btn-terminal btn-warning" onclick="toggleSafeMode()">
                 🛡️ Safe Mode
             </button>
@@ -76,7 +79,7 @@
          ========================================================================== -->
     <main class="terminal-workspace">
         
-        <!-- LEFT COLUMN: Account Details & MODULE B (Scanner Radar) -->
+        <!-- LEFT COLUMN: Verified Account Card & MODULE B (Scanner Radar) -->
         <aside class="terminal-panel" style="grid-row: 1 / 3;">
             <div class="panel-header">
                 <div class="panel-title-wrap">
@@ -121,7 +124,7 @@
                             <span id="acc-free-margin" class="account-item-val">$97.99</span>
                         </div>
                         <div class="account-item">
-                            <span class="account-item-lbl">Trading Mode</span>
+                            <span class="account-item-lbl">Trading Access</span>
                             <span id="acc-trade-allowed" class="account-item-val" style="color:var(--neon-bull); font-size:10.5px;">YES (Full)</span>
                         </div>
                     </div>
@@ -133,12 +136,12 @@
                     <span style="color:var(--accent-cyan); font-size:9px;">MULTI-TIMEFRAME</span>
                 </div>
                 <div id="radar-list" class="scanner-radar-list">
-                    <!-- Dynamic Radar Cards populated by terminal.js -->
+                    <!-- Dynamic Radar Cards rendered by terminal.js -->
                 </div>
             </div>
         </aside>
 
-        <!-- CENTER TOP: Central High-Performance Candlestick Chart -->
+        <!-- CENTER TOP: Multi-Pane Synchronized Financial Chart Stage -->
         <section class="terminal-panel">
             <div class="panel-header">
                 <div class="chart-header-bar">
@@ -156,8 +159,30 @@
                     </div>
                 </div>
             </div>
-            <div class="chart-viewport">
-                <canvas id="chart-canvas"></canvas>
+
+            <!-- Multi-Pane Synchronized Chart Area -->
+            <div class="chart-multipane-wrapper">
+                
+                <!-- Institutional Overlay Legend Badges -->
+                <div class="chart-overlay-legend">
+                    <span class="overlay-legend-tag overlay-demand-ob">✦ H1 Demand OB</span>
+                    <span class="overlay-legend-tag overlay-supply-ob">✦ H1 Supply OB</span>
+                    <span class="overlay-legend-tag overlay-fvg">✦ Bearish FVG</span>
+                </div>
+
+                <!-- Main Pane: Candlestick & Structural Geometry -->
+                <div id="main-chart-pane" class="main-chart-pane">
+                    <canvas id="main-chart-canvas" style="width:100%; height:100%; display:block;"></canvas>
+                </div>
+
+                <!-- Synchronized Sub Pane: Volume & RSI Momentum -->
+                <div id="sub-chart-pane" class="sub-chart-pane">
+                    <span class="sub-pane-title">Volume & RSI (14) Momentum</span>
+                    <canvas id="sub-chart-canvas" style="width:100%; height:100%; display:block;"></canvas>
+                </div>
+
+                <!-- Smart Floating Crosshair Tooltip -->
+                <div id="smart-chart-tooltip" class="smart-chart-tooltip"></div>
             </div>
         </section>
 
@@ -171,7 +196,7 @@
             </div>
             <div class="panel-content">
                 
-                <!-- Decision State Badge -->
+                <!-- Decision Execution State Badge -->
                 <div id="decision-badge-container" style="margin-bottom:8px;">
                     <div class="decision-badge badge-wait">WAIT FOR CONFIRMATION</div>
                 </div>
@@ -188,7 +213,7 @@
                     </div>
                 </div>
 
-                <!-- MODULE C: Adversarial Penalty Gauges -->
+                <!-- MODULE C: Adversarial Penalty & Risk Multiplier Gauges -->
                 <div class="devil-gauges-grid">
                     <div class="devil-gauge-card">
                         <span class="gauge-lbl">Adversarial Penalty</span>
@@ -238,8 +263,8 @@
             </div>
         </aside>
 
-        <!-- CENTER BOTTOM: MODULE A (Active Trades HUD) & AI Copilot Dock -->
-        <section class="terminal-panel" style="display:grid; grid-template-columns: 1fr 340px; gap:0;">
+        <!-- CENTER BOTTOM: MODULE A (Active Trades HUD) & Dockable AI Copilot -->
+        <section class="terminal-panel" style="display:grid; grid-template-columns: 1fr 350px; gap:0;">
             
             <!-- MODULE A: Active Trades (Live Positions HUD) -->
             <div style="display:flex; flex-direction:column; overflow:hidden; border-right:1px solid var(--border-subtle);">
@@ -272,25 +297,29 @@
                 </div>
             </div>
 
-            <!-- AI Copilot Intelligence Dock -->
-            <div style="display:flex; flex-direction:column; overflow:hidden;">
-                <div class="panel-header">
-                    <div class="panel-title-wrap">
-                        <span class="panel-title" style="color:var(--accent-cyan);">JARVIS AI Copilot</span>
+            <!-- DOCKABLE / DRAGGABLE / MINIMIZABLE JARVIS AI COPILOT WINDOW -->
+            <div id="copilot-window" class="copilot-window docked">
+                <div id="copilot-header" class="copilot-header">
+                    <div class="copilot-header-title">
+                        <span>🤖</span>
+                        <span>JARVIS Copilot</span>
                     </div>
-                    <span class="panel-counter" style="background:var(--neon-bull-subtle); color:var(--neon-bull);">ONLINE</span>
+                    <div class="copilot-header-actions">
+                        <button class="copilot-action-btn" title="Clear Context" onclick="clearCopilotChat()">🗑️</button>
+                        <button class="copilot-action-btn" title="Export Chat (.md)" onclick="exportCopilotChat()">📥</button>
+                        <button class="copilot-action-btn" title="Toggle Float / Dock" onclick="toggleCopilotFloating()">⛶</button>
+                        <button class="copilot-action-btn" title="Minimize to Chat Head" onclick="toggleCopilotMinimize(true)">−</button>
+                    </div>
                 </div>
-                <div class="panel-content" style="padding:8px;">
-                    <div class="copilot-container">
-                        <div id="copilot-messages" class="copilot-messages">
-                            <div class="copilot-bubble">
-                                🤖 <b>JARVIS AI 3.0:</b> Standing by. Ask me about market regimes, trade invalidations, risk telemetry, or specific symbols.
-                            </div>
+                <div class="copilot-body">
+                    <div id="copilot-messages" class="copilot-messages">
+                        <div class="copilot-bubble">
+                            🤖 <b>JARVIS AI 3.0:</b> Standing by. Double-click any chart candle to analyze order flow, or ask about market regimes, risk exposure, and live invalidations.
                         </div>
-                        <div class="copilot-input-bar">
-                            <input id="copilot-input" class="copilot-input" placeholder="Ask JARVIS (e.g. Why no trade on Gold?)..." onkeydown="handleChatKey(event)">
-                            <button class="btn-terminal" style="padding:5px 10px;" onclick="sendChatMessage()">Send</button>
-                        </div>
+                    </div>
+                    <div class="copilot-input-bar">
+                        <input id="copilot-input" class="copilot-input" placeholder="Ask JARVIS (e.g. Why no trade on Gold?)..." onkeydown="handleChatKey(event)">
+                        <button class="btn-terminal" style="padding:5px 10px;" onclick="sendChatMessage()">Send</button>
                     </div>
                 </div>
             </div>
@@ -298,6 +327,26 @@
         </section>
 
     </main>
+
+    <!-- Floating Chat Head FAB (Shown when minimized) -->
+    <div id="copilot-fab" class="copilot-fab" title="Open JARVIS AI Copilot" onclick="toggleCopilotMinimize(false)">
+        🤖
+    </div>
+
+    <!-- ==========================================================================
+         GLOBAL SPOTLIGHT COMMAND PALETTE (CTRL+K / CMD+K)
+         ========================================================================== -->
+    <div id="command-palette-overlay" class="command-palette-overlay" onclick="if(event.target === this) toggleCommandPalette(false)">
+        <div class="command-palette-modal">
+            <div class="command-palette-search">
+                <span class="command-palette-icon">⚡</span>
+                <input id="command-palette-input" class="command-palette-input" placeholder="Type a command or search (e.g. /analyze-xauusd, /m15, /safe)..." autocomplete="off" spellcheck="false">
+            </div>
+            <div id="command-palette-results" class="command-palette-results">
+                <!-- Populated dynamically by terminal.js -->
+            </div>
+        </div>
+    </div>
 
     <!-- Terminal Controller Script -->
     <script src="/static/js/terminal.js"></script>
