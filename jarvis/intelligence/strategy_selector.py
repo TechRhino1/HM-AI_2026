@@ -6,9 +6,10 @@ Features:
 """
 from typing import Dict, Any, List, Optional
 from jarvis.data.schemas import MarketRegime, RegimeOutput, MarketContext
+from jarvis.learning.strategy_bandit import StrategyBandit
 
 class StrategySelector:
-    """Selects and ranks candidate trading strategies with dynamic context awareness."""
+    """Selects and ranks candidate trading strategies with dynamic context awareness & reinforcement learning."""
     
     STRATEGIES = [
         "MICRO_ACCOUNT_ADAPTIVE",
@@ -19,6 +20,9 @@ class StrategySelector:
         "RANGE_MEAN_REVERSION",
         "CHOCH_STRUCTURAL_REVERSAL"
     ]
+
+    def __init__(self, bandit: Optional[StrategyBandit] = None):
+        self.bandit = bandit or StrategyBandit()
 
     def select_strategy_probabilities(
         self,
@@ -45,14 +49,15 @@ class StrategySelector:
         # =========================================================================
         # 2. STANDARD INSTITUTIONAL MODE (Active when Equity >= $100.00 - UNTOUCHED)
         # =========================================================================
+        bandit_boosts = self.bandit.get_strategy_boosts()
         weights = {
             "MICRO_ACCOUNT_ADAPTIVE": 0.00,
-            "TREND_FOLLOWING": 0.15,
-            "TREND_PULLBACK": 0.15,
-            "BREAKOUT_EXPANSION": 0.15,
-            "LIQUIDITY_SWEEP_REVERSAL": 0.15,
-            "RANGE_MEAN_REVERSION": 0.20,
-            "CHOCH_STRUCTURAL_REVERSAL": 0.20
+            "TREND_FOLLOWING": 0.15 * bandit_boosts.get("TREND_FOLLOWING", 1.0),
+            "TREND_PULLBACK": 0.15 * bandit_boosts.get("TREND_PULLBACK", 1.0),
+            "BREAKOUT_EXPANSION": 0.15 * bandit_boosts.get("BREAKOUT_EXPANSION", 1.0),
+            "LIQUIDITY_SWEEP_REVERSAL": 0.15 * bandit_boosts.get("LIQUIDITY_SWEEP_REVERSAL", 1.0),
+            "RANGE_MEAN_REVERSION": 0.20 * bandit_boosts.get("RANGE_MEAN_REVERSION", 1.0),
+            "CHOCH_STRUCTURAL_REVERSAL": 0.20 * bandit_boosts.get("CHOCH_STRUCTURAL_REVERSAL", 1.0)
         }
 
         # Evaluate Dynamic Context for standard mode

@@ -21,6 +21,8 @@ from jarvis.execution.state_synchronizer import MT5StateSynchronizer
 from jarvis.execution.execution_engine import ExecutionEngine
 from jarvis.execution.order_manager import OrderManager
 from jarvis.learning.trade_memory import TradeMemory
+from jarvis.learning.online_ml_predictor import OnlineMLPredictor
+from jarvis.learning.strategy_bandit import StrategyBandit
 from jarvis.data.schemas import ExecutionMode
 
 logger = logging.getLogger("JARVIS_Orchestrator")
@@ -39,12 +41,15 @@ class JarvisOrchestrator:
         self.state_manager.set_execution_mode(ExecutionMode(self.mode.upper()))
         self.event_bus = GLOBAL_EVENT_BUS
 
+        self.ml_predictor = OnlineMLPredictor()
+        self.strategy_bandit = StrategyBandit()
+
         self.mt5_client = MT5Client(magic_number=magic_number, mode=self.mode)
         self.data_feed = DataFeedEngine(self.mt5_client)
         self.context_engine = MarketContextEngine()
         self.regime_classifier = MarketRegimeClassifier()
         self.analyst_cluster = ParallelAnalystCluster()
-        self.decision_engine = DecisionEngine()
+        self.decision_engine = DecisionEngine(ml_predictor=self.ml_predictor)
         self.risk_engine = RiskEngine()
         self.order_manager = OrderManager(self.mt5_client)
         self.execution_engine = ExecutionEngine(self.mt5_client, self.state_manager)

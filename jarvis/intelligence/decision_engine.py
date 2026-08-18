@@ -18,6 +18,7 @@ from jarvis.data.schemas import (
 from jarvis.intelligence.strategy_selector import StrategySelector
 from jarvis.intelligence.hypothesis_engine import HypothesisEngine
 from jarvis.intelligence.confidence import ConfidenceCalibrationEngine
+from jarvis.learning.online_ml_predictor import OnlineMLPredictor
 
 class DecisionEngine:
     def __init__(
@@ -25,12 +26,14 @@ class DecisionEngine:
         strategy_selector: Optional[StrategySelector] = None,
         hypothesis_engine: Optional[HypothesisEngine] = None,
         calibrator: Optional[ConfidenceCalibrationEngine] = None,
+        ml_predictor: Optional[OnlineMLPredictor] = None,
         min_ev_hurdle: float = 0.50,
         max_devil_penalty: float = 38.0
     ):
         self.strategy_selector = strategy_selector or StrategySelector()
         self.hypothesis_engine = hypothesis_engine or HypothesisEngine()
         self.calibrator = calibrator or ConfidenceCalibrationEngine()
+        self.ml_predictor = ml_predictor or OnlineMLPredictor()
         self.min_ev_hurdle = min_ev_hurdle
         self.max_devil_penalty = max_devil_penalty
 
@@ -102,10 +105,23 @@ class DecisionEngine:
             context, regime, analyst_reports, devil_report, tentative_bias
         )
 
-        # 5. Calibrated Win Probability & Expected Value Calculation
+        # 5. Online Machine Learning Feature Extraction & Blended Probability
         raw_prob = hypotheses.primary_probability if tentative_bias in ["BUY", "SELL"] else 0.33
         calibrated_win_p = self.calibrator.calibrate_probability(raw_prob)
-        loss_p = 1.0 - calibrated_win_p
+
+        # ML Feature Vector & Online Inference
+        ml_features = self.ml_predictor.extract_feature_vector(
+            context=context,
+            regime=regime,
+            tentative_bias=tentative_bias,
+            devil_penalty=devil_report.penalty_score,
+            target_rr=rr_ratio
+        )
+        ml_win_p = self.ml_predictor.predict_win_probability(ml_features)
+
+        # High-Edge Blended Probability: 45% Dialectical Consensus + 55% Online ML Predictor
+        final_win_p = round((0.45 * calibrated_win_p) + (0.55 * ml_win_p), 2)
+        loss_p = round(1.0 - final_win_p, 2)
 
         # Micro-lot safety: on accounts < $250, calibrate risk to base 0.01 lot
         planned_risk_dollars = max(0.50, account_balance * (risk_per_trade_pct / 100.0))
@@ -118,7 +134,7 @@ class DecisionEngine:
         spread_cost = vol.current_spread_pips * pip_val_per_lot * est_lots
         expected_slippage = (vol.atr * 0.02) * est_lots
 
-        ev = (calibrated_win_p * planned_win_dollars) - (loss_p * planned_risk_dollars) - spread_cost - expected_slippage
+        ev = (final_win_p * planned_win_dollars) - (loss_p * planned_risk_dollars) - spread_cost - expected_slippage
         ev = round(float(ev), 2)
 
         # 6. Trade Quality Gate Validation (Micro-Account Adaptive vs Standard Institutional)
