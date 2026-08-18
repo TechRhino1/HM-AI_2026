@@ -107,6 +107,7 @@ class JarvisOrchestrator:
         # 7. Execute if authorized
         exec_res = None
         if auth_res["authorized"] and decision.decision == "EXECUTE":
+            decision.execution_authorized = True
             lots = auth_res["lots"]
             exec_res = self.execution_engine.execute_decision(decision, lots)
             if exec_res and exec_res.get("status") == "FILLED":

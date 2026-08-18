@@ -96,10 +96,16 @@ class DecisionEngine:
         loss_p = 1.0 - calibrated_win_p
 
         # Expected Value = (P_win * Avg_Win) - (P_loss * Avg_Loss) - Spread_Cost - Slippage
-        planned_risk_dollars = account_balance * (risk_per_trade_pct / 100.0)
+        planned_risk_dollars = max(1.0, account_balance * (risk_per_trade_pct / 100.0))
         planned_win_dollars = planned_risk_dollars * rr_ratio
-        spread_cost = vol.current_spread_pips * (1.0 if "XAU" in context.symbol else 10.0)
-        expected_slippage = vol.atr * 0.05
+        
+        # Scale friction accurately to estimated position lot size
+        contract_size = 100.0 if any(k in context.symbol.upper() for k in ["XAU", "GOLD"]) else 100000.0
+        pip_size = 0.1 if any(k in context.symbol.upper() for k in ["XAU", "GOLD"]) else (0.01 if "JPY" in context.symbol.upper() else 0.0001)
+        est_lots = max(0.01, planned_risk_dollars / (max(risk_dist, 1e-4) * contract_size))
+        pip_val_per_lot = contract_size * pip_size
+        spread_cost = vol.current_spread_pips * pip_val_per_lot * est_lots
+        expected_slippage = (vol.atr * 0.02) * est_lots
 
         ev = (calibrated_win_p * planned_win_dollars) - (loss_p * planned_risk_dollars) - spread_cost - expected_slippage
         ev = round(float(ev), 2)
