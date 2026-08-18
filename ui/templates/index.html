@@ -165,10 +165,10 @@
                     </div>
 
                     <!-- Chart Engine Mode Switcher & Controls -->
-                    <div style="display:flex; align-items:center; gap:6px;">
-                        <div class="tab-switcher" style="margin-right:8px;">
-                            <button id="btn-mode-tv-live" class="tab-btn active" onclick="switchChartMode('tv_live')">📊 TV Live MT5</button>
-                            <button id="btn-mode-tv-pro" class="tab-btn" onclick="switchChartMode('tv_pro')">📈 TV Pro Widget</button>
+                    <div class="chart-controls-group">
+                        <div class="tab-switcher">
+                            <button id="btn-mode-tv-live" class="tab-btn active" onclick="switchChartMode('tv_live')">⚡ Live MT5</button>
+                            <button id="btn-mode-tv-pro" class="tab-btn" onclick="switchChartMode('tv_pro')">📈 TV Pro</button>
                         </div>
                         <div class="timeframe-selector">
                             <button class="tf-btn" onclick="setTimeframe('M5')">M5</button>
@@ -177,7 +177,7 @@
                             <button class="tf-btn" onclick="setTimeframe('H4')">H4</button>
                             <button class="tf-btn" onclick="setTimeframe('D1')">D1</button>
                         </div>
-                        <button id="btn-expand-chart" class="btn-terminal" style="padding:2px 8px; font-size:10px; margin-left:6px;" onclick="toggleExpandChart()" title="Toggle Fullscreen Chart">
+                        <button id="btn-expand-chart" class="btn-expand-chart" onclick="toggleExpandChart()" title="Toggle Fullscreen Chart">
                             ⛶ Expand
                         </button>
                     </div>

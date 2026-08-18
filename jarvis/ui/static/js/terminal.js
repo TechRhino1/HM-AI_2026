@@ -208,7 +208,9 @@
             color: "#38bdf8",
             priceFormat: { type: "volume" },
             priceScaleId: "",
-            scaleMargins: { top: 0.8, bottom: 0 }
+            scaleMargins: { top: 0.82, bottom: 0 },
+            lastValueVisible: false,
+            priceLineVisible: false
         });
 
         state.tvChartInstance = chart;
@@ -339,20 +341,20 @@
         const r1Line = state.tvCandleSeries.createPriceLine({
             price: state.supportResistance.r1,
             color: '#ff3b5c',
-            lineWidth: 2,
+            lineWidth: 1.5,
             lineStyle: LightweightCharts.LineStyle.Dashed,
             axisLabelVisible: true,
-            title: `R1: ${state.supportResistance.r1.toFixed(digits)} (RESISTANCE)`
+            title: `R1: ${state.supportResistance.r1.toFixed(digits)}`
         });
 
         // Draw Active Support Level Line
         const s1Line = state.tvCandleSeries.createPriceLine({
             price: state.supportResistance.s1,
             color: '#00f59b',
-            lineWidth: 2,
+            lineWidth: 1.5,
             lineStyle: LightweightCharts.LineStyle.Dashed,
             axisLabelVisible: true,
-            title: `S1: ${state.supportResistance.s1.toFixed(digits)} (SUPPORT)`
+            title: `S1: ${state.supportResistance.s1.toFixed(digits)}`
         });
 
         state.tvPriceLines.push(r1Line, s1Line);
@@ -439,7 +441,7 @@
 
         if (btn) {
             btn.innerHTML = isExpanded ? "✕ Minimize" : "⛶ Expand";
-            btn.classList.toggle("btn-warning", isExpanded);
+            btn.classList.toggle("is-expanded-btn", isExpanded);
         }
 
         setTimeout(() => {
