@@ -1,8 +1,8 @@
 """
 JARVIS AI 3.0 — Dynamic Context-Aware Strategy Selection Engine.
 Features:
-- Full Market Context Synthesis (Structure, Momentum, Volatility, Liquidity, MTF)
-- Real-time Strategy Differentiation (Breakouts, CHoCH Reversals, Liquidity Sweeps, Mean Reversion, Trend Runs)
+- Micro-Account Adaptive Sizing & Execution (< $100 Equity)
+- Standard Institutional Multi-Strategy Suite (>= $100 Equity - Fully Preserved)
 """
 from typing import Dict, Any, List, Optional
 from jarvis.data.schemas import MarketRegime, RegimeOutput, MarketContext
@@ -11,6 +11,7 @@ class StrategySelector:
     """Selects and ranks candidate trading strategies with dynamic context awareness."""
     
     STRATEGIES = [
+        "MICRO_ACCOUNT_ADAPTIVE",
         "TREND_FOLLOWING",
         "TREND_PULLBACK",
         "BREAKOUT_EXPANSION",
@@ -22,11 +23,30 @@ class StrategySelector:
     def select_strategy_probabilities(
         self,
         regime: RegimeOutput,
-        context: Optional[MarketContext] = None
+        context: Optional[MarketContext] = None,
+        account_equity: float = 10000.0
     ) -> Dict[str, float]:
         r = regime.primary_regime
 
+        # =========================================================================
+        # 1. MICRO-ACCOUNT ADAPTIVE MODE (Active ONLY when Equity < $100.00)
+        # =========================================================================
+        if account_equity < 100.0:
+            return {
+                "MICRO_ACCOUNT_ADAPTIVE": 0.85,
+                "CHOCH_STRUCTURAL_REVERSAL": 0.05,
+                "BREAKOUT_EXPANSION": 0.05,
+                "LIQUIDITY_SWEEP_REVERSAL": 0.05,
+                "TREND_FOLLOWING": 0.00,
+                "TREND_PULLBACK": 0.00,
+                "RANGE_MEAN_REVERSION": 0.00
+            }
+
+        # =========================================================================
+        # 2. STANDARD INSTITUTIONAL MODE (Active when Equity >= $100.00 - UNTOUCHED)
+        # =========================================================================
         weights = {
+            "MICRO_ACCOUNT_ADAPTIVE": 0.00,
             "TREND_FOLLOWING": 0.15,
             "TREND_PULLBACK": 0.15,
             "BREAKOUT_EXPANSION": 0.15,
@@ -35,7 +55,7 @@ class StrategySelector:
             "CHOCH_STRUCTURAL_REVERSAL": 0.20
         }
 
-        # 1. Evaluate Dynamic Context if available
+        # Evaluate Dynamic Context for standard mode
         if context:
             st = context.structure
             mom = context.momentum
@@ -79,7 +99,6 @@ class StrategySelector:
                     weights["TREND_PULLBACK"] += 0.45
                     weights["TREND_FOLLOWING"] += 0.35
         else:
-            # Fallback to regime mapping if context not supplied
             if r in [MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR]:
                 weights["TREND_FOLLOWING"] = 0.40
                 weights["TREND_PULLBACK"] = 0.35

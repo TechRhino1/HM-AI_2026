@@ -36,8 +36,10 @@ class PositionSizer:
         raw_lots = risk_amount_dollars / (risk_distance * contract_size + 1e-9)
 
         # Apply account size protective caps
-        if account_balance <= 100.0:
-            account_cap = 0.03
+        if account_balance <= 40.0:
+            account_cap = 0.01  # Ultra-Survival Micro Tier ($20-$40)
+        elif account_balance < 100.0:
+            account_cap = 0.03  # Controlled Growth Micro Tier ($40-$100)
         elif account_balance <= 500.0:
             account_cap = 0.05
         elif account_balance <= 1000.0:

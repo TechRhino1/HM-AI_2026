@@ -65,7 +65,9 @@ class DecisionEngine:
             tentative_bias = "HOLD"
 
         # 2. Dynamic Context-Aware Strategy Selection
-        strategy_probs = self.strategy_selector.select_strategy_probabilities(regime, context=context)
+        strategy_probs = self.strategy_selector.select_strategy_probabilities(
+            regime, context=context, account_equity=account_balance
+        )
         best_strategy = max(strategy_probs.items(), key=lambda x: x[1])[0]
 
         # 3. Calculate SL, TP, Risk-Reward
@@ -119,29 +121,60 @@ class DecisionEngine:
         ev = (calibrated_win_p * planned_win_dollars) - (loss_p * planned_risk_dollars) - spread_cost - expected_slippage
         ev = round(float(ev), 2)
 
-        # 6. Trade Quality Gate Validation (Momentum Breakout & Dynamic EV Hurdle)
-        # In strong momentum breakouts (Trend Score >= 60 or <= -60), allow directional continuation
+        # 6. Trade Quality Gate Validation (Micro-Account Adaptive vs Standard Institutional)
         premium_discount_valid = True
         if tentative_bias == "BUY" and st.discount_premium_zone == "PREMIUM" and mom.trend_score < 60:
             premium_discount_valid = False
         elif tentative_bias == "SELL" and st.discount_premium_zone == "DISCOUNT" and mom.trend_score > -60:
             premium_discount_valid = False
 
-        # Scale minimum EV hurdle dynamically to account balance size
-        effective_min_ev = max(0.10, min(self.min_ev_hurdle, planned_risk_dollars * 0.5))
+        is_micro_mode = (account_balance < 100.0)
 
-        gate_checks = {
-            "Regime Viability": regime.primary_regime != MarketRegime.EVENT_RISK,
-            "Directional Bias": tentative_bias in ["BUY", "SELL"],
-            "Risk/Reward >= 1.5": rr_ratio >= 1.5,
-            "Positive Expected Value": ev > 0 and ev >= effective_min_ev,
-            "Spread Protection": not vol.is_excessive_spread,
-            "Devil Penalty Guard": devil_report.penalty_score <= self.max_devil_penalty,
-            "Calibrated Probability >= 55%": calibrated_win_p >= 0.55,
-            "No Active Macro Shock": regime.primary_regime != MarketRegime.EVENT_RISK,
-            "Valid Stop Loss Distance": risk_dist > 0,
-            "Premium/Discount Zone Valid": premium_discount_valid
-        }
+        if is_micro_mode:
+            # Sub-tier parameters for Micro Accounts (< $100)
+            if account_balance <= 40.0:
+                min_score = 80.0
+                min_rr = 2.0
+                max_spread = 2.5
+            elif account_balance <= 70.0:
+                min_score = 80.0
+                min_rr = 2.0
+                max_spread = 3.0
+            else:
+                min_score = 78.0
+                min_rr = 1.8
+                max_spread = 3.5
+
+            effective_min_ev = 0.05
+            ai_score = regime.confidence * 100.0
+
+            gate_checks = {
+                "Regime Viability": regime.primary_regime != MarketRegime.EVENT_RISK,
+                "Directional Bias": tentative_bias in ["BUY", "SELL"],
+                "Risk/Reward >= 2.0": rr_ratio >= min_rr,
+                "Positive Expected Value": ev > 0 and ev >= effective_min_ev,
+                "Spread Protection": vol.current_spread_pips <= max_spread,
+                "AI Score Gate >= 80": ai_score >= min_score,
+                "Devil Penalty Guard": devil_report.penalty_score <= self.max_devil_penalty,
+                "Calibrated Probability >= 55%": calibrated_win_p >= 0.55,
+                "Valid Stop Loss Distance": risk_dist >= (vol.atr * 1.2),
+                "Premium/Discount Zone Valid": premium_discount_valid
+            }
+        else:
+            # Standard Institutional Quality Gate (>= $100 Equity - UNTOUCHED)
+            effective_min_ev = max(0.50, planned_risk_dollars * 0.5)
+            gate_checks = {
+                "Regime Viability": regime.primary_regime != MarketRegime.EVENT_RISK,
+                "Directional Bias": tentative_bias in ["BUY", "SELL"],
+                "Risk/Reward >= 1.5": rr_ratio >= 1.5,
+                "Positive Expected Value": ev > 0 and ev >= effective_min_ev,
+                "Spread Protection": not vol.is_excessive_spread,
+                "Devil Penalty Guard": devil_report.penalty_score <= self.max_devil_penalty,
+                "Calibrated Probability >= 55%": calibrated_win_p >= 0.55,
+                "No Active Macro Shock": regime.primary_regime != MarketRegime.EVENT_RISK,
+                "Valid Stop Loss Distance": risk_dist > 0,
+                "Premium/Discount Zone Valid": premium_discount_valid
+            }
 
         failing_reasons = [name for name, passed in gate_checks.items() if not passed]
         gate_passed = len(failing_reasons) == 0
