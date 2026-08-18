@@ -1,6 +1,9 @@
 """
 JARVIS AI 3.0 — Market Structure Analyst Agent.
-Answers: What is current structure? Where are key swing points? Has BOS/CHoCH occurred? What invalidates structure?
+Features:
+- Fast Intraday Structure Inversion & Breakdown Detection (M5/M15 CHoCH & BOS)
+- Strict Institutional Premium vs Discount Equilibrium Filtering
+- Order Block & Liquidity Pool Boundary Mapping
 """
 import time
 from typing import Dict, Any
@@ -14,41 +17,63 @@ class StructureAnalyst(BaseAnalyst):
     def analyze(self, context: MarketContext, regime: RegimeOutput) -> AnalystReport:
         t0 = time.perf_counter()
         st = context.structure
+        vol = context.volatility
+        c_price = context.current_price
         evidence = []
         risk_factors = []
 
         score = 50.0
         bias = st.bias
 
+        # 1. Structural Geometry: Higher-Highs / Higher-Lows vs Lower-Highs / Lower-Lows
         if st.higher_highs and st.higher_lows:
-            score += 25.0
+            score += 20.0
             evidence.append("Sustained Higher-High and Higher-Low market geometry.")
         elif st.lower_highs and st.lower_lows:
-            score += 25.0
+            score += 20.0
             evidence.append("Sustained Lower-High and Lower-Low market geometry.")
+
+        # 2. Fast Change of Character (CHoCH) & Break of Structure (BOS)
+        if st.choch:
+            if st.choch_type == "BEARISH" or c_price < st.demand_zone[0]:
+                bias = "BEARISH"
+                score = 85.0
+                evidence.append("⚡ FAST INVERSION: Bearish Change of Character (CHoCH) breakdown below swing low.")
+            elif st.choch_type == "BULLISH" or c_price > st.supply_zone[1]:
+                bias = "BULLISH"
+                score = 85.0
+                evidence.append("⚡ FAST INVERSION: Bullish Change of Character (CHoCH) breakout above swing high.")
 
         if st.bos:
             score += 15.0
-            evidence.append(f"Confirmed Break of Structure (BOS: {st.bos_type}).")
-        elif st.choch:
-            score += 10.0
-            evidence.append(f"Early Change of Character reversal (CHoCH: {st.choch_type}).")
+            if st.bos_type == "BEARISH":
+                bias = "BEARISH"
+                evidence.append("Confirmed Bearish Break of Structure (BOS) expansion.")
+            elif st.bos_type == "BULLISH":
+                bias = "BULLISH"
+                evidence.append("Confirmed Bullish Break of Structure (BOS) expansion.")
 
-        # Premium / Discount Zone alignment
-        if bias == "BULLISH":
-            if st.discount_premium_zone == "DISCOUNT":
-                score += 10.0
-                evidence.append("Price positioned in optimal DISCOUNT zone for buying.")
-            elif st.discount_premium_zone == "PREMIUM":
-                risk_factors.append("Warning: Price in PREMIUM zone; buying carries overextension risk.")
-        elif bias == "BEARISH":
-            if st.discount_premium_zone == "PREMIUM":
-                score += 10.0
-                evidence.append("Price positioned in optimal PREMIUM zone for selling.")
-            elif st.discount_premium_zone == "DISCOUNT":
-                risk_factors.append("Warning: Price in DISCOUNT zone; selling carries overextension risk.")
+        # 3. Institutional Premium / Discount Zone Guard
+        # Premium: Upper 30% of range -> FAVOR SELLS, REJECT BUYS
+        # Discount: Lower 30% of range -> FAVOR BUYS, REJECT SELLS
+        if st.discount_premium_zone == "PREMIUM":
+            if bias == "BULLISH":
+                risk_factors.append("🚨 DANGER: Price is in extreme PREMIUM zone (Top 25% of range). Buying risks severe breakdown.")
+                score -= 30.0
+                bias = "NEUTRAL"
+            else:
+                score += 15.0
+                evidence.append("Institutional Sell Alignment: Price positioned in optimal PREMIUM supply zone for shorting.")
+        elif st.discount_premium_zone == "DISCOUNT":
+            if bias == "BEARISH":
+                risk_factors.append("🚨 DANGER: Price is in extreme DISCOUNT zone (Bottom 25% of range). Shorting risks demand squeeze.")
+                score -= 30.0
+                bias = "NEUTRAL"
+            else:
+                score += 15.0
+                evidence.append("Institutional Buy Alignment: Price positioned in optimal DISCOUNT demand zone for longing.")
 
-        # Multi-timeframe alignment
+        # 4. Multi-timeframe trend alignment check
         mtf = context.mtf_alignment
         if mtf.get("H4") == bias and mtf.get("D1") == bias:
             score += 10.0
@@ -69,5 +94,5 @@ class StructureAnalyst(BaseAnalyst):
             evidence=evidence,
             risk_factors=risk_factors,
             execution_time_ms=round(elapsed, 2),
-            metadata={"demand_zone": st.demand_zone, "supply_zone": st.supply_zone, "zone": st.discount_premium_zone}
+            metadata={"demand_zone": st.demand_zone, "supply_zone": st.supply_zone, "zone": st.discount_premium_zone, "choch": st.choch}
         )

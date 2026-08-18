@@ -100,15 +100,37 @@ class JarvisOrchestrator:
             "volume_max": 100.0,
             "volume_step": 0.01
         }
-        auth_res = self.risk_engine.authorize_execution(
-            decision, account, positions, sym_info, current_spread_pips=context.volatility.current_spread_pips
-        )
+
+        # Anti-Clustering Rule: Prevent stacking multiple simultaneous orders on same asset
+        active_sym_positions = [
+            p for p in positions if (p.symbol == symbol or (symbol == "XAUUSD" and "GOLD" in p.symbol))
+        ]
+        
+        # Asian Pre-Market Blackout Rule (01:00 to 05:00 UTC)
+        now_utc_hour = datetime.now(timezone.utc).hour
+        is_asian_blackout = (1 <= now_utc_hour < 5)
+
+        if active_sym_positions and decision.decision == "EXECUTE":
+            decision.decision = "WAIT"
+            decision.execution_authorized = False
+            auth_res = {"authorized": False, "reason": "ANTI_CLUSTERING_GUARD: Active trade already open on this asset."}
+        elif is_asian_blackout and decision.decision == "EXECUTE":
+            decision.decision = "WAIT"
+            decision.execution_authorized = False
+            auth_res = {"authorized": False, "reason": "ASIAN_SESSION_BLACKOUT: Low liquidity chop protection active."}
+        else:
+            auth_res = self.risk_engine.authorize_execution(
+                decision, account, positions, sym_info, current_spread_pips=context.volatility.current_spread_pips
+            )
 
         # 7. Execute if authorized
         exec_res = None
-        if auth_res["authorized"] and decision.decision == "EXECUTE":
+        if auth_res.get("authorized") and decision.decision == "EXECUTE":
             decision.execution_authorized = True
-            lots = auth_res["lots"]
+            lots = auth_res.get("lots", 0.01)
+            # Micro-lot cap on small accounts (< $250)
+            if account.equity < 250.0:
+                lots = 0.01
             exec_res = self.execution_engine.execute_decision(decision, lots)
             if exec_res and exec_res.get("status") == "FILLED":
                 self.trade_memory.record_trade({

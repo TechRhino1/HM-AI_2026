@@ -25,8 +25,8 @@ class DecisionEngine:
         strategy_selector: Optional[StrategySelector] = None,
         hypothesis_engine: Optional[HypothesisEngine] = None,
         calibrator: Optional[ConfidenceCalibrationEngine] = None,
-        min_ev_hurdle: float = 1.20,
-        max_devil_penalty: float = 35.0
+        min_ev_hurdle: float = 0.50,
+        max_devil_penalty: float = 38.0
     ):
         self.strategy_selector = strategy_selector or StrategySelector()
         self.hypothesis_engine = hypothesis_engine or HypothesisEngine()
@@ -48,13 +48,21 @@ class DecisionEngine:
         mom = context.momentum
         c_price = context.current_price
 
-        # 1. Determine Directional Bias from Analysts Confluence
+        # 1. Determine Directional Bias from Analysts Confluence + Macro Shock
         bull_votes = sum(1 for r in analyst_reports.values() if r.bias == "BULLISH")
         bear_votes = sum(1 for r in analyst_reports.values() if r.bias == "BEARISH")
         
-        tentative_bias = "BUY" if bull_votes > bear_votes and bull_votes >= 2 else (
-            "SELL" if bear_votes > bull_votes and bear_votes >= 2 else "HOLD"
-        )
+        # Immediate structure breakdown override (CHoCH / BOS)
+        if st.choch and st.choch_type == "BEARISH":
+            tentative_bias = "SELL"
+        elif st.choch and st.choch_type == "BULLISH":
+            tentative_bias = "BUY"
+        elif bear_votes > bull_votes and bear_votes >= 2:
+            tentative_bias = "SELL"
+        elif bull_votes > bear_votes and bull_votes >= 2:
+            tentative_bias = "BUY"
+        else:
+            tentative_bias = "HOLD"
 
         # 2. Strategy Selection
         strategy_probs = self.strategy_selector.select_strategy_probabilities(regime)
@@ -95,11 +103,10 @@ class DecisionEngine:
         calibrated_win_p = self.calibrator.calibrate_probability(raw_prob)
         loss_p = 1.0 - calibrated_win_p
 
-        # Expected Value = (P_win * Avg_Win) - (P_loss * Avg_Loss) - Spread_Cost - Slippage
-        planned_risk_dollars = max(1.0, account_balance * (risk_per_trade_pct / 100.0))
+        # Micro-lot safety: on accounts < $250, calibrate risk to base 0.01 lot
+        planned_risk_dollars = max(0.50, account_balance * (risk_per_trade_pct / 100.0))
         planned_win_dollars = planned_risk_dollars * rr_ratio
         
-        # Scale friction accurately to estimated position lot size
         contract_size = 100.0 if any(k in context.symbol.upper() for k in ["XAU", "GOLD"]) else 100000.0
         pip_size = 0.1 if any(k in context.symbol.upper() for k in ["XAU", "GOLD"]) else (0.01 if "JPY" in context.symbol.upper() else 0.0001)
         est_lots = max(0.01, planned_risk_dollars / (max(risk_dist, 1e-4) * contract_size))
@@ -110,9 +117,15 @@ class DecisionEngine:
         ev = (calibrated_win_p * planned_win_dollars) - (loss_p * planned_risk_dollars) - spread_cost - expected_slippage
         ev = round(float(ev), 2)
 
-        # 6. Trade Quality Gate Validation (14-Point Checklist)
+        # 6. Trade Quality Gate Validation (Premium/Discount Zone + Sizing + EV Guard)
+        premium_discount_valid = True
+        if tentative_bias == "BUY" and st.discount_premium_zone == "PREMIUM":
+            premium_discount_valid = False
+        elif tentative_bias == "SELL" and st.discount_premium_zone == "DISCOUNT":
+            premium_discount_valid = False
+
         gate_checks = {
-            "Regime Viability": regime.primary_regime != MarketRegime.EVENT_RISK and regime.primary_regime != MarketRegime.HIGH_VOLATILITY,
+            "Regime Viability": regime.primary_regime != MarketRegime.EVENT_RISK,
             "Directional Bias": tentative_bias in ["BUY", "SELL"],
             "Risk/Reward >= 1.5": rr_ratio >= 1.5,
             "Positive Expected Value": ev > 0 and ev >= self.min_ev_hurdle,
@@ -120,7 +133,8 @@ class DecisionEngine:
             "Devil Penalty Guard": devil_report.penalty_score <= self.max_devil_penalty,
             "Calibrated Probability >= 55%": calibrated_win_p >= 0.55,
             "No Active Macro Shock": regime.primary_regime != MarketRegime.EVENT_RISK,
-            "Valid Stop Loss Distance": risk_dist > 0
+            "Valid Stop Loss Distance": risk_dist > 0,
+            "Premium/Discount Zone Valid": premium_discount_valid
         }
 
         failing_reasons = [name for name, passed in gate_checks.items() if not passed]

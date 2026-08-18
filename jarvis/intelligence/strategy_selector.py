@@ -1,12 +1,12 @@
 """
 JARVIS AI 3.0 — Strategy Selection Engine.
-Maps causal market regimes to strategy suitability probability distributions.
+Maps causal market regimes, fast structure shifts, and macro catalysts to strategy suitability probability distributions.
 """
 from typing import Dict, Any, List
 from jarvis.data.schemas import MarketRegime, RegimeOutput
 
 class StrategySelector:
-    """Selects and ranks candidate trading strategies based on current market regime."""
+    """Selects and ranks candidate trading strategies based on current market regime & structure."""
     
     STRATEGIES = [
         "TREND_FOLLOWING",
@@ -30,20 +30,29 @@ class StrategySelector:
         }
 
         if r == MarketRegime.TREND_BULL or r == MarketRegime.TREND_BEAR:
-            weights["TREND_PULLBACK"] = 0.45
-            weights["TREND_FOLLOWING"] = 0.35
-            weights["BREAKOUT_EXPANSION"] = 0.10
-            weights["LIQUIDITY_SWEEP_REVERSAL"] = 0.05
-            weights["RANGE_MEAN_REVERSION"] = 0.03
-            weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.02
+            weights["TREND_PULLBACK"] = 0.40
+            weights["TREND_FOLLOWING"] = 0.30
+            weights["BREAKOUT_EXPANSION"] = 0.15
+            weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.10
+            weights["LIQUIDITY_SWEEP_REVERSAL"] = 0.03
+            weights["RANGE_MEAN_REVERSION"] = 0.02
 
         elif r == MarketRegime.BREAKOUT:
-            weights["BREAKOUT_EXPANSION"] = 0.55
-            weights["TREND_FOLLOWING"] = 0.25
-            weights["TREND_PULLBACK"] = 0.10
-            weights["LIQUIDITY_SWEEP_REVERSAL"] = 0.05
-            weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.03
-            weights["RANGE_MEAN_REVERSION"] = 0.02
+            weights["BREAKOUT_EXPANSION"] = 0.60
+            weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.20
+            weights["TREND_FOLLOWING"] = 0.15
+            weights["TREND_PULLBACK"] = 0.05
+            weights["LIQUIDITY_SWEEP_REVERSAL"] = 0.00
+            weights["RANGE_MEAN_REVERSION"] = 0.00
+
+        elif r == MarketRegime.REVERSAL or r == MarketRegime.TRANSITION:
+            # Immediate capture of breakdowns and structural flips
+            weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.50
+            weights["LIQUIDITY_SWEEP_REVERSAL"] = 0.30
+            weights["BREAKOUT_EXPANSION"] = 0.15
+            weights["RANGE_MEAN_REVERSION"] = 0.05
+            weights["TREND_PULLBACK"] = 0.00
+            weights["TREND_FOLLOWING"] = 0.00
 
         elif r == MarketRegime.RANGE or r == MarketRegime.LOW_VOLATILITY:
             weights["RANGE_MEAN_REVERSION"] = 0.50
@@ -53,17 +62,14 @@ class StrategySelector:
             weights["TREND_FOLLOWING"] = 0.03
             weights["BREAKOUT_EXPANSION"] = 0.02
 
-        elif r == MarketRegime.REVERSAL or r == MarketRegime.TRANSITION:
-            weights["LIQUIDITY_SWEEP_REVERSAL"] = 0.45
-            weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.35
-            weights["RANGE_MEAN_REVERSION"] = 0.10
-            weights["TREND_PULLBACK"] = 0.05
-            weights["BREAKOUT_EXPANSION"] = 0.03
-            weights["TREND_FOLLOWING"] = 0.02
-
         elif r == MarketRegime.HIGH_VOLATILITY or r == MarketRegime.EVENT_RISK:
-            # Defensive flat distribution
-            weights = {k: 0.166 for k in weights}
+            # High-volatility news breakdown mode
+            weights["BREAKOUT_EXPANSION"] = 0.45
+            weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.35
+            weights["LIQUIDITY_SWEEP_REVERSAL"] = 0.10
+            weights["TREND_FOLLOWING"] = 0.10
+            weights["TREND_PULLBACK"] = 0.00
+            weights["RANGE_MEAN_REVERSION"] = 0.00
 
         total = sum(weights.values())
         return {k: round(v / total, 3) for k, v in weights.items()}
