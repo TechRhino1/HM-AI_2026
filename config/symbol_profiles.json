@@ -1,0 +1,182 @@
+{
+  "XAUUSD": {
+    "symbol": "XAUUSD",
+    "digits": 2,
+    "max_allowed_spread_pips": 50.0,
+    "atr_period": 14,
+    "sl_atr_multiplier": 1.8,
+    "tp_atr_multiplier": 3.6,
+    "session_restriction": false,
+    "allowed_sessions": ["Asian", "London", "New York"]
+  },
+  "GOLD.i#": {
+    "symbol": "GOLD.i#",
+    "digits": 2,
+    "max_allowed_spread_pips": 50.0,
+    "atr_period": 14,
+    "sl_atr_multiplier": 1.8,
+    "tp_atr_multiplier": 3.6,
+    "session_restriction": false,
+    "allowed_sessions": ["Asian", "London", "New York"]
+  },
+  "EURUSD": {
+    "symbol": "EURUSD",
+    "digits": 5,
+    "max_allowed_spread_pips": 5.0,
+    "atr_period": 14,
+    "sl_atr_multiplier": 1.5,
+    "tp_atr_multiplier": 3.0,
+    "session_restriction": false,
+    "allowed_sessions": ["London", "New York"]
+  },
+  "EURUSD#": {
+    "symbol": "EURUSD#",
+    "digits": 5,
+    "max_allowed_spread_pips": 5.0,
+    "atr_period": 14,
+    "sl_atr_multiplier": 1.5,
+    "tp_atr_multiplier": 3.0,
+    "session_restriction": false,
+    "allowed_sessions": ["London", "New York"]
+  },
+  "GBPUSD": {
+    "symbol": "GBPUSD",
+    "digits": 5,
+    "max_allowed_spread_pips": 5.0,
+    "atr_period": 14,
+    "sl_atr_multiplier": 1.6,
+    "tp_atr_multiplier": 3.2,
+    "session_restriction": false,
+    "allowed_sessions": ["London", "New York"]
+  },
+  "GBPUSD#": {
+    "symbol": "GBPUSD#",
+    "digits": 5,
+    "max_allowed_spread_pips": 5.0,
+    "atr_period": 14,
+    "sl_atr_multiplier": 1.6,
+    "tp_atr_multiplier": 3.2,
+    "session_restriction": false,
+    "allowed_sessions": ["London", "New York"]
+  },
+  "USDJPY": {
+    "symbol": "USDJPY",
+    "digits": 3,
+    "max_allowed_spread_pips": 5.0,
+    "atr_period": 14,
+    "sl_atr_multiplier": 1.5,
+    "tp_atr_multiplier": 3.0,
+    "session_restriction": false,
+    "allowed_sessions": ["Asian", "London", "New York"]
+  },
+  "USDJPY#": {
+    "symbol": "USDJPY#",
+    "digits": 3,
+    "max_allowed_spread_pips": 5.0,
+    "atr_period": 14,
+    "sl_atr_multiplier": 1.5,
+    "tp_atr_multiplier": 3.0,
+    "session_restriction": false,
+    "allowed_sessions": ["Asian", "London", "New York"]
+  },
+  "AUDUSD": {
+    "symbol": "AUDUSD",
+    "digits": 5,
+    "max_allowed_spread_pips": 5.0,
+    "atr_period": 14,
+    "sl_atr_multiplier": 1.5,
+    "tp_atr_multiplier": 3.0,
+    "session_restriction": false,
+    "allowed_sessions": ["Asian", "London", "New York"]
+  },
+  "AUDUSD#": {
+    "symbol": "AUDUSD#",
+    "digits": 5,
+    "max_allowed_spread_pips": 5.0,
+    "atr_period": 14,
+    "sl_atr_multiplier": 1.5,
+    "tp_atr_multiplier": 3.0,
+    "session_restriction": false,
+    "allowed_sessions": ["Asian", "London", "New York"]
+  },
+  "USDCAD": {
+    "symbol": "USDCAD",
+    "digits": 5,
+    "max_allowed_spread_pips": 5.0,
+    "atr_period": 14,
+    "sl_atr_multiplier": 1.5,
+    "tp_atr_multiplier": 3.0,
+    "session_restriction": false,
+    "allowed_sessions": ["Asian", "London", "New York"]
+  },
+  "USDCAD#": {
+    "symbol": "USDCAD#",
+    "digits": 5,
+    "max_allowed_spread_pips": 5.0,
+    "atr_period": 14,
+    "sl_atr_multiplier": 1.5,
+    "tp_atr_multiplier": 3.0,
+    "session_restriction": false,
+    "allowed_sessions": ["Asian", "London", "New York"]
+  },
+  "BTCUSD": {
+    "symbol": "BTCUSD",
+    "digits": 2,
+    "max_allowed_spread_pips": 3000.0,
+    "atr_period": 14,
+    "sl_atr_multiplier": 2.0,
+    "tp_atr_multiplier": 4.0,
+    "session_restriction": false,
+    "allowed_sessions": ["Asian", "London", "New York"]
+  },
+  "BTCUSD#": {
+    "symbol": "BTCUSD#",
+    "digits": 2,
+    "max_allowed_spread_pips": 3000.0,
+    "atr_period": 14,
+    "sl_atr_multiplier": 2.0,
+    "tp_atr_multiplier": 4.0,
+    "session_restriction": false,
+    "allowed_sessions": ["Asian", "London", "New York"]
+  },
+  "US30": {
+    "symbol": "US30",
+    "digits": 2,
+    "max_allowed_spread_pips": 500.0,
+    "atr_period": 14,
+    "sl_atr_multiplier": 2.0,
+    "tp_atr_multiplier": 4.0,
+    "session_restriction": false,
+    "allowed_sessions": ["London", "New York"]
+  },
+  "US30Cash#": {
+    "symbol": "US30Cash#",
+    "digits": 2,
+    "max_allowed_spread_pips": 500.0,
+    "atr_period": 14,
+    "sl_atr_multiplier": 2.0,
+    "tp_atr_multiplier": 4.0,
+    "session_restriction": false,
+    "allowed_sessions": ["London", "New York"]
+  },
+  "OIL": {
+    "symbol": "OIL",
+    "digits": 2,
+    "max_allowed_spread_pips": 50.0,
+    "atr_period": 14,
+    "sl_atr_multiplier": 1.8,
+    "tp_atr_multiplier": 3.6,
+    "session_restriction": false,
+    "allowed_sessions": ["London", "New York"]
+  },
+  "OILCash#": {
+    "symbol": "OILCash#",
+    "digits": 2,
+    "max_allowed_spread_pips": 50.0,
+    "atr_period": 14,
+    "sl_atr_multiplier": 1.8,
+    "tp_atr_multiplier": 3.6,
+    "session_restriction": false,
+    "allowed_sessions": ["London", "New York"]
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "trading": {
+    "magic_number": 888999,
+    "default_mode": "live",
+    "primary_timeframe": "H1",
+    "macro_timeframe": "D1",
+    "allowed_symbols": [
+      "XAUUSD",
+      "EURUSD",
+      "GBPUSD",
+      "USDJPY",
+      "BTCUSD"
+    ]
+  },
+  "risk": {
+    "max_risk_per_trade_pct": 0.5,
+    "max_daily_loss_pct": 5.0,
+    "max_open_positions": 2,
+    "max_symbol_exposure_count": 1,
+    "min_rr_ratio": 2.0,
+    "breakeven_atr_trigger": 1.0,
+    "min_trade_score": 80.0,
+    "high_risk_trade_score": 88.0
+  },
+  "news": {
+    "enabled": true,
+    "forex_factory_url": "https://nfs.faireconomy.media/ff_calendar_thisweek.json",
+    "pre_news_buffer_minutes": 30,
+    "post_news_buffer_minutes": 15,
+    "high_impact_pause_trading": true,
+    "elevate_score_threshold_on_error": true
+  },
+  "logging": {
+    "sqlite_db_path": "trades_log.db",
+    "jsonl_log_path": "trades_log.jsonl",
+    "level": "INFO"
+  }
+}

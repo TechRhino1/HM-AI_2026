@@ -1,0 +1,39 @@
+{
+  "events": [
+    {
+      "title": "US Non-Farm Payrolls (NFP)",
+      "country": "USD",
+      "currency": "USD",
+      "impact": "HIGH",
+      "recurrence": "First Friday of month at 13:30 UTC"
+    },
+    {
+      "title": "US Consumer Price Index (CPI)",
+      "country": "USD",
+      "currency": "USD",
+      "impact": "HIGH",
+      "recurrence": "Mid-month at 13:30 UTC"
+    },
+    {
+      "title": "FOMC Interest Rate Decision",
+      "country": "USD",
+      "currency": "USD",
+      "impact": "HIGH",
+      "recurrence": "8 times per year at 19:00 UTC"
+    },
+    {
+      "title": "ECB Interest Rate Decision",
+      "country": "EUR",
+      "currency": "EUR",
+      "impact": "HIGH",
+      "recurrence": "6-8 times per year at 12:15 UTC"
+    },
+    {
+      "title": "BOE Interest Rate Decision",
+      "country": "GBP",
+      "currency": "GBP",
+      "impact": "HIGH",
+      "recurrence": "8 times per year at 12:00 UTC"
+    }
+  ]
+}
