@@ -60,11 +60,13 @@ class OrderManager:
                     modified = True
                     logger.info(f"Position #{position.ticket} BUY: Moving SL to Break-Even ({new_sl:.4f}).")
 
-            # Trailing stop behind dynamic swing low
-            if st.higher_lows and st.demand_zone[0] > new_sl and st.demand_zone[0] < c_price:
-                new_sl = st.demand_zone[0]
-                modified = True
-                logger.info(f"Position #{position.ticket} BUY: Trailing SL to Higher-Low structure ({new_sl:.4f}).")
+            # Structural Trailing: Ratchet SL behind newly formed Higher-Low Support Floor
+            if st.higher_lows and st.demand_zone[0] > 0:
+                struct_sl = st.demand_zone[0] - (atr * 0.2)
+                if struct_sl > new_sl and struct_sl < c_price:
+                    new_sl = struct_sl
+                    modified = True
+                    logger.info(f"🏛️ Position #{position.ticket} BUY: Ratcheted SL behind Support Floor at {new_sl:.2f}")
 
         elif position.type == "SELL":
             profit_pips = (position.open_price - c_price)
@@ -98,11 +100,13 @@ class OrderManager:
                     modified = True
                     logger.info(f"Position #{position.ticket} SELL: Moving SL to Break-Even ({new_sl:.4f}).")
 
-            # Trailing stop behind dynamic swing high
-            if st.lower_highs and st.supply_zone[1] < new_sl and st.supply_zone[1] > c_price:
-                new_sl = st.supply_zone[1]
-                modified = True
-                logger.info(f"Position #{position.ticket} SELL: Trailing SL to Lower-High structure ({new_sl:.4f}).")
+            # Structural Trailing: Ratchet SL behind newly formed Lower-High Resistance Ceiling
+            if st.lower_highs and st.supply_zone[1] > 0:
+                struct_sl = st.supply_zone[1] + (atr * 0.2)
+                if (struct_sl < new_sl or new_sl == 0) and struct_sl > c_price:
+                    new_sl = struct_sl
+                    modified = True
+                    logger.info(f"🏛️ Position #{position.ticket} SELL: Ratcheted SL behind Resistance Ceiling at {new_sl:.2f}")
 
         # Spread blowout alert
         if vol.current_spread_pips > 4.0:
