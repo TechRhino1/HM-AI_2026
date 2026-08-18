@@ -155,7 +155,7 @@
         </aside>
 
         <!-- CENTER TOP: TradingView Multi-Pane Financial Chart Stage -->
-        <section class="terminal-panel">
+        <section id="chart-main-panel" class="terminal-panel chart-panel">
             <div class="panel-header">
                 <div class="chart-header-bar">
                     <div class="chart-symbol-info">
@@ -164,7 +164,7 @@
                         <span id="chart-live-price" class="chart-live-price">2400.00</span>
                     </div>
 
-                    <!-- Chart Engine Mode Switcher -->
+                    <!-- Chart Engine Mode Switcher & Controls -->
                     <div style="display:flex; align-items:center; gap:6px;">
                         <div class="tab-switcher" style="margin-right:8px;">
                             <button id="btn-mode-tv-live" class="tab-btn active" onclick="switchChartMode('tv_live')">📊 TV Live MT5</button>
@@ -177,6 +177,9 @@
                             <button class="tf-btn" onclick="setTimeframe('H4')">H4</button>
                             <button class="tf-btn" onclick="setTimeframe('D1')">D1</button>
                         </div>
+                        <button id="btn-expand-chart" class="btn-terminal" style="padding:2px 8px; font-size:10px; margin-left:6px;" onclick="toggleExpandChart()" title="Toggle Fullscreen Chart">
+                            ⛶ Expand
+                        </button>
                     </div>
                 </div>
             </div>

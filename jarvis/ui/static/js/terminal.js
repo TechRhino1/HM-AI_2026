@@ -5,6 +5,7 @@
  * - TradingView Lightweight Charts v4 Integration (Live MT5 Candles + Volume + S/R Price Lines)
  * - TradingView Advanced Pro Real-Time Widget Switcher (Interactive Pine Script / Drawing Desk)
  * - Dynamic Active Support & Resistance Level Detection (R1/R2 & S1/S2)
+ * - Fullscreen / Expand Chart Mode with Instant Responsive Re-scaling
  * - Smart Floating Tooltip with Structural AI Context
  * - High-Impact Macro Economic News Feed & Shock Calendar
  * - Live Position Close Actions (Individual 1-Click Close & Emergency Close All)
@@ -21,6 +22,7 @@
         symbol: "XAUUSD",
         timeframe: "H1",
         chartMode: "tv_live", // 'tv_live' or 'tv_pro'
+        chartExpanded: false,
         candles: [],
         latestDecisions: {},
         radarOpportunities: [],
@@ -85,6 +87,7 @@
         deskTp: document.getElementById("desk-tp"),
 
         // Chart Stage
+        chartMainPanel: document.getElementById("chart-main-panel"),
         chartSymbol: document.getElementById("chart-symbol"),
         chartRegime: document.getElementById("chart-regime"),
         chartLivePrice: document.getElementById("chart-live-price"),
@@ -92,6 +95,7 @@
         tvProContainer: document.getElementById("tv-advanced-widget-container"),
         btnModeTvLive: document.getElementById("btn-mode-tv-live"),
         btnModeTvPro: document.getElementById("btn-mode-tv-pro"),
+        btnExpandChart: document.getElementById("btn-expand-chart"),
         legendR1: document.getElementById("legend-r1"),
         legendS1: document.getElementById("legend-s1"),
         smartTooltip: document.getElementById("smart-chart-tooltip"),
@@ -132,6 +136,7 @@
         { id: "gbp", title: "Analyze Pound (GBPUSD)", desc: "Switch terminal view & load GBPUSD desk", shortcut: "P", action: () => selectSymbol("GBPUSD") },
         { id: "jpy", title: "Analyze Yen (USDJPY)", desc: "Switch terminal view & load USDJPY desk", shortcut: "Y", action: () => selectSymbol("USDJPY") },
         { id: "btc", title: "Analyze Bitcoin (BTCUSD)", desc: "Switch terminal view & load BTCUSD desk", shortcut: "B", action: () => selectSymbol("BTCUSD") },
+        { id: "expand", title: "Toggle Fullscreen Chart", desc: "Expand chart to fill full viewport", shortcut: "F", action: () => toggleExpandChart() },
         { id: "buy", title: "1-Click BUY Execution", desc: "Execute immediate LONG order on active symbol", shortcut: "B", action: () => executeManualTrade("BUY") },
         { id: "sell", title: "1-Click SELL Execution", desc: "Execute immediate SHORT order on active symbol", shortcut: "S", action: () => executeManualTrade("SELL") },
         { id: "close_all", title: "Close All Active Positions", desc: "Emergency kill-switch closing all open tickets", shortcut: "X", action: () => closeAllPositions() },
@@ -156,7 +161,12 @@
 
         el.tvLiveContainer.innerHTML = "";
 
+        const width = el.tvLiveContainer.clientWidth || 600;
+        const height = el.tvLiveContainer.clientHeight || 340;
+
         const chart = LightweightCharts.createChart(el.tvLiveContainer, {
+            width: width,
+            height: height,
             layout: {
                 background: { color: "#080c14" },
                 textColor: "#94a3b8",
@@ -405,12 +415,45 @@
             if (el.tvLiveContainer) el.tvLiveContainer.style.display = "block";
             if (el.tvProContainer) el.tvProContainer.style.display = "none";
             if (!state.tvChartInstance) initTradingViewLightweightChart();
-            else renderTradingViewChartData();
+            else {
+                state.tvChartInstance.applyOptions({
+                    width: el.tvLiveContainer.clientWidth,
+                    height: el.tvLiveContainer.clientHeight
+                });
+                renderTradingViewChartData();
+            }
         } else {
             if (el.tvLiveContainer) el.tvLiveContainer.style.display = "none";
             if (el.tvProContainer) el.tvProContainer.style.display = "block";
             initTradingViewAdvancedWidget();
         }
+    };
+
+    window.toggleExpandChart = function () {
+        const panel = document.getElementById("chart-main-panel");
+        const btn = document.getElementById("btn-expand-chart");
+        if (!panel) return;
+
+        const isExpanded = panel.classList.toggle("is-expanded");
+        state.chartExpanded = isExpanded;
+
+        if (btn) {
+            btn.innerHTML = isExpanded ? "✕ Minimize" : "⛶ Expand";
+            btn.classList.toggle("btn-warning", isExpanded);
+        }
+
+        setTimeout(() => {
+            if (state.tvChartInstance && el.tvLiveContainer) {
+                state.tvChartInstance.applyOptions({
+                    width: el.tvLiveContainer.clientWidth,
+                    height: el.tvLiveContainer.clientHeight
+                });
+                state.tvChartInstance.timeScale().fitContent();
+            }
+            if (state.chartMode === "tv_pro") {
+                initTradingViewAdvancedWidget();
+            }
+        }, 80);
     };
 
     /* ==========================================================================
