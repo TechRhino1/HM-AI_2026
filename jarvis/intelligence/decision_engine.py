@@ -146,7 +146,8 @@ class DecisionEngine:
                 max_spread = 3.5
 
             effective_min_ev = 0.05
-            ai_score = regime.confidence * 100.0
+            # Composite multi-agent consensus score (0-100)
+            ai_score = sum(r.score for r in analyst_reports.values()) / max(1, len(analyst_reports))
 
             gate_checks = {
                 "Regime Viability": regime.primary_regime != MarketRegime.EVENT_RISK,
