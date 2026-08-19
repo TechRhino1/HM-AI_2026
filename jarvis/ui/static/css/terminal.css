@@ -408,7 +408,23 @@ header.terminal-hud {
 .radar-meta-row { display: flex; justify-content: space-between; align-items: center; font-size: 10.5px; color: var(--text-secondary); margin-top: 3px; }
 .radar-setup-name { font-weight: 600; color: var(--text-primary); }
 
-.radar-status-indicator { display: flex; align-items: center; gap: 5px; font-size: 9.5px; color: var(--text-dim); margin-top: 4px; padding-top: 3px; border-top: 1px solid rgba(255, 255, 255, 0.05); }
+.radar-levels-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 8px;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 4px;
+    padding: 5px 7px;
+    margin: 5px 0 3px 0;
+    font-family: var(--font-mono);
+    font-size: 10px;
+}
+.radar-level-item { display: flex; justify-content: space-between; align-items: center; }
+.radar-level-lbl { color: var(--text-dim); font-size: 9px; font-weight: 600; }
+.radar-level-val { font-weight: 700; color: #ffffff; }
+
+.radar-status-indicator { display: flex; justify-content: space-between; align-items: center; font-size: 9.5px; color: var(--text-dim); margin-top: 4px; padding-top: 3px; border-top: 1px solid rgba(255, 255, 255, 0.05); }
+.radar-status-indicator .status-left { display: flex; align-items: center; gap: 5px; }
 .radar-status-indicator .status-dot { width: 5px; height: 5px; border-radius: 50%; }
 
 /* ==========================================================================

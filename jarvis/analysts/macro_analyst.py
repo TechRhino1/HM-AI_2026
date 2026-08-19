@@ -36,12 +36,14 @@ class MacroAnalyst(BaseAnalyst):
                 score -= 10.0
 
         # 2. Real-Time Macro News Directional Shock Scoring
-        # Default mock/live calendar items if none passed
-        active_news = self.news_calendar if self.news_calendar else [
-            {"currency": "USD", "event": "US Core CPI (YoY)", "impact": "HIGH", "actual": "3.2%", "forecast": "3.0%", "previous": "2.9%"},
-            {"currency": "USD", "event": "FOMC Rate Probability & Yields", "impact": "HIGH", "actual": "5.50%", "forecast": "5.25%", "previous": "5.25%"},
-            {"currency": "EUR", "event": "ECB Monetary Policy Stance", "impact": "HIGH", "actual": "3.75%", "forecast": "3.75%", "previous": "4.00%"}
-        ]
+        if not self.news_calendar:
+            try:
+                from jarvis.market.news import GLOBAL_NEWS_ENGINE
+                active_news = GLOBAL_NEWS_ENGINE.get_news_calendar()
+            except Exception:
+                active_news = []
+        else:
+            active_news = self.news_calendar
 
         usd_bull_shock = False
         usd_bear_shock = False

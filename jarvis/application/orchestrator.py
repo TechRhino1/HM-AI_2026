@@ -358,14 +358,24 @@ class JarvisOrchestrator:
                         try:
                             res = fut.result()
                             d = res["decision"]
+                            # Calculate directional win probability
+                            win_p = d.probabilities.get(d.bias.lower(), d.model_confidence) if d.bias in ["BUY", "SELL"] else d.model_confidence
                             radar_results.append({
                                 "symbol": sym,
-                                "action": d.bias if d.decision == "EXECUTE" else "WAIT",
+                                "bias": d.bias,
+                                "action": d.bias if d.decision == "EXECUTE" else f"WAIT: {d.bias}",
                                 "decision": d.decision,
-                                "score": round(d.model_confidence * 100.0, 0),
+                                "score": round(win_p * 100.0, 0),
+                                "win_prob": round(win_p * 100.0, 0),
+                                "entry_price": d.entry_price,
+                                "stop_loss": d.stop_loss,
+                                "take_profit": d.take_profit,
+                                "risk_reward_ratio": d.risk_reward_ratio,
                                 "ev": d.expected_value,
                                 "regime": d.regime.primary_regime.value,
-                                "strategy": d.strategy
+                                "strategy": d.strategy,
+                                "gate_passed": d.quality_gate.passed,
+                                "failing_reasons": d.quality_gate.failing_reasons
                             })
                         except Exception as e:
                             logger.error(f"Parallel scan error for {sym}: {e}", exc_info=True)

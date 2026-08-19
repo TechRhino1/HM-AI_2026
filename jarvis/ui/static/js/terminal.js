@@ -580,14 +580,21 @@
         renderActiveTradesDOM(state.positions);
         renderDevilAdvocateDOM(state.latestDecisions[state.symbol]);
 
-        // Update Manual Trade Desk Active Target
+        // Update Manual Trade Desk Active Target & Real-Time Dynamic SL/TP
         if (el.deskActiveSymbol) el.deskActiveSymbol.textContent = state.symbol;
         const activeDec = state.latestDecisions[state.symbol];
         if (activeDec) {
-            const winProb = activeDec.probabilities && activeDec.probabilities.buy ? activeDec.probabilities.buy : 0.73;
-            if (el.deskWinProb) el.deskWinProb.value = `${(winProb * 100).toFixed(0)}%`;
-            if (el.deskSl && !el.deskSl.value && activeDec.stop_loss) el.deskSl.value = activeDec.stop_loss;
-            if (el.deskTp && !el.deskTp.value && activeDec.take_profit) el.deskTp.value = activeDec.take_profit;
+            const isSell = activeDec.bias === "SELL";
+            const winProb = (isSell ? activeDec.probabilities?.sell : activeDec.probabilities?.buy) || (activeDec.model_confidence || 0.55);
+            if (el.deskWinProb) el.deskWinProb.value = `${Math.round(winProb * 100)}%`;
+            
+            // Real-time market reactive update for Stop Loss & Take Profit
+            if (el.deskSl && document.activeElement !== el.deskSl && activeDec.stop_loss) {
+                el.deskSl.value = activeDec.stop_loss;
+            }
+            if (el.deskTp && document.activeElement !== el.deskTp && activeDec.take_profit) {
+                el.deskTp.value = activeDec.take_profit;
+            }
         }
     }
 
@@ -598,18 +605,33 @@
         }
 
         el.radarList.innerHTML = opps.map(opp => {
-            const isBuy = opp.action === "BUY";
-            const isSell = opp.action === "SELL";
+            const isBuy = opp.bias === "BUY" || (opp.action && opp.action.includes("BUY"));
+            const isSell = opp.bias === "SELL" || (opp.action && opp.action.includes("SELL"));
+            const isExecute = opp.decision === "EXECUTE";
+            
             const actionClass = isBuy ? "radar-action-buy" : (isSell ? "radar-action-sell" : "radar-action-wait");
-            const actionLabel = opp.action || "WAIT";
+            const actionLabel = opp.action || (isBuy ? "BUY" : (isSell ? "SELL" : "WAIT"));
+            const directionLabel = isBuy ? "BUY / LONG" : (isSell ? "SELL / SHORT" : "NEUTRAL");
 
-            let statusText = "Waiting for Confirmation";
+            const isCryptoOrMetal = opp.symbol.includes("XAU") || opp.symbol.includes("GOLD") || opp.symbol.includes("BTC");
+            const digits = isCryptoOrMetal ? 2 : 4;
+
+            const entryStr = opp.entry_price ? Number(opp.entry_price).toFixed(digits) : "Market";
+            const slStr = opp.stop_loss ? Number(opp.stop_loss).toFixed(digits) : "—";
+            const tpStr = opp.take_profit ? Number(opp.take_profit).toFixed(digits) : "—";
+            const rrStr = opp.risk_reward_ratio ? `1:${Number(opp.risk_reward_ratio).toFixed(2)}` : "1:2.50";
+            const winProb = opp.win_prob || opp.score || 55;
+
+            let statusText = "Awaiting Confirmation";
             let statusColor = "var(--devil-amber)";
-            if (opp.score >= 70 && opp.ev > 0) {
-                statusText = "High-Conviction Setup Ready";
+            if (isExecute) {
+                statusText = "⚡ EXECUTION AUTHORIZED";
                 statusColor = "var(--neon-bull)";
-            } else if (opp.action === "NO_TRADE") {
-                statusText = "Filtered by Quality Gate";
+            } else if (winProb >= 65 && opp.ev > 0) {
+                statusText = "High-Conviction Setup";
+                statusColor = "var(--neon-bull)";
+            } else if (opp.decision === "NO_TRADE") {
+                statusText = "Filtered by Risk Gate";
                 statusColor = "var(--text-dim)";
             }
 
@@ -622,15 +644,44 @@
                         </div>
                         <div class="radar-action-pill ${actionClass}">${actionLabel}</div>
                     </div>
+
+                    <!-- Trade Levels Strip: Entry, SL, TP, R:R -->
+                    <div class="radar-levels-grid">
+                        <div class="radar-level-item">
+                            <span class="radar-level-lbl">ENTRY</span>
+                            <span class="radar-level-val">${entryStr}</span>
+                        </div>
+                        <div class="radar-level-item">
+                            <span class="radar-level-lbl">R:R</span>
+                            <span class="radar-level-val" style="color:var(--accent-cyan);">${rrStr}</span>
+                        </div>
+                        <div class="radar-level-item">
+                            <span class="radar-level-lbl">SL</span>
+                            <span class="radar-level-val" style="color:var(--neon-bear);">${slStr}</span>
+                        </div>
+                        <div class="radar-level-item">
+                            <span class="radar-level-lbl">TP</span>
+                            <span class="radar-level-val" style="color:var(--neon-bull);">${tpStr}</span>
+                        </div>
+                    </div>
+
                     <div class="radar-meta-row">
                         <span class="radar-setup-name">${opp.strategy || opp.regime || 'Institutional Structure'}</span>
-                        <span class="mono-number" style="color: ${opp.ev >= 0 ? 'var(--neon-bull)' : 'var(--text-dim)'}; font-weight:700;">
-                            EV: $${(opp.ev || 0).toFixed(2)}
-                        </span>
+                        <div style="display:flex; gap:8px;">
+                            <span class="mono-number" style="color: ${opp.ev >= 0 ? 'var(--neon-bull)' : 'var(--text-dim)'}; font-weight:700;">
+                                EV: $${(opp.ev || 0).toFixed(2)}
+                            </span>
+                            <span class="mono-number" style="color:var(--accent-cyan); font-weight:700;">
+                                ${winProb}%
+                            </span>
+                        </div>
                     </div>
                     <div class="radar-status-indicator">
-                        <span class="status-dot" style="background-color: ${statusColor};"></span>
-                        <span>${statusText}</span>
+                        <div class="status-left">
+                            <span class="status-dot" style="background-color: ${statusColor};"></span>
+                            <span>${statusText}</span>
+                        </div>
+                        <span style="font-size:8.5px; font-weight:700; color:${isBuy ? 'var(--neon-bull)' : (isSell ? 'var(--neon-bear)' : 'var(--text-dim)')};">${directionLabel}</span>
                     </div>
                 </div>
             `;
@@ -728,10 +779,27 @@
             el.chartRegime.textContent = (d.regime && d.regime.primary) ? d.regime.primary : "TREND_BULL";
         }
 
-        const prob = d.probabilities && d.probabilities.buy ? d.probabilities.buy : 0.73;
-        if (el.decisionWinProb) el.decisionWinProb.textContent = `${(prob * 100).toFixed(0)}%`;
+        const isSell = d.bias === "SELL";
+        const prob = (isSell ? d.probabilities?.sell : d.probabilities?.buy) || (d.model_confidence || 0.55);
+        if (el.decisionWinProb) el.decisionWinProb.textContent = `${Math.round(prob * 100)}%`;
         if (el.decisionEv) el.decisionEv.textContent = `$${(d.expected_value || 0).toFixed(2)}`;
         if (el.decisionRr) el.decisionRr.textContent = `1:${(d.risk_reward_ratio || 2.5).toFixed(2)}`;
+
+        // Dynamic Quality Gate Status
+        const gateBadge = document.getElementById("decision-quality-gate");
+        if (gateBadge) {
+            const checks = (d.quality_gate && d.quality_gate.checks) ? d.quality_gate.checks : {};
+            const totalChecks = Object.keys(checks).length || 9;
+            const failingCount = d.quality_gate && d.quality_gate.failing_reasons ? d.quality_gate.failing_reasons.length : 0;
+            const passedCount = totalChecks - failingCount;
+            if (d.quality_gate && d.quality_gate.passed) {
+                gateBadge.textContent = `PASSED (${passedCount}/${totalChecks})`;
+                gateBadge.style.color = "var(--neon-bull)";
+            } else {
+                gateBadge.textContent = `GATED (${passedCount}/${totalChecks})`;
+                gateBadge.style.color = "var(--devil-amber)";
+            }
+        }
 
         const penalty = d.adversarial_penalty || 0;
         if (el.devilPenaltyScore) el.devilPenaltyScore.textContent = `${penalty.toFixed(1)} / 50.0`;

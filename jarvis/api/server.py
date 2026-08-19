@@ -61,52 +61,8 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                 self._send_json({"opportunities": self.state_manager.radar_opportunities})
             elif path == "/api/news":
                 # Real-Time Institutional Macro News & Economic Calendar
-                news_items = [
-                    {
-                        "time": "19:30 UTC",
-                        "currency": "USD",
-                        "impact": "HIGH",
-                        "event": "Fed FOMC Meeting Minutes & Rate Path Assessment",
-                        "forecast": "5.25%",
-                        "previous": "5.25%",
-                        "actual": "Hawkish Hold",
-                        "shock_risk": "HIGH",
-                        "affected_pairs": ["XAUUSD", "EURUSD", "USDJPY"]
-                    },
-                    {
-                        "time": "20:00 UTC",
-                        "currency": "USD",
-                        "impact": "HIGH",
-                        "event": "US Core CPI Inflation (YoY)",
-                        "forecast": "3.1%",
-                        "previous": "3.2%",
-                        "actual": "3.1% (In-line)",
-                        "shock_risk": "MODERATE",
-                        "affected_pairs": ["XAUUSD", "GBPUSD"]
-                    },
-                    {
-                        "time": "21:15 UTC",
-                        "currency": "EUR",
-                        "impact": "MEDIUM",
-                        "event": "ECB President Lagarde Speech on Liquidity Facilities",
-                        "forecast": "—",
-                        "previous": "—",
-                        "actual": "Live Commentary",
-                        "shock_risk": "LOW",
-                        "affected_pairs": ["EURUSD", "EURGBP"]
-                    },
-                    {
-                        "time": "23:50 UTC",
-                        "currency": "JPY",
-                        "impact": "HIGH",
-                        "event": "Bank of Japan (BOJ) Core CPI & Yield Curve Control",
-                        "forecast": "2.8%",
-                        "previous": "2.7%",
-                        "actual": "Upcoming",
-                        "shock_risk": "HIGH",
-                        "affected_pairs": ["USDJPY", "GBPJPY"]
-                    }
-                ]
+                from jarvis.market.news import GLOBAL_NEWS_ENGINE
+                news_items = GLOBAL_NEWS_ENGINE.get_news_calendar()
                 self._send_json({"news": news_items, "timestamp": datetime.now(timezone.utc).isoformat()})
             elif path == "/api/diagnostics":
                 snap = self.state_manager.get_state_snapshot()
