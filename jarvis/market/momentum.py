@@ -132,13 +132,60 @@ class MomentumEngine:
             if p_recent_high > p_prior_high and rsi_recent_high < rsi_prior_high - 3.0:
                 divergence = "BEARISH_DIVERGENCE"
 
+        # Rate of Change (ROC)
+        roc = 0.0
+        if len(df) >= 10:
+            roc = (close.iloc[-1] / close.iloc[-10] - 1.0) * 100.0
+
+        # Calculate trend_score history for persistence
+        persistence_count = 0
+        lookback = min(30, len(df))
+        if lookback >= 10:
+            for i in range(1, lookback):
+                idx = -i
+                cp = float(close.iloc[idx])
+                c_ema_f = float(ema_f.iloc[idx])
+                c_ema_m = float(ema_m.iloc[idx])
+                c_ema_s = float(ema_s.iloc[idx])
+                c_adx = float(adx.iloc[idx])
+                c_pdi = float(plus_di.iloc[idx])
+                c_mdi = float(minus_di.iloc[idx])
+                
+                t_score = 0.0
+                if cp > c_ema_f > c_ema_m > c_ema_s:
+                    t_score += 45.0
+                elif cp > c_ema_f > c_ema_m:
+                    t_score += 30.0
+                elif cp > c_ema_f:
+                    t_score += 15.0
+                elif cp < c_ema_f < c_ema_m < c_ema_s:
+                    t_score -= 45.0
+                elif cp < c_ema_f < c_ema_m:
+                    t_score -= 30.0
+                elif cp < c_ema_f:
+                    t_score -= 15.0
+                    
+                if c_adx >= 22.0:
+                    if c_pdi > c_mdi:
+                        t_score += 25.0
+                    else:
+                        t_score -= 25.0
+                
+                # Simple check: same sign as final_trend_score
+                if (final_trend_score > 0 and t_score > 0) or (final_trend_score < 0 and t_score < 0):
+                    persistence_count += 1
+                else:
+                    break
+
         return MomentumContext(
             rsi=round(cur_rsi, 1),
             adx=round(cur_adx, 1),
             plus_di=round(cur_plus_di, 1),
             minus_di=round(cur_minus_di, 1),
             trend_score=final_trend_score,
+            trend_persistence=persistence_count,
             slope=round(float(norm_slope), 3),
+            roc=round(roc, 2),
             divergence=divergence,
             acceleration=acceleration
         )

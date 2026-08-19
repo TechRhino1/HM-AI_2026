@@ -62,8 +62,8 @@ class MarketStructureEngine:
             bias = "BEARISH"
 
         # Premium / Discount / Equilibrium Zones
-        recent_max = float(highs[-30:].max()) if len(highs) >= 30 else recent_sh
-        recent_min = float(lows[-30:].min()) if len(lows) >= 30 else recent_sl
+        recent_max = float(highs[-30:].max()) if len(highs) >= 30 else float(highs.max())
+        recent_min = float(lows[-30:].min()) if len(lows) >= 30 else float(lows.min())
         equilibrium = (recent_max + recent_min) / 2.0
         range_span = recent_max - recent_min + 1e-9
         position_pct = ((latest_close - recent_min) / range_span) * 100.0
@@ -123,6 +123,22 @@ class MarketStructureEngine:
                     "index": i
                 })
 
+        # Horizontal S/R Clustering (Key Levels)
+        all_swings = [s["price"] for s in swing_highs] + [s["price"] for s in swing_lows]
+        key_levels = []
+        visited = set()
+        for p in all_swings:
+            if p in visited:
+                continue
+            # cluster within 0.2%
+            cluster = [x for x in all_swings if abs(x - p) / (p + 1e-9) <= 0.002]
+            if len(cluster) >= 3:
+                level_price = sum(cluster) / len(cluster)
+                if not any(abs(level_price - k["price"]) / (k["price"] + 1e-9) <= 0.002 for k in key_levels):
+                    key_levels.append({"price": round(level_price, 4), "touches": len(cluster)})
+            for c in cluster:
+                visited.add(c)
+
         return StructureContext(
             bias=bias,
             higher_highs=hh,
@@ -138,5 +154,6 @@ class MarketStructureEngine:
             equilibrium_price=round(equilibrium, 4),
             discount_premium_zone=discount_premium_zone,
             order_blocks=order_blocks[-4:],
-            fair_value_gaps=fair_value_gaps[-4:]
+            fair_value_gaps=fair_value_gaps[-4:],
+            key_levels=key_levels
         )

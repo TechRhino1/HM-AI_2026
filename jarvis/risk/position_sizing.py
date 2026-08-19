@@ -14,11 +14,20 @@ class PositionSizer:
         sl_price: float,
         risk_pct: float,
         symbol_info: Dict[str, Any],
-        invalidation_risk_coefficient: float = 1.0
+        invalidation_risk_coefficient: float = 1.0,
+        atr_ratio: float = 1.0,
+        current_drawdown_pct: float = 0.0
     ) -> float:
         risk_distance = abs(entry_price - sl_price)
         if risk_distance <= 0 or account_balance <= 0:
             return 0.01
+
+        # Adjust risk_pct based on volatility and drawdown
+        if atr_ratio > 1.5:
+            risk_pct *= 0.70  # Reduce risk by 30%
+            
+        if current_drawdown_pct > 5.0:
+            risk_pct *= 0.50  # Halve risk
 
         # Adjusted risk percent incorporating Devil's Advocate coefficient
         effective_risk_pct = max(0.1, min(2.0, risk_pct * invalidation_risk_coefficient))
@@ -32,23 +41,16 @@ class PositionSizer:
         max_vol = symbol_info.get("volume_max", 100.0) if symbol_info else 100.0
         vol_step = symbol_info.get("volume_step", 0.01) if symbol_info else 0.01
 
-        # Lot calculation: Risk ($) / (Risk Distance * Contract Size)
+        # Smooth continuous formula
         raw_lots = risk_amount_dollars / (risk_distance * contract_size + 1e-9)
 
-        # Apply account size protective caps
-        if account_balance <= 40.0:
-            account_cap = 0.01  # Ultra-Survival Micro Tier ($20-$40)
-        elif account_balance < 100.0:
-            account_cap = 0.03  # Controlled Growth Micro Tier ($40-$100)
-        elif account_balance <= 500.0:
-            account_cap = 0.05
-        elif account_balance <= 1000.0:
-            account_cap = 0.10
-        elif account_balance <= 5000.0:
-            account_cap = 0.50
-        else:
-            account_cap = max_vol
+        # Clamp between min_vol and max_vol
+        final_lots = max(min_vol, min(raw_lots, max_vol))
 
-        final_lots = min(raw_lots, account_cap, max_vol)
+        # Keep hard floor of 0.01 for micro accounts < $40
+        if account_balance < 40.0:
+            final_lots = min(final_lots, 0.01)
+
+        # Volume step rounding
         final_lots = max(min_vol, round(final_lots / vol_step) * vol_step)
         return round(final_lots, 2)

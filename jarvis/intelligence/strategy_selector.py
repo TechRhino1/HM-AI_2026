@@ -60,6 +60,11 @@ class StrategySelector:
             "CHOCH_STRUCTURAL_REVERSAL": 0.20 * bandit_boosts.get("CHOCH_STRUCTURAL_REVERSAL", 1.0)
         }
 
+        # First normalization after bandit boosts
+        total = sum(weights.values())
+        if total > 0:
+            weights = {k: v / total for k, v in weights.items()}
+
         # Evaluate Dynamic Context for standard mode
         if context:
             st = context.structure
@@ -118,5 +123,13 @@ class StrategySelector:
                 weights["RANGE_MEAN_REVERSION"] = 0.55
                 weights["LIQUIDITY_SWEEP_REVERSAL"] = 0.25
 
+        # Regime-conditional blacklisting
+        if r == MarketRegime.RANGE:
+            weights["TREND_FOLLOWING"] = 0.0
+        elif r in [MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR]:
+            weights["RANGE_MEAN_REVERSION"] = 0.0
+
         total = sum(weights.values())
-        return {k: round(v / total, 3) for k, v in weights.items()}
+        if total > 0:
+            return {k: round(v / total, 3) for k, v in weights.items()}
+        return {k: 0.0 for k in weights}

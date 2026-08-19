@@ -3,7 +3,9 @@ JARVIS AI 3.0 — Autonomous Trade Quality Guard.
 Executes hard independent pre-flight checks before approving any trade for execution.
 """
 from typing import Dict, List, Any
+from datetime import datetime, timezone
 from jarvis.data.schemas import DecisionObject, AccountSnapshot, PositionSnapshot
+from jarvis.data.symbol_registry import resolve
 
 class TradeGuard:
     @staticmethod
@@ -22,14 +24,23 @@ class TradeGuard:
         if not account.trade_allowed:
             reasons.append("Account trade permissions disabled by broker.")
 
-        if current_spread_pips > max_spread_pips:
-            reasons.append(f"Spread ({current_spread_pips} pips) exceeds maximum threshold ({max_spread_pips} pips).")
+        symbol_data = resolve(decision.symbol)
+        
+        # Use symbol-specific max spread if available, otherwise use default
+        allowed_max_spread = getattr(symbol_data, 'max_spread', max_spread_pips)
+        
+        # Asian session check (approx 22:00 to 08:00 UTC)
+        # We'll just do a simple check for hours 22, 23, 0-7
+        current_hour = datetime.now(timezone.utc).hour
+        is_asian_session = current_hour >= 22 or current_hour < 8
+        
+        is_crypto = getattr(symbol_data, 'type', '').lower() == 'crypto' or 'crypto' in getattr(symbol_data, 'tags', []) or 'BTC' in decision.symbol or 'ETH' in decision.symbol
+        
+        if is_crypto and is_asian_session:
+            allowed_max_spread *= 2.0
 
-        if decision.expected_value <= 0:
-            reasons.append(f"Expected value (${decision.expected_value:.2f}) is non-positive after trading costs.")
-
-        if decision.risk_reward_ratio < 1.5:
-            reasons.append(f"Risk-to-Reward ratio (1:{decision.risk_reward_ratio:.2f}) below minimum 1:1.50.")
+        if current_spread_pips > allowed_max_spread:
+            reasons.append(f"Spread ({current_spread_pips} pips) exceeds maximum threshold ({allowed_max_spread} pips).")
 
         # Inverted or invalid stop loss check
         if decision.bias == "BUY" and decision.stop_loss >= decision.entry_price:

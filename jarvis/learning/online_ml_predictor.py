@@ -10,6 +10,9 @@ import os
 import json
 import sqlite3
 import numpy as np
+import threading
+import logging
+from collections import deque
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone
 from jarvis.data.schemas import MarketContext, RegimeOutput, DecisionObject
@@ -50,6 +53,11 @@ class OnlineMLPredictor:
         
         self.bias = 0.20  # Log-odds corresponding to ~55% base win rate
         self.training_steps = 10
+        self._lock = threading.Lock()
+        self._grad_buffer = []
+        self._batch_size = 3
+        self._feature_importance = np.abs(self.weights).copy()
+        self._brier_window = deque(maxlen=50)
         self._load_model()
 
     def _sigmoid(self, z: float) -> float:
@@ -141,21 +149,56 @@ class OnlineMLPredictor:
         Executes online stochastic gradient step after trade completion.
         target_win = 1 if win, 0 if loss.
         """
-        pred = self._sigmoid(np.dot(self.weights, features) + self.bias)
-        error = pred - target_win  # Gradient of binary cross-entropy
+        with self._lock:
+            pred = self._sigmoid(np.dot(self.weights, features) + self.bias)
+            error = pred - target_win  # Gradient of binary cross-entropy
+            
+            # Brier score tracking
+            self._brier_window.append(error ** 2)
+            if self.get_brier_score() > 0.30:
+                logging.warning(f"Brier score degraded: {self.get_brier_score():.3f} (worse than random)")
 
-        # Adaptive learning rate decay
-        self.training_steps += 1
-        eta = self.learning_rate / np.sqrt(self.training_steps)
+            # Gradient computation
+            grad_w = (error * features) + (self.l2_reg * self.weights)
+            self._grad_buffer.append((grad_w, error))
 
-        # L2-regularized SGD weight update
-        grad_w = (error * features) + (self.l2_reg * self.weights)
-        self.weights -= eta * grad_w
-        self.bias -= eta * error
+            if len(self._grad_buffer) >= self._batch_size:
+                avg_grad_w = np.mean([g[0] for g in self._grad_buffer], axis=0)
+                avg_error = np.mean([g[1] for g in self._grad_buffer])
 
-        self._save_model()
+                # Adaptive learning rate decay
+                self.training_steps += 1
+                eta = self.learning_rate / np.sqrt(self.training_steps)
+
+                # Update weights
+                self.weights -= eta * avg_grad_w
+                self.bias -= eta * avg_error
+                
+                # Clamp weights
+                self.weights = np.clip(self.weights, -3.0, 3.0)
+                
+                # Update feature importance
+                self._feature_importance = np.abs(self.weights).copy()
+                
+                self._grad_buffer.clear()
+                self._save_model_internal()
+
+    def get_feature_importance(self) -> Dict[str, float]:
+        """Returns the current absolute weights as feature importance."""
+        with self._lock:
+            return {name: float(imp) for name, imp in zip(self.FEATURE_NAMES, self._feature_importance)}
+
+    def get_brier_score(self) -> float:
+        """Returns the rolling Brier score."""
+        if not self._brier_window:
+            return 0.0
+        return float(np.mean(self._brier_window))
 
     def _save_model(self):
+        with self._lock:
+            self._save_model_internal()
+            
+    def _save_model_internal(self):
         try:
             data = {
                 "weights": self.weights.tolist(),
@@ -169,12 +212,14 @@ class OnlineMLPredictor:
             pass
 
     def _load_model(self):
-        if os.path.exists(self.model_file):
-            try:
-                with open(self.model_file, "r") as f:
-                    data = json.load(f)
-                self.weights = np.array(data["weights"], dtype=float)
-                self.bias = float(data["bias"])
-                self.training_steps = int(data.get("training_steps", 10))
-            except Exception:
-                pass
+        with self._lock:
+            if os.path.exists(self.model_file):
+                try:
+                    with open(self.model_file, "r") as f:
+                        data = json.load(f)
+                    self.weights = np.array(data["weights"], dtype=float)
+                    self.bias = float(data["bias"])
+                    self.training_steps = int(data.get("training_steps", 10))
+                    self._feature_importance = np.abs(self.weights).copy()
+                except Exception:
+                    pass

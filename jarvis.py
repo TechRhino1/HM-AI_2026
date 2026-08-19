@@ -16,6 +16,18 @@ from jarvis.application.orchestrator import JarvisOrchestrator
 from jarvis.api.server import run_web_server
 from jarvis.application.state_manager import GLOBAL_STATE
 
+import logging
+import signal
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(name)s] %(levelname)s: %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('jarvis_system.log', encoding='utf-8')
+    ]
+)
+
 def print_status_hud():
     snap = GLOBAL_STATE.get_state_snapshot()
     acc = snap.get("account") or {}
@@ -40,6 +52,10 @@ def main():
         import threading
         mode = sys.argv[2] if len(sys.argv) > 2 else "paper"
         orchestrator = JarvisOrchestrator(mode=mode)
+        
+        if os.name != 'nt':
+            signal.signal(signal.SIGTERM, lambda sig, frame: orchestrator.stop())
+            
         orchestrator.start()
         
         server_thread = threading.Thread(target=run_web_server, args=(8501,), daemon=True)

@@ -35,22 +35,17 @@ class StructureAnalyst(BaseAnalyst):
 
         # 2. Fast Change of Character (CHoCH) & Break of Structure (BOS)
         if st.choch:
-            if st.choch_type == "BEARISH" or c_price < st.demand_zone[0]:
-                bias = "BEARISH"
-                score = 85.0
+            score += 35.0
+            if st.choch_type == "BEARISH":
                 evidence.append("⚡ FAST INVERSION: Bearish Change of Character (CHoCH) breakdown below swing low.")
-            elif st.choch_type == "BULLISH" or c_price > st.supply_zone[1]:
-                bias = "BULLISH"
-                score = 85.0
+            elif st.choch_type == "BULLISH":
                 evidence.append("⚡ FAST INVERSION: Bullish Change of Character (CHoCH) breakout above swing high.")
 
         if st.bos:
             score += 15.0
             if st.bos_type == "BEARISH":
-                bias = "BEARISH"
                 evidence.append("Confirmed Bearish Break of Structure (BOS) expansion.")
             elif st.bos_type == "BULLISH":
-                bias = "BULLISH"
                 evidence.append("Confirmed Bullish Break of Structure (BOS) expansion.")
 
         # 3. Institutional Premium / Discount Zone Guard

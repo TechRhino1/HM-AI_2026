@@ -2,7 +2,7 @@
 JARVIS AI 3.0 — Probabilistic Causal Market Regime Classifier.
 Classifies the market state into a probability distribution over distinct market regimes without future look-ahead.
 """
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 import numpy as np
 
@@ -10,6 +10,10 @@ from jarvis.data.schemas import MarketRegime, RegimeOutput, MarketContext
 
 class MarketRegimeClassifier:
     """Causal, probabilistic regime classification engine."""
+    
+    def __init__(self):
+        self._previous_regime: Optional[MarketRegime] = None
+        self._regime_persistence: int = 0
     
     def classify_regime(self, context: MarketContext, macro_news_risk: bool = False) -> RegimeOutput:
         structure = context.structure
@@ -99,9 +103,20 @@ class MarketRegimeClassifier:
         second_p = sorted_regimes[1][1] if len(sorted_regimes) > 1 else 0.0
         confidence = min(0.98, max(0.40, round(highest_p + (highest_p - second_p) * 0.5, 2)))
 
+        regime_transition = False
+        if self._previous_regime is not None and self._previous_regime != primary_regime:
+            regime_transition = True
+            self._regime_persistence = 0
+        elif self._previous_regime is not None and self._previous_regime == primary_regime:
+            self._regime_persistence += 1
+
+        self._previous_regime = primary_regime
+
         return RegimeOutput(
             primary_regime=primary_regime,
             probabilities=regime_probs,
             confidence=confidence,
-            timestamp=datetime.now(timezone.utc)
+            timestamp=datetime.now(timezone.utc),
+            regime_transition=regime_transition,
+            regime_persistence=self._regime_persistence
         )

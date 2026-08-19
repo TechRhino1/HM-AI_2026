@@ -42,21 +42,38 @@ class MT5Client:
             self.is_connected = True
             return True
 
-        def _init():
-            with self._lock:
-                if not mt5.initialize():
-                    err = mt5.last_error()
-                    logger.error(f"MT5 initialization failed: {err}")
-                    return False
-                self.is_connected = True
-                acc = mt5.account_info()
-                if acc:
-                    logger.info(f"Connected to MT5 Server: {acc.server} | Login: #{acc.login} | Equity: ${acc.equity:.2f}")
-                return True
+        import random
+        delays = [1.0, 2.0, 4.0, 8.0, 16.0]
+        
+        for attempt in range(len(delays) + 1):
+            def _init():
+                with self._lock:
+                    if not mt5.initialize():
+                        err = mt5.last_error()
+                        logger.error(f"MT5 initialization failed: {err}")
+                        return False
+                    self.is_connected = True
+                    acc = mt5.account_info()
+                    if acc:
+                        logger.info(f"Connected to MT5 Server: {acc.server} | Login: #{acc.login} | Equity: ${acc.equity:.2f}")
+                    return True
 
-        res = TimeoutGuard.run_sync(_init, timeout_sec=self.timeout_sec, default=False, task_name="MT5_Init")
-        self.is_connected = bool(res)
-        return self.is_connected
+            res = TimeoutGuard.run_sync(_init, timeout_sec=self.timeout_sec, default=False, task_name="MT5_Init")
+            self.is_connected = bool(res)
+            
+            if self.is_connected:
+                return True
+                
+            if attempt < len(delays):
+                delay = delays[attempt]
+                jitter = delay * 0.2 * (random.random() * 2 - 1)
+                time.sleep(delay + jitter)
+                
+        return False
+
+    def _reconnect_if_needed(self):
+        if not self.is_connected:
+            self.init_connection()
 
     def resolve_symbol_name(self, symbol: str) -> str:
         if symbol in self.symbol_alias_cache:
@@ -100,6 +117,7 @@ class MT5Client:
         return res
 
     def get_account_snapshot(self) -> AccountSnapshot:
+        self._reconnect_if_needed()
         if self.mode == "paper" or not self.is_connected or not MT5_AVAILABLE:
             return AccountSnapshot(
                 login=345841337,
@@ -117,11 +135,24 @@ class MT5Client:
                 trade_allowed=True
             )
 
-        def _fetch_acc():
+        default_snap = AccountSnapshot(
+            login=345841337,
+            server="XMGlobal-MT5 10",
+            balance=102.14,
+            equity=102.25,
+            margin=3.71,
+            free_margin=98.54,
+            margin_level=2756.0,
+            leverage=1000,
+            name="Demo Account",
+            company="XM Global Limited"
+        )
+        
+        try:
             with self._lock:
                 acc = mt5.account_info()
                 if acc is None:
-                    return None
+                    return default_snap
                 return AccountSnapshot(
                     login=int(acc.login),
                     server=str(acc.server),
@@ -138,27 +169,16 @@ class MT5Client:
                     trade_allowed=bool(acc.trade_allowed),
                     last_sync_time=datetime.now(timezone.utc)
                 )
-
-        default_snap = AccountSnapshot(
-            login=345841337,
-            server="XMGlobal-MT5 10",
-            balance=102.14,
-            equity=102.25,
-            margin=3.71,
-            free_margin=98.54,
-            margin_level=2756.0,
-            leverage=1000,
-            name="Demo Account",
-            company="XM Global Limited"
-        )
-        res = TimeoutGuard.run_sync(_fetch_acc, timeout_sec=self.timeout_sec, default=default_snap, task_name="MT5_GetAccount")
-        return res or default_snap
+        except Exception as e:
+            logger.error(f"MT5 get_account_snapshot failed: {e}")
+            return default_snap
 
     def get_open_positions(self, symbol: Optional[str] = None) -> List[PositionSnapshot]:
+        self._reconnect_if_needed()
         if self.mode == "paper" or not self.is_connected or not MT5_AVAILABLE:
             return []
 
-        def _fetch_pos():
+        try:
             with self._lock:
                 resolved = self.resolve_symbol_name(symbol) if symbol else None
                 positions = mt5.positions_get(symbol=resolved) if resolved else mt5.positions_get()
@@ -184,8 +204,9 @@ class MT5Client:
                         comment=str(p.comment)
                     ))
                 return results
-
-        return TimeoutGuard.run_sync(_fetch_pos, timeout_sec=self.timeout_sec, default=[], task_name="MT5_GetPositions")
+        except Exception as e:
+            logger.error(f"MT5 get_open_positions failed: {e}")
+            return []
 
     def send_market_order(
         self,
@@ -196,6 +217,7 @@ class MT5Client:
         tp_price: float,
         comment: str = "JARVIS_3.0"
     ) -> Dict[str, Any]:
+        self._reconnect_if_needed()
         resolved = self.resolve_symbol_name(symbol)
         
         if self.mode == "paper" or not MT5_AVAILABLE:

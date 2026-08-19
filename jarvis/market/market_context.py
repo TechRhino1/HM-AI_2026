@@ -81,12 +81,33 @@ class MarketContextEngine:
         if not df_timing.empty:
             mtf_alignment["M5"] = self.structure_engine.analyze_structure(df_timing).bias
 
+        # 7. VWAP Calculation
+        vwap = 0.0
+        if not df_primary.empty and "volume" in df_primary.columns and "high" in df_primary.columns:
+            typical_price = (df_primary["high"] + df_primary["low"] + df_primary["close"]) / 3
+            vol = df_primary["volume"]
+            if vol.sum() > 0:
+                vwap_series = (typical_price * vol).cumsum() / vol.cumsum()
+                vwap = float(vwap_series.iloc[-1]) if not vwap_series.isna().all() else 0.0
+
+        # 8. Context Quality Score
+        quality = 0.0
+        available_tfs = sum(1 for d in [df_macro, df_context, df_primary, df_setup, df_timing] if not d.empty)
+        quality += (available_tfs / 5.0) * 50.0
+        if not df_primary.empty and len(df_primary) >= 50:
+            quality += 30.0
+        if not df_context.empty and len(df_context) >= 20:
+            quality += 20.0
+        context_quality = min(100.0, quality)
+
         return MarketContext(
             symbol=symbol,
             timestamp=datetime.now(timezone.utc),
             current_price=latest_close,
             bid=bid,
             ask=ask,
+            vwap=round(vwap, 4),
+            context_quality=round(context_quality, 1),
             structure=structure_primary,
             liquidity=liquidity,
             volatility=volatility,

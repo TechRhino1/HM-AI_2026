@@ -76,6 +76,7 @@ class StructureContext:
     discount_premium_zone: str = "EQUILIBRIUM"  # "DISCOUNT", "PREMIUM", "EQUILIBRIUM"
     order_blocks: List[Dict[str, Any]] = field(default_factory=list)
     fair_value_gaps: List[Dict[str, Any]] = field(default_factory=list)
+    key_levels: List[Dict[str, Any]] = field(default_factory=list)
 
 @dataclass
 class LiquidityContext:
@@ -84,6 +85,7 @@ class LiquidityContext:
     sweep_detected: bool = False
     sweep_type: str = "NONE"  # "BULLISH_SWEEP", "BEARISH_SWEEP"
     sweep_level: float = 0.0
+    sweep_magnitude: float = 0.0
     liquidity_pools: List[Dict[str, Any]] = field(default_factory=list)
     buy_side_liquidity: float = 0.0
     sell_side_liquidity: float = 0.0
@@ -105,7 +107,9 @@ class MomentumContext:
     plus_di: float = 0.0
     minus_di: float = 0.0
     trend_score: int = 0
+    trend_persistence: int = 0
     slope: float = 0.0
+    roc: float = 0.0
     divergence: str = "NONE"  # "BULLISH_DIVERGENCE", "BEARISH_DIVERGENCE", "NONE"
     acceleration: str = "STEADY"  # "ACCELERATING", "DECELERATING", "EXHAUSTION", "STEADY"
 
@@ -128,6 +132,10 @@ class MarketContext:
     volatility: VolatilityContext
     momentum: MomentumContext
     session: SessionContext
+    vwap: float = 0.0
+    context_quality: float = 100.0
+    strategy: str = ""
+    trend_score: float = 0.0
     mtf_alignment: Dict[str, str] = field(default_factory=dict)
 
 @dataclass
@@ -136,6 +144,8 @@ class RegimeOutput:
     probabilities: Dict[str, float]
     confidence: float
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    regime_transition: bool = False
+    regime_persistence: int = 0
 
 @dataclass
 class AnalystReport:
@@ -172,6 +182,7 @@ class CompetingHypotheses:
     invalidation_criteria: List[str]
     confirmation_conditions: List[str]
     expected_outcome: str
+    structural_invalidation_distance: float = 0.0
 
 @dataclass
 class TradeQualityGateResult:

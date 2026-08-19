@@ -20,6 +20,7 @@ class HypothesisEngine:
         mom = context.momentum
         vol = context.volatility
         liq = context.liquidity
+        c_price = context.current_price
 
         primary_evidence = []
         for role, rep in analyst_reports.items():
@@ -32,12 +33,13 @@ class HypothesisEngine:
 
         invalidation_criteria = list(devil_report.invalidation_triggers)
         confirmation_conditions = []
+        
+        structural_invalidation_distance = 0.0
 
         if proposed_action == "BUY":
             primary_thesis = f"Bullish continuation / demand bounce in {regime.primary_regime.value} regime."
             alternative_thesis = "Bearish rejection / liquidity sweep failure breakdown."
             
-            # Confidence & Probabilities
             adv_penalty = devil_report.penalty_score
             primary_p = round(max(0.20, min(0.85, 0.72 - (adv_penalty * 0.008))), 2)
             alt_p = round(max(0.10, min(0.60, 0.20 + (adv_penalty * 0.008))), 2)
@@ -49,6 +51,8 @@ class HypothesisEngine:
             confirmation_conditions.append("M5 bullish displacement with volume absorption.")
             confirmation_conditions.append(f"Hold above demand level {st.demand_zone[0]}.")
             expected_outcome = f"Targeting supply liquidity pool at {st.supply_zone[1]} with minimum 1:2.0 R:R."
+            
+            structural_invalidation_distance = abs(c_price - st.demand_zone[0]) if st.demand_zone[0] > 0 else 0.0
 
         elif proposed_action == "SELL":
             primary_thesis = f"Bearish continuation / supply mitigation in {regime.primary_regime.value} regime."
@@ -65,13 +69,20 @@ class HypothesisEngine:
             confirmation_conditions.append("M5 bearish displacement with volume rejection.")
             confirmation_conditions.append(f"Hold below supply level {st.supply_zone[1]}.")
             expected_outcome = f"Targeting demand liquidity pool at {st.demand_zone[0]} with minimum 1:2.0 R:R."
+            
+            structural_invalidation_distance = abs(st.supply_zone[1] - c_price) if st.supply_zone[1] > 0 else 0.0
 
         else:
             primary_thesis = "Indeterminate market equilibrium. Capital preservation active."
             alternative_thesis = "Breakout emergence from range compression."
-            primary_p = 0.33
-            alt_p = 0.33
-            no_trade_p = 0.34
+            
+            adv_penalty = devil_report.penalty_score
+            # Scale towards 0.33 based on devil penalty
+            factor = min(1.0, adv_penalty / 50.0)
+            primary_p = round(0.5 * (1.0 - factor) + 0.33 * factor, 2)
+            alt_p = round(0.5 * (1.0 - factor) + 0.33 * factor, 2)
+            no_trade_p = round(max(0.05, 1.0 - primary_p - alt_p), 2)
+            
             invalidation_criteria.append("Break of structural range boundaries.")
             confirmation_conditions.append("Wait for confirmed directional displacement.")
             expected_outcome = "No trade execution authorized; observing price action."
@@ -86,5 +97,6 @@ class HypothesisEngine:
             no_trade_probability=no_trade_p,
             invalidation_criteria=invalidation_criteria,
             confirmation_conditions=confirmation_conditions,
-            expected_outcome=expected_outcome
+            expected_outcome=expected_outcome,
+            structural_invalidation_distance=structural_invalidation_distance
         )

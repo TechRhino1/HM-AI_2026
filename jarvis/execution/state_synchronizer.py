@@ -31,6 +31,8 @@ class MT5StateSynchronizer:
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self._last_position_tickets: Set[int] = set()
+        self._backoff_delay = 1.0
+        self._max_backoff = 30.0
 
     def start(self):
         if not self._running:
@@ -62,6 +64,25 @@ class MT5StateSynchronizer:
             for t in closed_tickets:
                 logger.info(f"State Reconciliation: Position #{t} closed on broker terminal.")
                 self.event_bus.publish_sync("POSITION_CLOSED", {"ticket": t})
+                
+                # Fetch deal history for ML feedback loop
+                try:
+                    import MetaTrader5 as mt5
+                    deals = mt5.history_deals_get(position=t)
+                    if deals:
+                        pnl = sum(d.profit for d in deals)
+                        is_win = pnl > 0
+                        symbol = deals[0].symbol if deals else "UNKNOWN"
+                        self.event_bus.publish_sync('trade_closed', {
+                            'ticket': t, 
+                            'symbol': symbol, 
+                            'pnl': pnl, 
+                            'is_win': is_win, 
+                            'strategy': 'UNKNOWN', 
+                            'regime': 'UNKNOWN'
+                        })
+                except Exception as e:
+                    logger.error(f"Failed to fetch deal history for closed position #{t}: {e}")
 
             # Detect newly opened positions
             opened_tickets = current_tickets - self._last_position_tickets
@@ -75,6 +96,9 @@ class MT5StateSynchronizer:
             self.state_manager.update_service_health("MT5", status)
             self.state_manager.update_service_health("STATE_SYNC", "ONLINE")
 
+            # Reset backoff on success
+            self._backoff_delay = 1.0
+
             return {
                 "success": True,
                 "login": account.login,
@@ -86,9 +110,16 @@ class MT5StateSynchronizer:
         except Exception as e:
             logger.error(f"State Synchronization error: {e}", exc_info=True)
             self.state_manager.update_service_health("STATE_SYNC", "DEGRADED")
-            return {"success": False, "error": str(e)}
+            raise  # Re-raise to trigger backoff in sync_loop
 
     def _sync_loop(self):
         while self._running:
-            self.sync_once()
-            time.sleep(self.sync_interval_sec)
+            try:
+                self.sync_once()
+                time.sleep(self.sync_interval_sec)
+            except Exception:
+                # Apply exponential backoff
+                delay = self._backoff_delay
+                logger.warning(f"Sync loop failed. Retrying in {delay}s...")
+                time.sleep(delay)
+                self._backoff_delay = min(delay * 2, self._max_backoff)
