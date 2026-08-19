@@ -51,6 +51,15 @@ class JarvisOrchestrator:
         self.drawdown_guard = DrawdownGuard()
         self._pending_features = {}
 
+        # ── In-process execution guard ─────────────────────────────────────
+        # Tracks symbols currently being executed to prevent race-condition
+        # multi-fires before MT5StateSynchronizer (1 s lag) can catch up.
+        self._execution_in_progress: set = set()
+        self._execution_lock = threading.Lock()
+        # Per-symbol last-execution timestamp for 10-min same-symbol cooldown
+        self._last_execution_time: Dict[str, float] = {}
+        self._SAME_SYMBOL_COOLDOWN_SEC = 600  # 10 minutes
+
         self.event_bus.subscribe('trade_closed', self._on_trade_closed)
 
         self.mt5_client = MT5Client(magic_number=magic_number, mode=self.mode)
@@ -125,18 +134,46 @@ class JarvisOrchestrator:
 
         # 6. Risk Engine Independent Authorization & Sizing
         positions = self.state_manager.positions
+        from jarvis.data.symbol_registry import resolve as _resolve_sym
+        _spec = _resolve_sym(symbol)
         sym_info = {
-            "trade_contract_size": 100 if "XAU" in symbol else 100000,
+            "trade_contract_size": _spec.contract_size,
             "volume_min": 0.01,
             "volume_max": 100.0,
             "volume_step": 0.01
         }
 
+        # ── Hard Quality Gate: min model_confidence ────────────────────────
+        # Root-cause of triple-Gold loss: entries with confidence only 0.40.
+        # Raised minimum to 0.55. Also require devil penalty > 0 (entries with
+        # zero devil penalty and high EV are suspiciously overconfident).
+        MIN_CONFIDENCE = 0.55
+        if decision.decision == "EXECUTE" and decision.model_confidence < MIN_CONFIDENCE:
+            decision.decision = "WAIT"
+            decision.execution_authorized = False
+            auth_res = {"authorized": False, "reason": f"CONFIDENCE_GATE: {decision.model_confidence:.2f} < {MIN_CONFIDENCE} minimum"}
+        elif decision.decision == "EXECUTE" and decision.adversarial_penalty == 0.0 and decision.expected_value > 1.0:
+            decision.decision = "WAIT"
+            decision.execution_authorized = False
+            auth_res = {"authorized": False, "reason": "OVERCONFIDENCE_GUARD: Zero devil penalty with high EV is suspicious."}
+        else:
+            auth_res = {"authorized": decision.decision == "EXECUTE"}
+
+        # ── In-process execution lock + 10-min cooldown ────────────────────
+        # Fixes race condition where ThreadPoolExecutor fires multiple trades
+        # on same symbol before MT5StateSynchronizer 1-second sync catches up.
+        canonical_sym = _spec.canonical
+        with self._execution_lock:
+            already_executing = canonical_sym in self._execution_in_progress
+            last_exec_time = self._last_execution_time.get(canonical_sym, 0.0)
+            cooldown_active = (time.time() - last_exec_time) < self._SAME_SYMBOL_COOLDOWN_SEC
+
         # Anti-Clustering Rule: Prevent stacking multiple simultaneous orders on same asset
         active_sym_positions = [
-            p for p in positions if (p.symbol == symbol or (symbol == "XAUUSD" and "GOLD" in p.symbol))
+            p for p in positions if (p.symbol == symbol or (symbol == "XAUUSD" and "GOLD" in p.symbol)
+                                      or canonical_sym in p.symbol.upper())
         ]
-        
+
         # Asian Pre-Market Blackout Rule (01:00 to 05:00 UTC)
         now_utc_hour = datetime.now(timezone.utc).hour
         is_asian_blackout = (1 <= now_utc_hour < 5) and not is_crypto(symbol)
@@ -154,7 +191,16 @@ class JarvisOrchestrator:
             except Exception as e:
                 logger.error(f"Error trailing position #{pos.ticket}: {e}", exc_info=True)
 
-        if active_sym_positions and decision.decision == "EXECUTE":
+        if already_executing and decision.decision == "EXECUTE":
+            decision.decision = "WAIT"
+            decision.execution_authorized = False
+            auth_res = {"authorized": False, "reason": "IN_PROCESS_LOCK: Execution already in progress for this symbol."}
+        elif cooldown_active and decision.decision == "EXECUTE":
+            remaining = int(self._SAME_SYMBOL_COOLDOWN_SEC - (time.time() - last_exec_time))
+            decision.decision = "WAIT"
+            decision.execution_authorized = False
+            auth_res = {"authorized": False, "reason": f"COOLDOWN_GUARD: {remaining}s remaining before next {canonical_sym} trade."}
+        elif active_sym_positions and decision.decision == "EXECUTE":
             decision.decision = "WAIT"
             decision.execution_authorized = False
             auth_res = {"authorized": False, "reason": "ANTI_CLUSTERING_GUARD: Active trade already open on this asset."}
@@ -162,10 +208,12 @@ class JarvisOrchestrator:
             decision.decision = "WAIT"
             decision.execution_authorized = False
             auth_res = {"authorized": False, "reason": "ASIAN_SESSION_BLACKOUT: Low liquidity chop protection active."}
-        else:
+        elif auth_res.get("authorized"):
             auth_res = self.risk_engine.authorize_execution(
                 decision, account, positions, sym_info, current_spread_pips=context.volatility.current_spread_pips
             )
+
+
 
         # Circuit Breaker check
         cb_status = self.circuit_breaker.check_status()
@@ -190,7 +238,21 @@ class JarvisOrchestrator:
             # Micro-lot cap on small accounts (< $250)
             if account.equity < 250.0:
                 lots = 0.01
-            exec_res = self.execution_engine.execute_decision(decision, lots)
+
+            # Claim in-process lock BEFORE sending to MT5
+            with self._execution_lock:
+                self._execution_in_progress.add(canonical_sym)
+
+            try:
+                exec_res = self.execution_engine.execute_decision(decision, lots)
+            finally:
+                # Always release lock; update cooldown only on successful fill
+                with self._execution_lock:
+                    self._execution_in_progress.discard(canonical_sym)
+                    if exec_res and exec_res.get("status") == "FILLED":
+                        self._last_execution_time[canonical_sym] = time.time()
+                        logger.info(f"Execution lock released for {canonical_sym}. Cooldown {self._SAME_SYMBOL_COOLDOWN_SEC}s started.")
+
             if exec_res and exec_res.get("status") == "FILLED":
                 self.trade_memory.record_trade({
                     "ticket": exec_res.get("ticket"),
@@ -213,6 +275,7 @@ class JarvisOrchestrator:
             "authorized": auth_res["authorized"],
             "execution": exec_res
         }
+
 
     def _orchestration_loop(self):
         """Ultra-fast parallel radar scan loop across configured symbols (<50ms latency)."""
