@@ -51,7 +51,7 @@ _REGISTRY: Dict[str, SymbolSpec] = {
     "BTCUSD": SymbolSpec(
         canonical="BTCUSD", asset_class="CRYPTO",
         contract_size=1.0, pip_size=0.01, pip_value_per_lot=0.01,
-        typical_spread_pips=30.0, max_spread_pips=80.0,
+        typical_spread_pips=1500.0, max_spread_pips=3000.0,
         typical_atr_pct=2.5, margin_pct=0.5, digits=2, is_crypto=True
     ),
 }

@@ -56,7 +56,7 @@ def main():
         logger.info(f"Executing single telemetry sweep for {args.symbol}...")
         res = orchestrator.run_cycle_for_symbol(args.symbol)
         d = res["decision"]
-        logger.info(f"Result for {args.symbol}: Decision={d.decision}, Bias={d.bias}, EV=${d.expected_value:.2f}, Gate={d.quality_gate.passed}")
+        logger.info(f"Result for {args.symbol}: Decision={d.decision}, Bias={d.bias}, EV=${d.expected_value:.2f}, Gate={d.quality_gate.passed}, Reasons={d.quality_gate.failing_reasons}")
         orchestrator.stop()
         return
 

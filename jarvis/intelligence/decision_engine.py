@@ -178,6 +178,9 @@ class DecisionEngine:
         contract_size = spec.contract_size
         pip_size = spec.pip_size
         
+        if tentative_bias not in ["BUY", "SELL"]:
+            return final_win_p, loss_p, 0.0
+
         est_lots = max(0.01, planned_risk_dollars / (max(risk_dist, 1e-4) * contract_size))
         pip_val_per_lot = contract_size * pip_size
         spread_cost = context.volatility.current_spread_pips * pip_val_per_lot * est_lots

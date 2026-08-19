@@ -46,9 +46,12 @@ class MarketContextEngine:
         if df_primary.empty:
             df_primary = list(mtf_data.values())[0] if mtf_data else pd.DataFrame()
 
+        from jarvis.data.symbol_registry import resolve as _resolve_sym
+        _spec = _resolve_sym(symbol)
+        
         latest_close = float(df_primary["close"].iloc[-1]) if not df_primary.empty else 0.0
         bid = latest_close
-        ask = latest_close + (current_spread_pips * (0.01 if "XAU" in symbol else 0.0001))
+        ask = latest_close + (current_spread_pips * _spec.pip_size)
 
         # 1. Structural Analysis (Primary & Setup timeframes)
         structure_primary = self.structure_engine.analyze_structure(df_primary)

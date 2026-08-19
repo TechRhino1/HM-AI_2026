@@ -158,9 +158,16 @@ class JarvisOrchestrator:
         """Executes a single end-to-end analytical and decision cycle for a target symbol."""
         # 1. Fetch Multi-Timeframe Data
         mtf_data = self.data_feed.fetch_multi_timeframe(symbol)
+        from jarvis.data.symbol_registry import resolve as _resolve_sym
+        _spec = _resolve_sym(symbol)
         
         # 2. Synthesize Multi-Timeframe Market Context
-        context = self.context_engine.build_context(symbol, mtf_data)
+        context = self.context_engine.build_context(
+            symbol, 
+            mtf_data,
+            current_spread_pips=_spec.typical_spread_pips,
+            max_allowed_spread_pips=_spec.max_spread_pips
+        )
         self.state_manager.update_market_context(symbol, context)
 
         # 3. Classify Market Regime
@@ -334,7 +341,7 @@ class JarvisOrchestrator:
                     "model_confidence": decision.model_confidence,
                     "adversarial_penalty": decision.adversarial_penalty,
                     "expected_value": decision.expected_value,
-                    "ml_features": ml_feat
+                    "ml_features": ml_feat.tolist() if hasattr(ml_feat, "tolist") else list(ml_feat)
                 })
 
         return {
