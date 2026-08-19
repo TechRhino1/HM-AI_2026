@@ -20,6 +20,7 @@ from jarvis.execution.mt5_client import MT5Client
 from jarvis.execution.state_synchronizer import MT5StateSynchronizer
 from jarvis.execution.execution_engine import ExecutionEngine
 from jarvis.execution.order_manager import OrderManager
+from jarvis.execution.position_monitor import PositionMonitorEngine
 from jarvis.learning.trade_memory import TradeMemory
 from jarvis.learning.online_ml_predictor import OnlineMLPredictor
 from jarvis.learning.strategy_bandit import StrategyBandit
@@ -74,6 +75,9 @@ class JarvisOrchestrator:
         self.trade_memory = TradeMemory()
 
         self.state_synchronizer = MT5StateSynchronizer(self.mt5_client, self.state_manager, self.event_bus)
+        self.position_monitor = PositionMonitorEngine(
+            self.mt5_client, self.data_feed, self.context_engine, self.state_manager, self.event_bus
+        )
         self._running = False
         self._main_thread: Optional[threading.Thread] = None
 
@@ -82,6 +86,7 @@ class JarvisOrchestrator:
         if not self._running:
             self._running = True
             self.state_synchronizer.start()
+            self.position_monitor.start()
             self._main_thread = threading.Thread(target=self._orchestration_loop, daemon=True, name="jarvis_orchestrator")
             self._main_thread.start()
             logger.info("JARVIS 3.0 Orchestrator started.")
@@ -89,6 +94,7 @@ class JarvisOrchestrator:
     def stop(self):
         """Clean shutdown of all engine workers."""
         self._running = False
+        self.position_monitor.stop()
         self.state_synchronizer.stop()
         self.mt5_client.shutdown()
         logger.info("JARVIS 3.0 Orchestrator stopped.")
