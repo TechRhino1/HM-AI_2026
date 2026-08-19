@@ -242,6 +242,21 @@ class MT5Client:
                 price = tick.ask if order_type == "BUY" else tick.bid
                 type_op = getattr(mt5, "ORDER_TYPE_BUY", 0) if order_type == "BUY" else getattr(mt5, "ORDER_TYPE_SELL", 1)
                 digits = sym_info.digits
+                point = sym_info.point or (10 ** -digits)
+                min_stop_dist = max(getattr(sym_info, "trade_stops_level", 0), getattr(sym_info, "freeze_level", 0), 5) * point
+
+                final_sl = float(sl_price)
+                final_tp = float(tp_price)
+                if order_type == "BUY":
+                    if final_sl > 0 and (price - final_sl) < min_stop_dist:
+                        final_sl = price - min_stop_dist
+                    if final_tp > 0 and (final_tp - price) < min_stop_dist:
+                        final_tp = price + min_stop_dist
+                else:
+                    if final_sl > 0 and (final_sl - price) < min_stop_dist:
+                        final_sl = price + min_stop_dist
+                    if final_tp > 0 and (price - final_tp) < min_stop_dist:
+                        final_tp = price - min_stop_dist
 
                 request = {
                     "action": getattr(mt5, "TRADE_ACTION_DEAL", 1),
@@ -249,8 +264,8 @@ class MT5Client:
                     "volume": round(volume, 2),
                     "type": type_op,
                     "price": round(price, digits),
-                    "sl": round(sl_price, digits),
-                    "tp": round(tp_price, digits),
+                    "sl": round(final_sl, digits) if final_sl > 0 else 0.0,
+                    "tp": round(final_tp, digits) if final_tp > 0 else 0.0,
                     "deviation": 50,
                     "magic": self.magic_number,
                     "comment": comment,
@@ -353,12 +368,33 @@ class MT5Client:
                     return {"status": "FAILED", "reason": f"Symbol info unavailable for {symbol}"}
 
                 digits = sym_info.digits
+                point = sym_info.point or (10 ** -digits)
+                min_stop_dist = max(getattr(sym_info, "trade_stops_level", 0), getattr(sym_info, "freeze_level", 0), 5) * point
+
+                tick = mt5.symbol_info_tick(symbol)
+                cur_price = (tick.bid if p.type == getattr(mt5, "POSITION_TYPE_BUY", 0) else tick.ask) if tick else p.price_current
+
+                final_sl = float(sl)
+                final_tp = float(tp)
+                is_buy = (p.type == getattr(mt5, "POSITION_TYPE_BUY", 0))
+
+                if is_buy:
+                    if final_sl > 0 and (cur_price - final_sl) < min_stop_dist:
+                        final_sl = cur_price - min_stop_dist
+                    if final_tp > 0 and (final_tp - cur_price) < min_stop_dist:
+                        final_tp = cur_price + min_stop_dist
+                else:
+                    if final_sl > 0 and (final_sl - cur_price) < min_stop_dist:
+                        final_sl = cur_price + min_stop_dist
+                    if final_tp > 0 and (cur_price - final_tp) < min_stop_dist:
+                        final_tp = cur_price - min_stop_dist
+
                 request = {
                     "action": getattr(mt5, "TRADE_ACTION_SLTP", 6),
                     "position": ticket,
                     "symbol": symbol,
-                    "sl": round(float(sl), digits),
-                    "tp": round(float(tp), digits),
+                    "sl": round(final_sl, digits) if final_sl > 0 else 0.0,
+                    "tp": round(final_tp, digits) if final_tp > 0 else 0.0,
                     "magic": self.magic_number,
                     "comment": "JARVIS_SLTP_MODIFY"
                 }
@@ -369,8 +405,8 @@ class MT5Client:
                     logger.error(f"MT5 SL/TP Modify Failed for #{ticket}: {err_msg}")
                     return {"status": "FAILED", "reason": err_msg}
 
-                logger.info(f"⚡ LIVE SL/TP MODIFIED: Ticket=#{ticket} {symbol} -> New SL={round(float(sl), digits)}, TP={round(float(tp), digits)}")
-                return {"status": "MODIFIED", "ticket": ticket, "sl": round(float(sl), digits), "tp": round(float(tp), digits)}
+                logger.info(f"⚡ LIVE SL/TP MODIFIED: Ticket=#{ticket} {symbol} -> New SL={round(final_sl, digits)}, TP={round(final_tp, digits)}")
+                return {"status": "MODIFIED", "ticket": ticket, "sl": round(final_sl, digits), "tp": round(final_tp, digits)}
 
         return TimeoutGuard.run_sync(_modify, timeout_sec=5.0, default={"status": "FAILED", "reason": "Timeout"}, task_name=f"MT5_Modify_{ticket}")
 

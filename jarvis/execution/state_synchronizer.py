@@ -5,7 +5,7 @@ Guarantees real-time consistency between broker terminal state and internal appl
 import time
 import logging
 import threading
-from typing import Dict, List, Set, Any
+from typing import Dict, List, Set, Any, Optional
 
 from jarvis.data.schemas import AccountSnapshot, PositionSnapshot
 from jarvis.execution.mt5_client import MT5Client
@@ -65,21 +65,22 @@ class MT5StateSynchronizer:
                 logger.info(f"State Reconciliation: Position #{t} closed on broker terminal.")
                 self.event_bus.publish_sync("POSITION_CLOSED", {"ticket": t})
                 
-                # Fetch deal history for ML feedback loop
+                # Fetch deal history for ML feedback loop (§17)
                 try:
                     import MetaTrader5 as mt5
-                    deals = mt5.history_deals_get(position=t)
+                    deals = mt5.history_deals_get(position=t) if self.mt5_client.mode != "paper" else None
                     if deals:
-                        pnl = sum(d.profit for d in deals)
-                        is_win = pnl > 0
+                        total_pnl = sum(d.profit + d.swap + d.commission for d in deals)
+                        is_win = 1 if total_pnl > 0 else 0
                         symbol = deals[0].symbol if deals else "UNKNOWN"
+                        exit_price = float(deals[-1].price) if len(deals) > 1 else float(deals[0].price)
                         self.event_bus.publish_sync('trade_closed', {
-                            'ticket': t, 
-                            'symbol': symbol, 
-                            'pnl': pnl, 
-                            'is_win': is_win, 
-                            'strategy': 'UNKNOWN', 
-                            'regime': 'UNKNOWN'
+                            'ticket': t,
+                            'symbol': symbol,
+                            'pnl': total_pnl,
+                            'is_win': is_win,
+                            'exit_price': exit_price,
+                            'equity': account.equity
                         })
                 except Exception as e:
                     logger.error(f"Failed to fetch deal history for closed position #{t}: {e}")

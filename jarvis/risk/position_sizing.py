@@ -1,8 +1,7 @@
-"""
-JARVIS AI 3.0 — Volatility & Fixed-Fractional Position Sizing Engine.
-Calculates mathematically sound lot sizing based on account equity, stop-loss distance, tick values, and volatility.
-"""
+import logging
 from typing import Dict, Any
+
+logger = logging.getLogger("JARVIS_PositionSizer")
 
 class PositionSizer:
     """Calculates risk-controlled lot sizes adjusted for symbol contract specifications and account balance."""
@@ -43,6 +42,16 @@ class PositionSizer:
 
         # Smooth continuous formula
         raw_lots = risk_amount_dollars / (risk_distance * contract_size + 1e-9)
+
+        # §8: Detect when raw_lots is below broker minimum volume floor
+        if raw_lots < min_vol:
+            actual_risk_dollars = min_vol * risk_distance * contract_size
+            actual_risk_pct = (actual_risk_dollars / (account_balance + 1e-9)) * 100.0
+            if actual_risk_pct > (effective_risk_pct * 1.5):
+                logger.info(
+                    f"Position sizing minimum lot floor active: raw_lots={raw_lots:.4f} < min={min_vol}. "
+                    f"Effective risk adjusted to {actual_risk_pct:.2f}% (${actual_risk_dollars:.2f}) on ${account_balance:.2f} equity."
+                )
 
         # Clamp between min_vol and max_vol
         final_lots = max(min_vol, min(raw_lots, max_vol))

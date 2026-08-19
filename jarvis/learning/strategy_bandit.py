@@ -74,19 +74,30 @@ class StrategyBandit:
     def record_outcome(self, strategy: str, is_win: int, r_multiple: float = 1.0, regime: str = "GLOBAL"):
         """Updates strategy bandit statistics after a closed trade."""
         with self._lock:
-            if regime not in self.counts:
-                self.counts[regime] = {s: 5 for s in self.STRATEGIES}
-                self.rewards[regime] = {s: 3.0 for s in self.STRATEGIES}
+            reg_key = str(regime or "GLOBAL").upper()
+            if reg_key not in self.counts:
+                self.counts[reg_key] = {s: 5 for s in self.STRATEGIES}
+                self.rewards[reg_key] = {s: 3.0 for s in self.STRATEGIES}
+
+            # Map strategy to known canonical strategy if needed
+            strat_key = str(strategy or "").upper()
+            if strat_key not in self.counts[reg_key]:
+                matched = None
+                for s in self.STRATEGIES:
+                    if s in strat_key or strat_key in s:
+                        matched = s
+                        break
+                strat_key = matched if matched else self.STRATEGIES[0]
 
             # Exponential decay
             for reg in self.rewards:
                 for s in self.rewards[reg]:
                     self.rewards[reg][s] *= 0.98
 
-            self.counts[regime][strategy] += 1
-            # Reward function: Win gives +1.0 * R-multiple, Loss gives -0.5
-            reward_val = (1.0 * max(1.0, r_multiple)) if is_win else -0.5
-            self.rewards[regime][strategy] = max(0.0, self.rewards[regime][strategy] + reward_val)
+            self.counts[reg_key][strat_key] += 1
+            # Reward function: Win gives +1.0 * R-multiple, Loss gives -0.5 (allow true negative tracking §14)
+            reward_val = (1.0 * max(1.0, float(r_multiple))) if is_win else -0.5
+            self.rewards[reg_key][strat_key] = self.rewards[reg_key][strat_key] + reward_val
 
             self._save_state_internal()
 

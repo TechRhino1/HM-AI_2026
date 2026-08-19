@@ -19,6 +19,8 @@ class ExposureManager:
         account: AccountSnapshot
     ) -> Dict[str, Any]:
         breaches = []
+        if len(positions) >= self.max_open_positions:
+            breaches.append(f"Max Concurrent Positions reached ({len(positions)} >= {self.max_open_positions}).")
 
         symbol_count = sum(1 for p in positions if p.symbol == symbol)
         if symbol_count >= self.max_symbol_positions:

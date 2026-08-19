@@ -99,3 +99,29 @@ class TradeMemory:
             cur.execute("SELECT * FROM trade_records ORDER BY timestamp DESC LIMIT ?", (n,))
             rows = cur.fetchall()
             return [dict(r) for r in rows]
+
+    def update_closed_trade(
+        self,
+        ticket: int,
+        exit_price: float,
+        pnl: float,
+        is_win: int,
+        mfe: float = 0.0,
+        mae: float = 0.0
+    ):
+        """Updates trade outcome fields in SQLite when position closes (§17)."""
+        with self._lock:
+            cur = self._conn.cursor()
+            cur.execute("""
+                UPDATE trade_records
+                SET exit_price = ?, pnl = ?, is_win = ?, mfe = ?, mae = ?
+                WHERE ticket = ?
+            """, (
+                float(exit_price),
+                float(pnl),
+                int(is_win),
+                float(mfe),
+                float(mae),
+                int(ticket)
+            ))
+            self._conn.commit()

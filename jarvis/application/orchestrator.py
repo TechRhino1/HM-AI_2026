@@ -24,10 +24,12 @@ from jarvis.execution.position_monitor import PositionMonitorEngine
 from jarvis.learning.trade_memory import TradeMemory
 from jarvis.learning.online_ml_predictor import OnlineMLPredictor
 from jarvis.learning.strategy_bandit import StrategyBandit
+from jarvis.learning.strategy_memory import StrategyRegimeMemory
 from jarvis.data.schemas import ExecutionMode
 from jarvis.data.symbol_registry import is_crypto
 from jarvis.risk.circuit_breaker import CircuitBreaker
 from jarvis.risk.drawdown import DrawdownGuard
+from jarvis.risk.account_tier import is_micro_account, get_max_lot_cap
 from jarvis.market.sessions import SessionEngine
 
 logger = logging.getLogger("JARVIS_Orchestrator")
@@ -73,6 +75,7 @@ class JarvisOrchestrator:
         self.order_manager = OrderManager(self.mt5_client)
         self.execution_engine = ExecutionEngine(self.mt5_client, self.state_manager)
         self.trade_memory = TradeMemory()
+        self.strategy_memory = StrategyRegimeMemory(self.trade_memory)
 
         self.state_synchronizer = MT5StateSynchronizer(self.mt5_client, self.state_manager, self.event_bus)
         self.position_monitor = PositionMonitorEngine(
@@ -101,19 +104,55 @@ class JarvisOrchestrator:
 
     def _on_trade_closed(self, data):
         ticket = data.get("ticket")
-        is_win = data.get("profit", 0) > 0
-        r_multiple = data.get("r_multiple", 0.0)
-        strategy = data.get("strategy", "UNKNOWN")
-        new_equity = data.get("equity", 0.0)
-        
-        features = self._pending_features.pop(ticket, None)
-        if features:
-            self.ml_predictor.update_online(features, is_win)
-            
-        self.strategy_bandit.record_outcome(strategy, is_win, r_multiple)
-        self.circuit_breaker.record_trade_result(is_win)
-        self.drawdown_guard.update_equity_benchmarks(new_equity)
-        logger.info(f"Trade {ticket} closed. Win: {is_win}, R: {r_multiple}. ML/Risk updated.")
+        pnl = float(data.get("pnl", 0.0))
+        is_win = 1 if pnl > 0 else 0
+        exit_price = float(data.get("exit_price", 0.0))
+        new_equity = float(data.get("equity", 0.0))
+
+        pending = self._pending_features.pop(ticket, None)
+        strategy = pending.get("strategy", data.get("strategy", "UNKNOWN")) if pending else data.get("strategy", "UNKNOWN")
+        regime_name = pending.get("regime", data.get("regime", "GLOBAL")) if pending else data.get("regime", "GLOBAL")
+
+        # Calculate realized R-multiple
+        r_multiple = 1.0
+        if pending and pending.get("risk_dist", 0) > 0 and exit_price > 0:
+            entry = pending.get("entry", 0.0)
+            risk_dist = pending.get("risk_dist", 1.0)
+            realized_gain = (exit_price - entry) if is_win else (entry - exit_price)
+            r_multiple = max(0.1, round(realized_gain / risk_dist, 2))
+
+        # 1. Update SQLite trade records (§17)
+        if ticket:
+            self.trade_memory.update_closed_trade(
+                ticket=ticket,
+                exit_price=exit_price,
+                pnl=pnl,
+                is_win=is_win,
+                mfe=0.0,
+                mae=0.0
+            )
+
+        # 2. Update ML SGD predictor (§17)
+        if pending and "features" in pending:
+            self.ml_predictor.update_online(pending["features"], is_win)
+
+        # 3. Update Multi-Armed Bandit (§17)
+        self.strategy_bandit.record_outcome(strategy, is_win, r_multiple, regime=regime_name)
+
+        # 4. Update Circuit Breaker & Drawdown Guard
+        self.circuit_breaker.record_trade_result(is_win == 1)
+        if new_equity > 0:
+            self.drawdown_guard.update_equity_benchmarks(new_equity)
+
+        # 5. Recalibrate confidence curve from recent closed trades (§17)
+        all_closed = [t for t in self.trade_memory.fetch_recent_trades(50) if t.get("exit_price", 0) > 0]
+        if len(all_closed) >= 10:
+            self.decision_engine.calibrator.update_calibration_from_history(all_closed)
+
+        logger.info(
+            f"🔄 Closed-trade self-learning loop completed for #{ticket}: "
+            f"PnL=${pnl:.2f}, Win={is_win}, R={r_multiple}, Strat={strategy}, Regime={regime_name}"
+        )
 
     def run_cycle_for_symbol(self, symbol: str) -> Dict[str, Any]:
         """Executes a single end-to-end analytical and decision cycle for a target symbol."""
@@ -241,9 +280,8 @@ class JarvisOrchestrator:
         if auth_res.get("authorized") and decision.decision == "EXECUTE":
             decision.execution_authorized = True
             lots = auth_res.get("lots", 0.01)
-            # Micro-lot cap on small accounts (< $250)
-            if account.equity < 250.0:
-                lots = 0.01
+            # Unified lot cap based on account tier (§4)
+            lots = min(lots, get_max_lot_cap(account.equity))
 
             # Claim in-process lock BEFORE sending to MT5
             with self._execution_lock:
@@ -260,19 +298,43 @@ class JarvisOrchestrator:
                         logger.info(f"Execution lock released for {canonical_sym}. Cooldown {self._SAME_SYMBOL_COOLDOWN_SEC}s started.")
 
             if exec_res and exec_res.get("status") == "FILLED":
+                ticket = exec_res.get("ticket")
+                fill_price = float(exec_res.get("price", decision.entry_price))
+                actual_sl = float(exec_res.get("sl", decision.stop_loss))
+                actual_tp = float(exec_res.get("tp", decision.take_profit))
+
+                ml_feat = self.ml_predictor.extract_feature_vector(
+                    context=context,
+                    regime=regime,
+                    tentative_bias=decision.bias,
+                    devil_penalty=decision.adversarial_penalty,
+                    target_rr=decision.risk_reward_ratio
+                )
+
+                if ticket:
+                    self._pending_features[ticket] = {
+                        "features": ml_feat,
+                        "strategy": decision.strategy,
+                        "regime": regime.primary_regime.value,
+                        "entry": fill_price,
+                        "sl": actual_sl,
+                        "risk_dist": abs(fill_price - actual_sl)
+                    }
+
                 self.trade_memory.record_trade({
-                    "ticket": exec_res.get("ticket"),
+                    "ticket": ticket,
                     "symbol": symbol,
                     "type": decision.bias,
-                    "entry": decision.entry_price,
-                    "sl": decision.stop_loss,
-                    "tp": decision.take_profit,
+                    "entry": fill_price,
+                    "sl": actual_sl,
+                    "tp": actual_tp,
                     "lots": lots,
                     "regime": regime.primary_regime.value,
                     "strategy": decision.strategy,
                     "model_confidence": decision.model_confidence,
                     "adversarial_penalty": decision.adversarial_penalty,
-                    "expected_value": decision.expected_value
+                    "expected_value": decision.expected_value,
+                    "ml_features": ml_feat
                 })
 
         return {

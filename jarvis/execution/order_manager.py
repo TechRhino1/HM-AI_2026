@@ -6,9 +6,10 @@ Features:
 - Execution Deterioration & Spread Expansion Protection
 """
 import logging
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from jarvis.data.schemas import PositionSnapshot, MarketContext
 from jarvis.execution.mt5_client import MT5Client
+from jarvis.risk.account_tier import is_micro_account
 
 logger = logging.getLogger("JARVIS_OrderManager")
 
@@ -28,13 +29,18 @@ class OrderManager:
     def __init__(self, mt5_client: MT5Client):
         self.mt5_client = mt5_client
 
-    def manage_position(self, position: PositionSnapshot, context: MarketContext) -> Dict[str, Any]:
+    def manage_position(
+        self,
+        position: PositionSnapshot,
+        context: MarketContext,
+        account_equity: Optional[float] = None
+    ) -> Dict[str, Any]:
         """Dynamically manages trailing stop loss and profit protection for an open position."""
         c_price = context.current_price
         atr = context.volatility.atr if context.volatility.atr > 0 else (c_price * 0.005)
         st = context.structure
         vol = context.volatility
-        is_micro_pos = (position.volume <= self.MICRO_VOLUME_THRESHOLD)
+        is_micro_pos = (position.volume <= self.MICRO_VOLUME_THRESHOLD) or (account_equity is not None and is_micro_account(account_equity))
 
         # ATR-adaptive trailing step
         atr_multiplier = 1.3 if vol.state in ["EXPANSION", "EXTREME"] else 1.0

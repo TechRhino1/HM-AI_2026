@@ -2,7 +2,7 @@
 JARVIS AI 3.0 — Conversational AI Copilot Layer.
 Answers discretionary trader queries using verified in-memory system state, market context, and decision records.
 """
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from jarvis.application.state_manager import StateManager, GLOBAL_STATE
 from jarvis.intelligence.reasoning_engine import ReasoningEngine
 

@@ -213,6 +213,8 @@ class DecisionObject:
     quality_gate: TradeQualityGateResult
     decision: str
     execution_authorized: bool = False
+    sl_distance: float = 0.0
+    tp_distance: float = 0.0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -229,6 +231,8 @@ class DecisionObject:
             "entry_price": self.entry_price,
             "stop_loss": self.stop_loss,
             "take_profit": self.take_profit,
+            "sl_distance": self.sl_distance,
+            "tp_distance": self.tp_distance,
             "risk_reward_ratio": self.risk_reward_ratio,
             "calculated_risk_percent": self.calculated_risk_percent,
             "expected_value": self.expected_value,

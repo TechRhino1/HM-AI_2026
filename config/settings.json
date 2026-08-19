@@ -1,7 +1,7 @@
 {
   "trading": {
     "magic_number": 888999,
-    "default_mode": "live",
+    "default_mode": "paper",
     "primary_timeframe": "H1",
     "macro_timeframe": "D1",
     "allowed_symbols": [

@@ -37,8 +37,8 @@ class ConfidenceCalibrationEngine:
         return float(np.mean((preds - outs) ** 2))
 
     def update_calibration_from_history(self, trade_records: List[Dict[str, Any]]) -> None:
-        """Updates calibration curve based on actual win rates from historical trades."""
-        if len(trade_records) < 20:
+        """Updates calibration curve based on actual win rates from historical trades (§17)."""
+        if len(trade_records) < 10:
             return
 
         # Define bins
@@ -46,8 +46,8 @@ class ConfidenceCalibrationEngine:
         bin_stats = {b: {"wins": 0, "total": 0} for b in bins}
 
         for record in trade_records:
-            predicted_prob = record.get("predicted_probability", 0.0)
-            is_win = record.get("is_win", False)
+            predicted_prob = float(record.get("model_confidence", record.get("predicted_probability", 0.5)))
+            is_win = int(record.get("is_win", 0)) == 1
             
             for b in bins:
                 if b[0] <= predicted_prob < b[1]:
@@ -58,7 +58,7 @@ class ConfidenceCalibrationEngine:
         
         # Update calibration curve for bins with enough data
         for b, stats in bin_stats.items():
-            if stats["total"] >= 5: # Require at least 5 trades per bin to adjust
+            if stats["total"] >= 3:  # Require at least 3 trades per bin to adjust
                 actual_win_rate = stats["wins"] / stats["total"]
                 # Smooth update (alpha = 0.5)
                 old_val = self.calibration_curve.get(b, b[0] + 0.05)

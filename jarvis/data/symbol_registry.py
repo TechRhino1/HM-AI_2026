@@ -18,6 +18,7 @@ class SymbolSpec:
     max_spread_pips: float      # Reject trade if spread exceeds this
     typical_atr_pct: float      # Typical daily ATR as % of price
     margin_pct: float           # Margin requirement as % of notional (1:1000 = 0.1%)
+    digits: int = 5             # Price precision digits
     is_crypto: bool = False     # 24/7 market — exempt from session blackouts
     is_jpy_quote: bool = False  # JPY-quoted pair (affects pip calculation)
 
@@ -27,41 +28,41 @@ _REGISTRY: Dict[str, SymbolSpec] = {
         canonical="XAUUSD", asset_class="COMMODITY",
         contract_size=100.0, pip_size=0.1, pip_value_per_lot=10.0,
         typical_spread_pips=2.0, max_spread_pips=5.0,
-        typical_atr_pct=0.8, margin_pct=0.1
+        typical_atr_pct=0.8, margin_pct=0.1, digits=2
     ),
     "EURUSD": SymbolSpec(
         canonical="EURUSD", asset_class="FOREX",
         contract_size=100_000.0, pip_size=0.0001, pip_value_per_lot=10.0,
         typical_spread_pips=1.2, max_spread_pips=3.0,
-        typical_atr_pct=0.4, margin_pct=0.1
+        typical_atr_pct=0.4, margin_pct=0.1, digits=5
     ),
     "GBPUSD": SymbolSpec(
         canonical="GBPUSD", asset_class="FOREX",
         contract_size=100_000.0, pip_size=0.0001, pip_value_per_lot=10.0,
         typical_spread_pips=1.5, max_spread_pips=4.0,
-        typical_atr_pct=0.5, margin_pct=0.1
+        typical_atr_pct=0.5, margin_pct=0.1, digits=5
     ),
     "USDJPY": SymbolSpec(
         canonical="USDJPY", asset_class="FOREX",
         contract_size=100_000.0, pip_size=0.01, pip_value_per_lot=6.80,
         typical_spread_pips=1.0, max_spread_pips=3.0,
-        typical_atr_pct=0.4, margin_pct=0.1, is_jpy_quote=True
+        typical_atr_pct=0.4, margin_pct=0.1, digits=3, is_jpy_quote=True
     ),
     "BTCUSD": SymbolSpec(
         canonical="BTCUSD", asset_class="CRYPTO",
         contract_size=1.0, pip_size=0.01, pip_value_per_lot=0.01,
         typical_spread_pips=30.0, max_spread_pips=80.0,
-        typical_atr_pct=2.5, margin_pct=0.5, is_crypto=True
+        typical_atr_pct=2.5, margin_pct=0.5, digits=2, is_crypto=True
     ),
 }
 
 # ─── Broker Alias Resolution ─────────────────────────────────────────────────
 _ALIAS_MAP: Dict[str, str] = {
-    "GOLD.i#": "XAUUSD", "GOLD": "XAUUSD", "GOLD.i": "XAUUSD", "XAUUSD#": "XAUUSD",
-    "EURUSD#": "EURUSD", "EURUSD.i#": "EURUSD", "EURUSD.i": "EURUSD",
-    "GBPUSD#": "GBPUSD", "GBPUSD.i#": "GBPUSD", "GBPUSD.i": "GBPUSD",
-    "USDJPY#": "USDJPY", "USDJPY.i#": "USDJPY", "USDJPY.i": "USDJPY",
-    "BTCUSD#": "BTCUSD", "BTCUSD.i#": "BTCUSD", "BTCUSD.i": "BTCUSD",
+    "GOLD.I#": "XAUUSD", "GOLD": "XAUUSD", "GOLD.I": "XAUUSD", "XAUUSD#": "XAUUSD", "XAUUSD.I#": "XAUUSD", "XAUUSD.I": "XAUUSD",
+    "EURUSD#": "EURUSD", "EURUSD.I#": "EURUSD", "EURUSD.I": "EURUSD",
+    "GBPUSD#": "GBPUSD", "GBPUSD.I#": "GBPUSD", "GBPUSD.I": "GBPUSD",
+    "USDJPY#": "USDJPY", "USDJPY.I#": "USDJPY", "USDJPY.I": "USDJPY",
+    "BTCUSD#": "BTCUSD", "BTCUSD.I#": "BTCUSD", "BTCUSD.I": "BTCUSD",
 }
 
 

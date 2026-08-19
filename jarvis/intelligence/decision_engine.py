@@ -20,6 +20,7 @@ from jarvis.intelligence.hypothesis_engine import HypothesisEngine
 from jarvis.intelligence.confidence import ConfidenceCalibrationEngine
 from jarvis.learning.online_ml_predictor import OnlineMLPredictor
 from jarvis.data.symbol_registry import resolve as resolve_symbol
+from jarvis.risk.account_tier import is_micro_account, get_effective_min_ev
 
 class DecisionEngine:
     def __init__(
@@ -63,23 +64,74 @@ class DecisionEngine:
             tentative_bias = "HOLD"
 
         spec = resolve_symbol(context.symbol)
-        digits = 2 if (spec.asset_class == "COMMODITY" or spec.asset_class == "CRYPTO") else 5
+        digits = spec.digits
         atr = vol.atr if vol.atr > 0 else (c_price * 0.005)
 
         if tentative_bias == "BUY":
             entry_price = round(context.ask, digits)
-            sl_dist = min(atr * 2.5, max(atr * 1.5, entry_price - st.demand_zone[0])) if (st.demand_zone[0] > 0 and entry_price > st.demand_zone[0]) else (atr * 1.8)
+            # §5 & §6: Structural SL with ±0.2 ATR buffer and [0.8*ATR, 4.0*ATR] sanity bounds
+            if st.demand_zone[0] > 0 and entry_price > st.demand_zone[0]:
+                struct_sl_dist = entry_price - (st.demand_zone[0] - (atr * 0.2))
+                if (0.8 * atr) <= struct_sl_dist <= (4.0 * atr):
+                    sl_dist = struct_sl_dist
+                else:
+                    sl_dist = atr * 1.8
+            else:
+                sl_dist = atr * 1.8
+
             sl_price = round(entry_price - sl_dist, digits)
             risk_dist = abs(entry_price - sl_price)
-            tp_price = round(entry_price + (risk_dist * 2.5), digits)
-            rr_ratio = round(abs(tp_price - entry_price) / (risk_dist + 1e-9), 2)
+
+            # §7: Dynamic TP targeting nearest opposing structural supply zone or key resistance
+            flat_tp_dist = risk_dist * 2.5
+            struct_target_dist = 0.0
+            if st.supply_zone[0] > entry_price:
+                struct_target_dist = st.supply_zone[0] - entry_price
+            elif hasattr(st, "key_levels") and st.key_levels:
+                res_levels = [kl["price"] for kl in st.key_levels if kl.get("price", 0) > entry_price]
+                if res_levels:
+                    struct_target_dist = min(res_levels) - entry_price
+
+            if struct_target_dist >= (risk_dist * 1.5) and struct_target_dist < flat_tp_dist:
+                tp_dist = struct_target_dist
+            else:
+                tp_dist = flat_tp_dist
+
+            tp_price = round(entry_price + tp_dist, digits)
+            rr_ratio = round(tp_dist / (risk_dist + 1e-9), 2)
+
         elif tentative_bias == "SELL":
             entry_price = round(context.bid, digits)
-            sl_dist = min(atr * 2.5, max(atr * 1.5, st.supply_zone[1] - entry_price)) if (st.supply_zone[1] > 0 and st.supply_zone[1] > entry_price) else (atr * 1.8)
+            # §5 & §6: Structural SL with ±0.2 ATR buffer and [0.8*ATR, 4.0*ATR] sanity bounds
+            if st.supply_zone[1] > 0 and st.supply_zone[1] > entry_price:
+                struct_sl_dist = (st.supply_zone[1] + (atr * 0.2)) - entry_price
+                if (0.8 * atr) <= struct_sl_dist <= (4.0 * atr):
+                    sl_dist = struct_sl_dist
+                else:
+                    sl_dist = atr * 1.8
+            else:
+                sl_dist = atr * 1.8
+
             sl_price = round(entry_price + sl_dist, digits)
             risk_dist = abs(sl_price - entry_price)
-            tp_price = round(entry_price - (risk_dist * 2.5), digits)
-            rr_ratio = round(abs(entry_price - tp_price) / (risk_dist + 1e-9), 2)
+
+            # §7: Dynamic TP targeting nearest opposing structural demand zone or key support
+            flat_tp_dist = risk_dist * 2.5
+            struct_target_dist = 0.0
+            if st.demand_zone[1] > 0 and st.demand_zone[1] < entry_price:
+                struct_target_dist = entry_price - st.demand_zone[1]
+            elif hasattr(st, "key_levels") and st.key_levels:
+                sup_levels = [kl["price"] for kl in st.key_levels if 0 < kl.get("price", 0) < entry_price]
+                if sup_levels:
+                    struct_target_dist = entry_price - max(sup_levels)
+
+            if struct_target_dist >= (risk_dist * 1.5) and struct_target_dist < flat_tp_dist:
+                tp_dist = struct_target_dist
+            else:
+                tp_dist = flat_tp_dist
+
+            tp_price = round(entry_price - tp_dist, digits)
+            rr_ratio = round(tp_dist / (risk_dist + 1e-9), 2)
         else:
             entry_price = c_price
             sl_price = c_price
@@ -153,7 +205,8 @@ class DecisionEngine:
         risk_dist: float = 0.0,
         planned_risk_dollars: float = 0.0
     ) -> TradeQualityGateResult:
-        is_micro_mode = (account_balance < 100.0)
+        is_micro_mode = is_micro_account(account_balance)
+        effective_min_ev = get_effective_min_ev(account_balance, planned_risk_dollars)
 
         if is_micro_mode:
             if account_balance <= 40.0:
@@ -172,8 +225,6 @@ class DecisionEngine:
             if current_drawdown_pct > 5.0:
                 min_score = max(min_score, 85.0)
 
-            effective_min_ev = 0.05
-            
             if regime.primary_regime in [MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR] and regime.confidence > 0.7:
                 effective_min_ev *= 0.7
 
@@ -190,7 +241,6 @@ class DecisionEngine:
                 "Premium/Discount Zone Valid": premium_discount_valid
             }
         else:
-            effective_min_ev = max(0.50, planned_risk_dollars * 0.5)
             if regime.primary_regime in [MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR] and regime.confidence > 0.7:
                 effective_min_ev *= 0.7
 
@@ -264,7 +314,7 @@ class DecisionEngine:
 
         if gate_passed:
             decision_action = "EXECUTE"
-        elif tentative_bias in ["BUY", "SELL"] and len(failing_reasons) <= 2 and "Regime Viability" in quality_gate.checks:
+        elif tentative_bias in ["BUY", "SELL"] and len(failing_reasons) <= 2 and quality_gate.checks.get("Regime Viability", False):
             decision_action = "WAIT"
         else:
             decision_action = "NO_TRADE"
@@ -283,6 +333,8 @@ class DecisionEngine:
             "no_trade": round(hypotheses.no_trade_probability, 2)
         }
 
+        tp_dist = abs(tp_price - entry_price)
+
         return DecisionObject(
             symbol=context.symbol,
             timestamp=datetime.now(timezone.utc),
@@ -293,6 +345,8 @@ class DecisionEngine:
             entry_price=entry_price,
             stop_loss=sl_price,
             take_profit=tp_price,
+            sl_distance=risk_dist,
+            tp_distance=tp_dist,
             risk_reward_ratio=rr_ratio,
             calculated_risk_percent=round(risk_per_trade_pct * devil_report.invalidation_risk_coefficient, 2),
             expected_value=ev,

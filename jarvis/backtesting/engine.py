@@ -3,7 +3,7 @@ JARVIS AI 3.0 — Chronological Event-Driven Backtesting Engine.
 Executes historical simulation without lookahead bias, incorporating realistic spreads, commissions, and slippage.
 """
 import pandas as pd
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 from jarvis.market.market_context import MarketContextEngine
 from jarvis.intelligence.regime_engine import MarketRegimeClassifier
@@ -11,6 +11,7 @@ from jarvis.analysts.parallel_runner import ParallelAnalystCluster
 from jarvis.intelligence.decision_engine import DecisionEngine
 from jarvis.risk.risk_engine import RiskEngine
 from jarvis.data.schemas import AccountSnapshot, PositionSnapshot
+from jarvis.data.symbol_registry import resolve as resolve_symbol
 from jarvis.backtesting.metrics import PerformanceMetricsCalculator
 
 class BacktestEngine:
@@ -123,8 +124,9 @@ class BacktestEngine:
                 context = self.context_engine.build_context(symbol, mtf_dict, current_spread_pips=spread_pips)
                 regime = self.regime_classifier.classify_regime(context)
 
-                # Parallel analysts
-                analyst_reports, devil_report = self.analyst_cluster.run_all_parallel(context, regime, "BUY")
+                # Parallel analysts with dynamic tentative bias
+                tentative_bias = "BUY" if context.structure.bias == "BULLISH" else ("SELL" if context.structure.bias == "BEARISH" else "HOLD")
+                analyst_reports, devil_report = self.analyst_cluster.run_all_parallel(context, regime, tentative_bias)
                 decision = self.decision_engine.evaluate(
                     context, regime, analyst_reports, devil_report, account_balance=balance, risk_per_trade_pct=self.risk_per_trade_pct
                 )
@@ -133,7 +135,8 @@ class BacktestEngine:
                     account_snap = AccountSnapshot(
                         login=1, server="Backtest", balance=balance, equity=balance, margin=0, free_margin=balance, margin_level=0, leverage=100
                     )
-                    sym_info = {"trade_contract_size": 100 if "XAU" in symbol else 100000, "volume_min": 0.01, "volume_max": 100.0, "volume_step": 0.01}
+                    spec = resolve_symbol(symbol)
+                    sym_info = {"trade_contract_size": spec.contract_size, "volume_min": 0.01, "volume_max": 100.0, "volume_step": 0.01}
                     auth_res = self.risk_engine.authorize_execution(decision, account_snap, [], sym_info, spread_pips)
 
                     if auth_res["authorized"]:

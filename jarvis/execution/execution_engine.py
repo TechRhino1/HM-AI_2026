@@ -39,4 +39,30 @@ class ExecutionEngine:
             comment=comment
         )
 
+        # §2: Re-anchor SL/TP to actual fill price if slippage occurred
+        if res and res.get("status") == "FILLED":
+            ticket = res.get("ticket")
+            fill_price = float(res.get("price", decision.entry_price))
+            sl_dist = getattr(decision, "sl_distance", 0.0)
+            tp_dist = getattr(decision, "tp_distance", 0.0)
+
+            if ticket and sl_dist > 0 and abs(fill_price - decision.entry_price) > 1e-5:
+                if decision.bias == "BUY":
+                    actual_sl = fill_price - sl_dist
+                    actual_tp = (fill_price + tp_dist) if tp_dist > 0 else decision.take_profit
+                else:
+                    actual_sl = fill_price + sl_dist
+                    actual_tp = (fill_price - tp_dist) if tp_dist > 0 else decision.take_profit
+
+                actual_rr = round(tp_dist / (sl_dist + 1e-9), 2)
+                logger.info(
+                    f"⚓ RE-ANCHORING SL/TP to real fill: Ticket=#{ticket} Fill={fill_price} "
+                    f"(planned {decision.entry_price}) -> Real SL={actual_sl:.4f}, TP={actual_tp:.4f} (R:R={actual_rr})"
+                )
+                mod_res = self.mt5_client.modify_position(ticket=ticket, sl=actual_sl, tp=actual_tp)
+                if mod_res and mod_res.get("status") == "MODIFIED":
+                    res["sl"] = actual_sl
+                    res["tp"] = actual_tp
+                    res["real_fill_anchored"] = True
+
         return res
