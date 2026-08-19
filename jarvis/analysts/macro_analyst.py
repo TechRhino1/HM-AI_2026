@@ -89,6 +89,14 @@ class MacroAnalyst(BaseAnalyst):
                 score += 20.0
                 evidence.append(f"Macro Directional Forecast: Weaker USD triggers SELL bias on {sym}.")
 
+        # 3b. Fallback: No macro shock — align with structure bias
+        # "No news is good news" — absence of macro headwinds supports trend continuation.
+        if bias == "NEUTRAL" and not usd_bull_shock and not usd_bear_shock:
+            structure_bias = context.structure.bias
+            if structure_bias in ("BULLISH", "BEARISH"):
+                bias = structure_bias
+                evidence.append(f"Macro: No active macro headwinds — aligning with {structure_bias} structure bias.")
+
         # 4. Check regime event risk / blackout window
         if regime.primary_regime.value == "EVENT_RISK":
             score = 30.0

@@ -48,22 +48,20 @@ class StructureAnalyst(BaseAnalyst):
             elif st.bos_type == "BULLISH":
                 evidence.append("Confirmed Bullish Break of Structure (BOS) expansion.")
 
-        # 3. Institutional Premium / Discount Zone Guard
-        # Premium: Upper 30% of range -> FAVOR SELLS, REJECT BUYS
-        # Discount: Lower 30% of range -> FAVOR BUYS, REJECT SELLS
+        # 3. Institutional Premium / Discount Zone Awareness
+        # Premium/Discount is a risk signal, not a bias override.
+        # The Quality Gate has its own independent Premium/Discount check.
         if st.discount_premium_zone == "PREMIUM":
             if bias == "BULLISH":
-                risk_factors.append("🚨 DANGER: Price is in extreme PREMIUM zone (Top 25% of range). Buying risks severe breakdown.")
-                score -= 30.0
-                bias = "NEUTRAL"
+                risk_factors.append("⚠️ Price in PREMIUM zone — upside may be limited. Monitor for rejection.")
+                score -= 10.0
             else:
                 score += 15.0
                 evidence.append("Institutional Sell Alignment: Price positioned in optimal PREMIUM supply zone for shorting.")
         elif st.discount_premium_zone == "DISCOUNT":
             if bias == "BEARISH":
-                risk_factors.append("🚨 DANGER: Price is in extreme DISCOUNT zone (Bottom 25% of range). Shorting risks demand squeeze.")
-                score -= 30.0
-                bias = "NEUTRAL"
+                risk_factors.append("⚠️ Price in DISCOUNT zone — downside may be limited. Monitor for bounce.")
+                score -= 10.0
             else:
                 score += 15.0
                 evidence.append("Institutional Buy Alignment: Price positioned in optimal DISCOUNT demand zone for longing.")

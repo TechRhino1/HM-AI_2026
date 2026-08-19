@@ -9,6 +9,7 @@ class ConfidenceCalibrationEngine:
     def __init__(self):
         # Default historical calibration mapping: raw confidence bin -> calibrated true probability
         self.calibration_curve = {
+            (0.40, 0.50): 0.44,
             (0.50, 0.60): 0.53,
             (0.60, 0.70): 0.62,
             (0.70, 0.80): 0.71,
@@ -26,7 +27,11 @@ class ConfidenceCalibrationEngine:
                 frac = (raw_confidence - low) / bin_span
                 next_val = true_prob + (frac * (high - low) * 0.8)
                 return round(float(next_val), 3)
-        return round(raw_confidence * 0.85, 3)
+        # Smooth fallback for values outside bins (below 0.40 or above 1.0)
+        # Use a gentle linear scaling instead of harsh 0.85× compression
+        if raw_confidence < 0.40:
+            return round(raw_confidence * 0.95, 3)
+        return round(raw_confidence * 0.90, 3)
 
     def compute_brier_score(self, predictions: List[float], outcomes: List[int]) -> float:
         """Calculates Brier Score (lower is better, 0.0 is perfect calibration)."""

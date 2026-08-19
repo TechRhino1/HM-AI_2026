@@ -179,7 +179,7 @@ class DecisionEngine:
         pip_size = spec.pip_size
         
         if tentative_bias not in ["BUY", "SELL"]:
-            return final_win_p, loss_p, 0.0
+            return final_win_p, loss_p, 0.0, hypotheses, calibrated_win_p
 
         est_lots = max(0.01, planned_risk_dollars / (max(risk_dist, 1e-4) * contract_size))
         pip_val_per_lot = contract_size * pip_size
@@ -188,7 +188,7 @@ class DecisionEngine:
 
         ev = (final_win_p * planned_win_dollars) - (loss_p * planned_risk_dollars) - spread_cost - expected_slippage
         ev = round(float(ev), 2)
-        return final_win_p, loss_p, ev
+        return final_win_p, loss_p, ev, hypotheses, calibrated_win_p
 
     def _apply_quality_gate(
         self,
@@ -240,7 +240,7 @@ class DecisionEngine:
                 "AI Score Gate >= 80": ai_score >= min_score,
                 "Devil Penalty Guard": devil_report.penalty_score <= self.max_devil_penalty,
                 "Calibrated Probability >= 55%": calibrated_win_p >= 0.55,
-                "Valid Stop Loss Distance": risk_dist >= (context.volatility.atr * 1.2),
+                "Valid Stop Loss Distance": risk_dist >= (context.volatility.atr * 0.75),
                 "Premium/Discount Zone Valid": premium_discount_valid
             }
         else:
@@ -284,15 +284,10 @@ class DecisionEngine:
         )
         best_strategy = max(strategy_probs.items(), key=lambda x: x[1])[0]
 
-        final_win_p, loss_p, ev = self._compute_blended_probability(
+        final_win_p, loss_p, ev, hypotheses, calibrated_win_p = self._compute_blended_probability(
             context, regime, analyst_reports, devil_report, tentative_bias, rr_ratio, risk_dist, account_balance, risk_per_trade_pct
         )
 
-        hypotheses = self.hypothesis_engine.construct_hypotheses(
-            context, regime, analyst_reports, devil_report, tentative_bias
-        )
-        raw_prob = hypotheses.primary_probability if tentative_bias in ["BUY", "SELL"] else 0.33
-        calibrated_win_p = self.calibrator.calibrate_probability(raw_prob)
         ai_score = sum(r.score for r in analyst_reports.values()) / max(1, len(analyst_reports)) if analyst_reports else 0.0
         
         st = context.structure
@@ -353,7 +348,7 @@ class DecisionEngine:
             risk_reward_ratio=rr_ratio,
             calculated_risk_percent=round(risk_per_trade_pct * devil_report.invalidation_risk_coefficient, 2),
             expected_value=ev,
-            model_confidence=regime.confidence,
+            model_confidence=calibrated_win_p,
             adversarial_penalty=devil_report.penalty_score,
             invalidation_levels=hypotheses.invalidation_criteria,
             bull_case=bull_case[:4],

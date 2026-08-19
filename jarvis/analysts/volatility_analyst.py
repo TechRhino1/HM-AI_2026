@@ -13,6 +13,8 @@ class VolatilityAnalyst(BaseAnalyst):
     def analyze(self, context: MarketContext, regime: RegimeOutput) -> AnalystReport:
         t0 = time.perf_counter()
         vol = context.volatility
+        st = context.structure
+        mom = context.momentum
         evidence = []
         risk_factors = []
 
@@ -29,14 +31,25 @@ class VolatilityAnalyst(BaseAnalyst):
         if vol.state == "NORMAL":
             score += 15.0
             evidence.append("Optimal volatility conditions for systematic execution.")
+            # Normal volatility: align with structure bias
+            bias = st.bias if st.bias in ("BULLISH", "BEARISH") else "NEUTRAL"
         elif vol.state == "EXPANSION":
             score += 10.0
             evidence.append("Volatility expanding — favorable for breakout/trend setups.")
+            # Expansion: align with momentum direction for trend-following
+            if mom.trend_score >= 40:
+                bias = "BULLISH"
+                evidence.append("Expansion with strong bullish momentum — volatility supports BUY.")
+            elif mom.trend_score <= -40:
+                bias = "BEARISH"
+                evidence.append("Expansion with strong bearish momentum — volatility supports SELL.")
         elif vol.state == "COMPRESSION":
             evidence.append("Volatility compression — breakout or liquidity sweep imminent.")
+            # Compression = no directional edge, stay neutral
         elif vol.state == "EXTREME":
             score -= 35.0
             risk_factors.append("Extreme volatility shock active — stop-outs likely due to erratic wicks.")
+            # Extreme = dangerous, stay neutral
 
         final_score = min(100.0, max(0.0, score))
         confidence = min(0.95, max(0.40, final_score / 100.0))

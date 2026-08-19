@@ -27,6 +27,7 @@ from jarvis.learning.strategy_bandit import StrategyBandit
 from jarvis.learning.strategy_memory import StrategyRegimeMemory
 from jarvis.data.schemas import ExecutionMode
 from jarvis.data.symbol_registry import is_crypto
+from jarvis.data.symbol_registry import resolve as _resolve_sym
 from jarvis.risk.circuit_breaker import CircuitBreaker
 from jarvis.risk.drawdown import DrawdownGuard
 from jarvis.risk.account_tier import is_micro_account, get_max_lot_cap
@@ -158,7 +159,6 @@ class JarvisOrchestrator:
         """Executes a single end-to-end analytical and decision cycle for a target symbol."""
         # 1. Fetch Multi-Timeframe Data
         mtf_data = self.data_feed.fetch_multi_timeframe(symbol)
-        from jarvis.data.symbol_registry import resolve as _resolve_sym
         _spec = _resolve_sym(symbol)
         
         # 2. Synthesize Multi-Timeframe Market Context
@@ -186,7 +186,6 @@ class JarvisOrchestrator:
 
         # 6. Risk Engine Independent Authorization & Sizing
         positions = self.state_manager.positions
-        from jarvis.data.symbol_registry import resolve as _resolve_sym
         _spec = _resolve_sym(symbol)
         sym_info = {
             "trade_contract_size": _spec.contract_size,
@@ -262,19 +261,21 @@ class JarvisOrchestrator:
             auth_res = {"authorized": False, "reason": "ASIAN_SESSION_BLACKOUT: Low liquidity chop protection active."}
         elif auth_res.get("authorized"):
             auth_res = self.risk_engine.authorize_execution(
-                decision, account, positions, sym_info, current_spread_pips=context.volatility.current_spread_pips
+                decision, account, positions, sym_info,
+                current_spread_pips=context.volatility.current_spread_pips,
+                max_allowed_spread_pips=_spec.max_spread_pips
             )
 
 
 
-        # Circuit Breaker check
+        # Circuit Breaker check (backstop — also checked inside risk_engine)
         cb_status = self.circuit_breaker.check_status()
-        if cb_status.get('tripped') and decision.decision == 'EXECUTE':
+        if cb_status.get('active') and decision.decision == 'EXECUTE':
             decision.decision = 'WAIT'
             decision.execution_authorized = False
             auth_res = {'authorized': False, 'reason': f'CIRCUIT_BREAKER: {cb_status.get("reason", "Cooling down")}'}
 
-        # Drawdown Guard check
+        # Drawdown Guard check (backstop — also checked inside risk_engine)
         dd_status = self.drawdown_guard.check_limits(account.equity, account.balance)
         if not dd_status.get('passed') and decision.decision == 'EXECUTE':
             decision.decision = 'WAIT'
