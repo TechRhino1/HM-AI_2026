@@ -71,12 +71,18 @@ class MarketRegimeClassifier:
         t_score = momentum.trend_score
         adx = momentum.adx
         if adx >= 25:
+            # Scale score based on ADX strength (explosive momentum bonus)
+            adx_multiplier = 1.0 + max(0.0, (adx - 25) / 10.0) 
             if t_score >= 50:
-                scores[MarketRegime.TREND_BULL.value] += 1.0
+                scores[MarketRegime.TREND_BULL.value] += 1.5 * adx_multiplier
+                if t_score >= 75:
+                    scores[MarketRegime.TREND_BULL.value] += 1.0 * adx_multiplier
             elif t_score <= -50:
-                scores[MarketRegime.TREND_BEAR.value] += 1.0
+                scores[MarketRegime.TREND_BEAR.value] += 1.5 * adx_multiplier
+                if t_score <= -75:
+                    scores[MarketRegime.TREND_BEAR.value] += 1.0 * adx_multiplier
             else:
-                scores[MarketRegime.WEAK_TREND.value] += 0.5
+                scores[MarketRegime.WEAK_TREND.value] += 0.8
         elif adx < 18:
             scores[MarketRegime.RANGE.value] += 0.7
             scores[MarketRegime.WEAK_TREND.value] += 0.4

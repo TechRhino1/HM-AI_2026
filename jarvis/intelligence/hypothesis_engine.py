@@ -50,8 +50,18 @@ class HypothesisEngine:
             mtf_bonus += 0.04
 
         # Trend persistence factor
+        # Trend persistence & explosive momentum factor
         trend_persist = getattr(mom, "trend_persistence", 0)
-        persist_factor = min(0.06, max(-0.06, trend_persist * 0.003))
+        adx = getattr(mom, "adx", 0)
+        base_persist = min(0.06, max(-0.06, trend_persist * 0.003))
+        
+        # Explosive breakout dynamic scaling bonus
+        momentum_bonus = 0.0
+        if adx >= 25 and abs(getattr(mom, "trend_score", 0)) >= 60:
+            # Scale bonus continuously from +2% at ADX 25 to +10% at ADX 45
+            momentum_bonus = min(0.10, 0.02 + ((adx - 25) / 20.0) * 0.08)
+            
+        persist_factor = base_persist + momentum_bonus
 
         adv_penalty = devil_report.penalty_score
 
