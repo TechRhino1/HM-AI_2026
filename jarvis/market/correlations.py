@@ -30,6 +30,37 @@ class DynamicCorrelationEngine:
 
         return result
 
+    _DEFAULT_CORRELATIONS = {
+        ("EURUSD", "GBPUSD"): 0.82,
+        ("EURUSD", "USDJPY"): -0.65,
+        ("EURUSD", "USDCHF"): -0.88,
+        ("GBPUSD", "USDJPY"): -0.55,
+        ("XAUUSD", "EURUSD"): 0.45,
+        ("XAUUSD", "USDJPY"): -0.40,
+        ("XAUUSD", "BTCUSD"): 0.25,
+        ("BTCUSD", "EURUSD"): 0.15,
+        ("BTCUSD", "USDJPY"): -0.10,
+    }
+
+    def get_correlation(self, symbol_a: str, symbol_b: str) -> float:
+        """Returns pairwise correlation between two symbols (1.0 for same symbol)."""
+        from jarvis.data.symbol_registry import resolve
+        canon_a = resolve(symbol_a).canonical
+        canon_b = resolve(symbol_b).canonical
+
+        if canon_a == canon_b:
+            return 1.0
+
+        pair = (canon_a, canon_b)
+        rev_pair = (canon_b, canon_a)
+
+        if pair in self._DEFAULT_CORRELATIONS:
+            return self._DEFAULT_CORRELATIONS[pair]
+        if rev_pair in self._DEFAULT_CORRELATIONS:
+            return self._DEFAULT_CORRELATIONS[rev_pair]
+
+        return 0.0
+
     def get_correlated_exposure_risk(
         self,
         target_symbol: str,
@@ -42,7 +73,7 @@ class DynamicCorrelationEngine:
         for sym in open_symbols:
             if sym == target_symbol:
                 continue
-            corr = corr_matrix.get(target_symbol, {}).get(sym, 0.0)
+            corr = corr_matrix.get(target_symbol, {}).get(sym, 0.0) if corr_matrix else self.get_correlation(target_symbol, sym)
             if abs(corr) >= threshold:
                 conflicts.append({
                     "symbol": sym,
@@ -54,3 +85,4 @@ class DynamicCorrelationEngine:
             "has_correlated_risk": len(conflicts) > 0,
             "conflicts": conflicts
         }
+

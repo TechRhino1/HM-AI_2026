@@ -27,6 +27,9 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     root_dir = os.path.dirname(base_dir)
 
+    def log_message(self, format, *args):
+        logger.debug(f"{self.address_string()} - {format % args}")
+
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
@@ -259,14 +262,17 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
             self.send_error(404, "Terminal UI index.html not found")
 
 def start_server(host: str = "0.0.0.0", port: int = 8501) -> ThreadingHTTPServer:
+    ThreadingHTTPServer.allow_reuse_address = True
     server = ThreadingHTTPServer((host, port), JarvisRequestHandler)
     logger.info(f"JARVIS AI 3.0 Web Terminal Server running at http://{host}:{port}")
     return server
 
 def run_web_server(port: int = 8501, host: str = "0.0.0.0"):
+    ThreadingHTTPServer.allow_reuse_address = True
     server = ThreadingHTTPServer((host, port), JarvisRequestHandler)
     logger.info(f"JARVIS AI 3.0 Web Terminal Server running at http://{host}:{port}")
     try:
         server.serve_forever()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Web server serve_forever error: {e}", exc_info=True)
+
