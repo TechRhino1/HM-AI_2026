@@ -1213,3 +1213,75 @@ header.terminal-hud {
 .rationale-item.reject { color: #fca5a5; }
 .rationale-item.ready { color: #86efac; }
 
+/* ==========================================================================
+   MOBILE & RESPONSIVE LAYOUT RULES (Phone & Tablet Support)
+   ========================================================================== */
+@media (max-width: 1024px) {
+    body {
+        height: auto;
+        min-height: 100vh;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    header.terminal-hud {
+        height: auto;
+        padding: 8px 12px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .hud-telemetry {
+        flex-wrap: wrap;
+        gap: 8px 12px;
+    }
+
+    .hud-actions {
+        width: 100%;
+        justify-content: space-between;
+        margin-top: 4px;
+    }
+
+    .terminal-workspace {
+        display: flex;
+        flex-direction: column;
+        height: auto;
+        overflow: visible;
+        padding: 6px;
+        gap: 10px;
+    }
+
+    .radar-panel,
+    .center-column,
+    .devil-panel {
+        width: 100%;
+        height: auto;
+        min-height: auto;
+        overflow: visible;
+    }
+
+    .chart-panel-container {
+        height: 380px !important;
+        min-height: 380px !important;
+    }
+
+    .positions-hud-container {
+        max-height: 300px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .desk-inputs-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .copilot-window.floating {
+        width: 94vw !important;
+        max-width: 420px;
+        right: 3vw !important;
+        bottom: 75px !important;
+        height: 70vh !important;
+    }
+}
+
+
