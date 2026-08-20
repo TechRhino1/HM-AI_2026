@@ -68,10 +68,10 @@ class DrawdownGuard:
                 self.daily_start_equity = 0.0
                 changed = True
 
-        if self.daily_start_equity <= 0 or current_balance > self.daily_start_equity:
+        if self.daily_start_equity <= 0 or current_balance > self.daily_start_equity or self.daily_start_equity > current_balance * 1.5:
             self.daily_start_equity = current_balance
             changed = True
-        if current_equity > self.peak_equity:
+        if self.peak_equity <= 0 or current_equity > self.peak_equity or self.peak_equity > current_equity * 1.5:
             self.peak_equity = current_equity
             changed = True
             
