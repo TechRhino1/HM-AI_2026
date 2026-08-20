@@ -51,13 +51,21 @@ class OrderManager:
 
         if position.type == "BUY":
             profit_pips = (c_price - position.open_price)
+
+            # Continuous Dynamic ATR Trailing Stop
+            if profit_pips >= (atr * 0.75 * atr_multiplier):
+                dynamic_trail = c_price - (atr * 0.85 * atr_multiplier)
+                if dynamic_trail > position.open_price and dynamic_trail > new_sl and dynamic_trail < c_price:
+                    new_sl = dynamic_trail
+                    modified = True
+                    logger.info(f"⚡ Position #{position.ticket} BUY: Dynamic ATR Trailing Stop at {new_sl:.2f}")
             
             # Momentum-loss exit
             if getattr(context, "strategy", "") == "TREND_FOLLOWING" and profit_pips > 0:
                 trend_score = getattr(context, "trend_score", 0)
                 if trend_score < 0:
                     lock_80_sl = position.open_price + (profit_pips * 0.80)
-                    if lock_80_sl > new_sl:
+                    if lock_80_sl > new_sl and lock_80_sl < c_price:
                         new_sl = lock_80_sl
                         modified = True
                         logger.info(f"⚡ Momentum Loss Exit! Position #{position.ticket} BUY: 80% Profit Lock at {new_sl:.2f}")
@@ -67,29 +75,35 @@ class OrderManager:
                 # Stage 3: Lock in 60% of Floating Profit at >= 2.0 ATR / +15 pts
                 if profit_pips >= (atr * self.STAGE3_ATR_TRIGGER * atr_multiplier):
                     lock_60_sl = position.open_price + (profit_pips * self.STAGE3_PROFIT_LOCK_PCT)
-                    if lock_60_sl > new_sl:
+                    if lock_60_sl > new_sl and lock_60_sl < c_price:
                         new_sl = lock_60_sl
                         modified = True
                         logger.info(f"⚡ [MICRO] Position #{position.ticket} BUY: Stage 3 (60% Profit Lock) at {new_sl:.2f}")
 
                 # Stage 2: Lock in +0.75R profit at +1.6 ATR
-                elif profit_pips >= (atr * self.STAGE2_ATR_TRIGGER * atr_multiplier) and position.sl < position.open_price + (atr * self.STAGE2_PROFIT_LOCK):
-                    new_sl = position.open_price + (atr * self.STAGE2_PROFIT_LOCK)
-                    modified = True
-                    logger.info(f"⚡ [MICRO] Position #{position.ticket} BUY: Stage 2 Profit Lock at {new_sl:.2f}")
+                elif profit_pips >= (atr * self.STAGE2_ATR_TRIGGER * atr_multiplier):
+                    candidate = position.open_price + (atr * self.STAGE2_PROFIT_LOCK)
+                    if candidate > new_sl and candidate < c_price:
+                        new_sl = candidate
+                        modified = True
+                        logger.info(f"⚡ [MICRO] Position #{position.ticket} BUY: Stage 2 Profit Lock at {new_sl:.2f}")
 
-                # Stage 1: Move SL to Break-Even + Buffer at +1.0 ATR
-                elif profit_pips >= (atr * self.STAGE1_ATR_TRIGGER * atr_multiplier) and position.sl < position.open_price:
-                    new_sl = position.open_price + (atr * self.STAGE1_BE_BUFFER)
-                    modified = True
-                    logger.info(f"⚡ [MICRO] Position #{position.ticket} BUY: Stage 1 Breakeven Lock at {new_sl:.2f}")
+                # Stage 1: Move SL to Break-Even + Buffer at +0.6 ATR
+                elif profit_pips >= (atr * 0.60 * atr_multiplier) and new_sl < position.open_price:
+                    candidate = position.open_price + (atr * self.STAGE1_BE_BUFFER)
+                    if candidate > new_sl and candidate < c_price:
+                        new_sl = candidate
+                        modified = True
+                        logger.info(f"⚡ [MICRO] Position #{position.ticket} BUY: Stage 1 Breakeven Lock at {new_sl:.2f}")
 
             # Standard Institutional Trailing (>= $100 Accounts - UNTOUCHED)
             else:
-                if profit_pips >= (atr * self.STD_ATR_TRIGGER * atr_multiplier) and position.sl < position.open_price:
-                    new_sl = position.open_price + (atr * self.STD_BE_BUFFER)
-                    modified = True
-                    logger.info(f"Position #{position.ticket} BUY: Moving SL to Break-Even ({new_sl:.4f}).")
+                if profit_pips >= (atr * 1.0 * atr_multiplier) and new_sl < position.open_price:
+                    candidate = position.open_price + (atr * self.STD_BE_BUFFER)
+                    if candidate > new_sl and candidate < c_price:
+                        new_sl = candidate
+                        modified = True
+                        logger.info(f"Position #{position.ticket} BUY: Moving SL to Break-Even ({new_sl:.4f}).")
 
             # Structural Trailing: Ratchet SL behind newly formed Higher-Low Support Floor
             if st.higher_lows and st.demand_zone[0] > 0:
@@ -101,13 +115,21 @@ class OrderManager:
 
         elif position.type == "SELL":
             profit_pips = (position.open_price - c_price)
+
+            # Continuous Dynamic ATR Trailing Stop
+            if profit_pips >= (atr * 0.75 * atr_multiplier):
+                dynamic_trail = c_price + (atr * 0.85 * atr_multiplier)
+                if dynamic_trail < position.open_price and (new_sl == 0 or dynamic_trail < new_sl) and dynamic_trail > c_price:
+                    new_sl = dynamic_trail
+                    modified = True
+                    logger.info(f"⚡ Position #{position.ticket} SELL: Dynamic ATR Trailing Stop at {new_sl:.2f}")
             
             # Momentum-loss exit
             if getattr(context, "strategy", "") == "TREND_FOLLOWING" and profit_pips > 0:
                 trend_score = getattr(context, "trend_score", 0)
                 if trend_score > 0:
                     lock_80_sl = position.open_price - (profit_pips * 0.80)
-                    if lock_80_sl < new_sl or new_sl == 0:
+                    if (lock_80_sl < new_sl or new_sl == 0) and lock_80_sl > c_price:
                         new_sl = lock_80_sl
                         modified = True
                         logger.info(f"⚡ Momentum Loss Exit! Position #{position.ticket} SELL: 80% Profit Lock at {new_sl:.2f}")
@@ -117,29 +139,35 @@ class OrderManager:
                 # Stage 3: Lock in 60% of Floating Profit at >= 2.0 ATR / +15 pts
                 if profit_pips >= (atr * self.STAGE3_ATR_TRIGGER * atr_multiplier):
                     lock_60_sl = position.open_price - (profit_pips * self.STAGE3_PROFIT_LOCK_PCT)
-                    if lock_60_sl < new_sl or new_sl == 0:
+                    if (lock_60_sl < new_sl or new_sl == 0) and lock_60_sl > c_price:
                         new_sl = lock_60_sl
                         modified = True
                         logger.info(f"⚡ [MICRO] Position #{position.ticket} SELL: Stage 3 (60% Profit Lock) at {new_sl:.2f}")
 
                 # Stage 2: Lock in +0.75R profit at +1.6 ATR
-                elif profit_pips >= (atr * self.STAGE2_ATR_TRIGGER * atr_multiplier) and (position.sl > position.open_price - (atr * self.STAGE2_PROFIT_LOCK) or position.sl == 0):
-                    new_sl = position.open_price - (atr * self.STAGE2_PROFIT_LOCK)
-                    modified = True
-                    logger.info(f"⚡ [MICRO] Position #{position.ticket} SELL: Stage 2 Profit Lock at {new_sl:.2f}")
+                elif profit_pips >= (atr * self.STAGE2_ATR_TRIGGER * atr_multiplier):
+                    candidate = position.open_price - (atr * self.STAGE2_PROFIT_LOCK)
+                    if (candidate < new_sl or new_sl == 0) and candidate > c_price:
+                        new_sl = candidate
+                        modified = True
+                        logger.info(f"⚡ [MICRO] Position #{position.ticket} SELL: Stage 2 Profit Lock at {new_sl:.2f}")
 
-                # Stage 1: Move SL to Break-Even - Buffer at +1.0 ATR
-                elif profit_pips >= (atr * self.STAGE1_ATR_TRIGGER * atr_multiplier) and (position.sl > position.open_price or position.sl == 0):
-                    new_sl = position.open_price - (atr * self.STAGE1_BE_BUFFER)
-                    modified = True
-                    logger.info(f"⚡ [MICRO] Position #{position.ticket} SELL: Stage 1 Breakeven Lock at {new_sl:.2f}")
+                # Stage 1: Move SL to Break-Even - Buffer at +0.6 ATR
+                elif profit_pips >= (atr * 0.60 * atr_multiplier) and (new_sl == 0 or new_sl > position.open_price):
+                    candidate = position.open_price - (atr * self.STAGE1_BE_BUFFER)
+                    if (candidate < new_sl or new_sl == 0) and candidate > c_price:
+                        new_sl = candidate
+                        modified = True
+                        logger.info(f"⚡ [MICRO] Position #{position.ticket} SELL: Stage 1 Breakeven Lock at {new_sl:.2f}")
 
             # Standard Institutional Trailing (>= $100 Accounts - UNTOUCHED)
             else:
-                if profit_pips >= (atr * self.STD_ATR_TRIGGER * atr_multiplier) and (position.sl > position.open_price or position.sl == 0):
-                    new_sl = position.open_price - (atr * self.STD_BE_BUFFER)
-                    modified = True
-                    logger.info(f"Position #{position.ticket} SELL: Moving SL to Break-Even ({new_sl:.4f}).")
+                if profit_pips >= (atr * 1.0 * atr_multiplier) and (new_sl == 0 or new_sl > position.open_price):
+                    candidate = position.open_price - (atr * self.STD_BE_BUFFER)
+                    if (candidate < new_sl or new_sl == 0) and candidate > c_price:
+                        new_sl = candidate
+                        modified = True
+                        logger.info(f"Position #{position.ticket} SELL: Moving SL to Break-Even ({new_sl:.4f}).")
 
             # Structural Trailing: Ratchet SL behind newly formed Lower-High Resistance Ceiling
             if st.lower_highs and st.supply_zone[1] > 0:

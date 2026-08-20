@@ -180,7 +180,7 @@ class JarvisOrchestrator:
         # 5. Evaluate Decision with Expected Value & Quality Gate
         account = self.state_manager.account or self.mt5_client.get_account_snapshot()
         decision = self.decision_engine.evaluate(
-            context, regime, analyst_reports, devil_report, account_balance=account.equity
+            context, regime, analyst_reports, devil_report, account_balance=account.equity, mtf_data=mtf_data
         )
         self.state_manager.record_decision(symbol, decision)
 
@@ -304,6 +304,7 @@ class JarvisOrchestrator:
                     if exec_res and exec_res.get("status") == "FILLED":
                         self._last_execution_time[canonical_sym] = time.time()
                         logger.info(f"Execution lock released for {canonical_sym}. Cooldown {self._SAME_SYMBOL_COOLDOWN_SEC}s started.")
+        else:
 
             if exec_res and exec_res.get("status") == "FILLED":
                 ticket = exec_res.get("ticket")
@@ -368,22 +369,48 @@ class JarvisOrchestrator:
                             d = res["decision"]
                             # Calculate directional win probability
                             win_p = d.probabilities.get(d.bias.lower(), d.model_confidence) if d.bias in ["BUY", "SELL"] else d.model_confidence
+                            
+                            # Standardized Status Classification (Requirement 8)
+                            if d.decision == "EXECUTE":
+                                status_label = f"{d.bias} READY"
+                            elif d.decision == "WAIT" and d.bias in ["BUY", "SELL"]:
+                                status_label = f"WAIT: {d.bias}"
+                            elif d.decision == "NO_TRADE":
+                                if not d.quality_gate.passed and any("Invalid" in r or "Devil" in r or "Adversarial" in r for r in d.quality_gate.failing_reasons):
+                                    status_label = "TRADE INVALIDATED"
+                                elif d.bias in ["BUY", "SELL"]:
+                                    status_label = "NO TRADE"
+                                else:
+                                    status_label = "NO SETUP"
+                            elif d.bias == "HOLD" or not d.strategy:
+                                status_label = "NO SETUP"
+                            else:
+                                status_label = "NO SETUP"
+
                             radar_results.append({
                                 "symbol": sym,
+                                "timeframe": "H1",
                                 "bias": d.bias,
-                                "action": d.bias if d.decision == "EXECUTE" else f"WAIT: {d.bias}",
+                                "action": status_label,
+                                "status_label": status_label,
                                 "decision": d.decision,
                                 "score": round(win_p * 100.0, 0),
                                 "win_prob": round(win_p * 100.0, 0),
                                 "entry_price": d.entry_price,
                                 "stop_loss": d.stop_loss,
                                 "take_profit": d.take_profit,
-                                "risk_reward_ratio": d.risk_reward_ratio,
-                                "ev": d.expected_value,
-                                "regime": d.regime.primary_regime.value,
-                                "strategy": d.strategy,
+                                "risk_reward_ratio": round(d.risk_reward_ratio, 2) if d.risk_reward_ratio else 2.50,
+                                "ev": round(d.expected_value, 2) if d.expected_value else 0.0,
+                                "regime": d.regime.primary_regime.value if d.regime else "UNKNOWN",
+                                "strategy": d.strategy or "STRUCTURE",
+                                "adversarial_penalty": round(d.adversarial_penalty, 1) if d.adversarial_penalty else 0.0,
+                                "invalidation_levels": d.invalidation_levels or [],
+                                "risk_factors": d.risk_factors or [],
                                 "gate_passed": d.quality_gate.passed,
-                                "failing_reasons": d.quality_gate.failing_reasons
+                                "failing_reasons": d.quality_gate.failing_reasons,
+                                "checks": d.quality_gate.checks,
+                                "waiting_reasons": getattr(d, "waiting_reasons", []),
+                                "rejection_reasons": getattr(d, "rejection_reasons", [])
                             })
                         except Exception as e:
                             logger.error(f"Parallel scan error for {sym}: {e}", exc_info=True)
@@ -395,7 +422,7 @@ class JarvisOrchestrator:
 
                 try:
                     session = SessionEngine.get_current_session()
-                    sleep_interval = 15.0 if session.is_prime_session else 60.0
+                    sleep_interval = 3.0 if session.is_prime_session else 15.0
                 except Exception:
-                    sleep_interval = 60.0
+                    sleep_interval = 5.0
                 time.sleep(sleep_interval)

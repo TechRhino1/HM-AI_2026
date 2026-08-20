@@ -53,20 +53,44 @@ class MacroAnalyst(BaseAnalyst):
             impact = item.get("impact", "")
             actual_str = str(item.get("actual", ""))
             fcst_str = str(item.get("forecast", ""))
+            event_name = str(item.get("event", "")).lower()
 
             if curr == "USD" and impact == "HIGH":
+                # Skip events that haven't released yet
+                if not actual_str or actual_str in ("Upcoming", "—", "", "Pending"):
+                    risk_factors.append(f"⏳ Upcoming HIGH-impact USD event: {item.get('event')} — volatility spike imminent.")
+                    score -= 5.0
+                    continue
+
                 try:
                     act = float(actual_str.replace("%", "").replace("K", "").replace("M", "").strip())
                     fcst = float(fcst_str.replace("%", "").replace("K", "").replace("M", "").strip())
-                    if act > fcst:
-                        usd_bull_shock = True
-                        evidence.append(f"Macro Shock: Stronger USD Event ({item.get('event')} {actual_str} vs {fcst_str} fcst).")
-                    elif act < fcst:
-                        usd_bear_shock = True
-                        evidence.append(f"Macro Shock: Weaker USD Event ({item.get('event')} {actual_str} vs {fcst_str} fcst).")
+                    
+                    # Detect inverse indicators where higher actual = weaker USD
+                    is_inverse = any(kw in event_name for kw in [
+                        "jobless", "unemployment", "trade deficit", "deficit"
+                    ])
+                    
+                    if is_inverse:
+                        # Higher actual = weaker economy = bearish USD
+                        if act > fcst:
+                            usd_bear_shock = True
+                            evidence.append(f"Macro Shock: Weaker USD (inverse) ({item.get('event')} {actual_str} vs {fcst_str} fcst).")
+                        elif act < fcst:
+                            usd_bull_shock = True
+                            evidence.append(f"Macro Shock: Stronger USD (inverse) ({item.get('event')} {actual_str} vs {fcst_str} fcst).")
+                    else:
+                        # Standard indicators: higher actual = stronger USD
+                        if act > fcst:
+                            usd_bull_shock = True
+                            evidence.append(f"Macro Shock: Stronger USD Event ({item.get('event')} {actual_str} vs {fcst_str} fcst).")
+                        elif act < fcst:
+                            usd_bear_shock = True
+                            evidence.append(f"Macro Shock: Weaker USD Event ({item.get('event')} {actual_str} vs {fcst_str} fcst).")
                 except Exception:
-                    usd_bull_shock = True
-                    evidence.append(f"Macro Shock: Hawkish USD Policy Bias detected ({item.get('event')}).")
+                    # Cannot parse — do NOT default to any shock direction
+                    risk_factors.append(f"⚠️ Unparseable USD event data: {item.get('event')}. No directional assumption made.")
+                    continue
 
         # 3. Directional Bias Mapping for Target Asset
         if any(k in sym for k in ["XAU", "GOLD", "EUR", "GBP", "BTC"]):

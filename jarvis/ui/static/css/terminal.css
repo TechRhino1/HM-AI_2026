@@ -248,23 +248,30 @@ header.terminal-hud {
     font-family: var(--font-mono);
     font-size: 10px;
     padding: 3px 8px;
-    border-radius: 4px;
-    cursor: pointer;
 }
 
 /* ==========================================================================
-   Main Terminal Grid Workspace
+   Main Terminal Grid Workspace — 3-Column Institutional Architecture
    ========================================================================== */
 .terminal-workspace {
     display: grid;
-    grid-template-columns: 310px 1fr 370px;
-    grid-template-rows: 1fr 240px;
+    grid-template-columns: 330px 1fr 390px;
     gap: 8px;
     padding: 8px;
     flex: 1;
     overflow: hidden;
     position: relative;
     min-height: 0;
+    height: calc(100vh - 50px);
+}
+
+.middle-column-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .terminal-panel {
@@ -304,70 +311,54 @@ header.terminal-hud {
     flex-shrink: 0;
 }
 
-.panel-title-wrap { display: flex; align-items: center; gap: 6px; }
-.panel-title { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-secondary); }
-.panel-counter { font-family: var(--font-mono); font-size: 9.5px; color: var(--accent-cyan); background: var(--accent-cyan-subtle); padding: 1px 5px; border-radius: 8px; }
-.panel-content { padding: 8px; flex: 1; overflow-y: auto; min-height: 0; }
+.panel-title-wrap { display: flex; align-items: center; gap: 8px; }
+.panel-title { font-size: 11.5px; font-weight: 700; color: #ffffff; letter-spacing: 0.03em; text-transform: uppercase; }
+.panel-counter { font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; color: var(--accent-cyan); background: rgba(56, 189, 248, 0.12); padding: 1px 6px; border-radius: 3px; }
 
-/* Tabs Header */
-.tab-switcher { display: flex; gap: 4px; }
-.tab-btn {
-    background: transparent;
-    border: none;
-    color: var(--text-dim);
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 700;
-    padding: 3px 8px;
-    border-radius: 3px;
-    cursor: pointer;
-    transition: var(--transition-fast);
-}
-.tab-btn.active {
-    background: var(--accent-cyan-subtle);
-    color: var(--accent-cyan);
-    border: 1px solid rgba(56, 189, 248, 0.3);
+.panel-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
 
 /* ==========================================================================
-   MODULE: Verified MT5 Account Card
+   MODULE A: Verified MT5 Account Card
    ========================================================================== */
 .account-hud-card {
-    background: rgba(10, 14, 23, 0.65);
+    background: rgba(10, 14, 23, 0.6);
     border: 1px solid var(--border-subtle);
-    border-radius: 6px;
+    border-radius: 5px;
     padding: 8px;
     margin-bottom: 8px;
-    border-left: 3px solid var(--accent-cyan);
 }
 
 .account-hud-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid rgba(51, 65, 85, 0.4);
-    padding-bottom: 4px;
     margin-bottom: 6px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.account-name-tag { font-weight: 700; color: #ffffff; font-size: 11.5px; }
-.account-leverage-tag {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--accent-cyan);
-    background: var(--accent-cyan-subtle);
-    padding: 1px 5px;
-    border-radius: 3px;
+.account-name-tag { font-weight: 700; font-size: 11px; color: #ffffff; }
+.account-leverage-tag { font-family: var(--font-mono); font-size: 9px; font-weight: 700; background: var(--accent-cyan-subtle); color: var(--accent-cyan); padding: 1px 5px; border-radius: 3px; }
+
+.account-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 10px;
 }
 
-.account-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
-.account-item { display: flex; flex-direction: column; }
-.account-item-lbl { font-size: 8.5px; font-weight: 500; color: var(--text-dim); text-transform: uppercase; }
-.account-item-val { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--text-primary); }
+.account-item { display: flex; justify-content: space-between; align-items: center; }
+.account-item-lbl { font-size: 9.5px; color: var(--text-dim); }
+.account-item-val { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; color: var(--text-primary); }
 
 /* ==========================================================================
-   MODULE B: Upcoming Trades & Scanner Radar
+   MODULE B: High-Probability Scanner Radar with Compact Trade Plans
    ========================================================================== */
 .scanner-radar-list { display: flex; flex-direction: column; gap: 6px; }
 
@@ -375,57 +366,145 @@ header.terminal-hud {
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
     border-radius: 5px;
-    padding: 8px;
+    padding: 7px 9px;
     cursor: pointer;
     transition: var(--transition-fast);
-    position: relative;
-    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 
-.radar-opportunity-card:hover, .radar-opportunity-card.active {
+.radar-opportunity-card:hover {
     background: var(--bg-card-hover);
     border-color: var(--accent-cyan);
-    box-shadow: 0 0 14px rgba(56, 189, 248, 0.15);
+    transform: translateY(-1px);
 }
 
-.radar-opportunity-card.active::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; bottom: 0;
-    width: 3px;
-    background: var(--accent-cyan);
+.radar-opportunity-card.active {
+    background: rgba(30, 48, 80, 0.95);
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
 }
 
-.radar-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
-.radar-symbol { font-family: var(--font-mono); font-weight: 800; font-size: 12.5px; color: #ffffff; display: flex; align-items: center; gap: 4px; }
-.radar-timeframe-tag { font-size: 9px; color: var(--text-dim); background: rgba(0, 0, 0, 0.35); padding: 1px 4px; border-radius: 3px; }
+.radar-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
 
-.radar-action-pill { font-family: var(--font-mono); font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; }
-.radar-action-buy { background: var(--neon-bull-subtle); color: var(--neon-bull); border: 1px solid rgba(0, 245, 155, 0.3); }
-.radar-action-sell { background: var(--neon-bear-subtle); color: var(--neon-bear); border: 1px solid rgba(255, 59, 92, 0.3); }
-.radar-action-wait { background: var(--devil-amber-subtle); color: var(--devil-amber); border: 1px solid rgba(245, 158, 11, 0.3); }
-
-.radar-meta-row { display: flex; justify-content: space-between; align-items: center; font-size: 10.5px; color: var(--text-secondary); margin-top: 3px; }
-.radar-setup-name { font-weight: 600; color: var(--text-primary); }
-
-.radar-levels-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px 8px;
-    background: rgba(0, 0, 0, 0.25);
-    border-radius: 4px;
-    padding: 5px 7px;
-    margin: 5px 0 3px 0;
+.radar-symbol {
     font-family: var(--font-mono);
+    font-weight: 800;
+    font-size: 12.5px;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.radar-timeframe-tag {
+    font-size: 8.5px;
+    color: var(--text-dim);
+    background: rgba(0, 0, 0, 0.4);
+    padding: 1px 4px;
+    border-radius: 3px;
+}
+
+/* Action Status Badges (Requirement 8) */
+.radar-action-pill {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.badge-ready-buy {
+    background: rgba(0, 245, 155, 0.16);
+    color: var(--neon-bull);
+    border: 1px solid var(--neon-bull);
+    box-shadow: 0 0 8px rgba(0, 245, 155, 0.2);
+}
+
+.badge-ready-sell {
+    background: rgba(255, 59, 92, 0.16);
+    color: var(--neon-bear);
+    border: 1px solid var(--neon-bear);
+    box-shadow: 0 0 8px rgba(255, 59, 92, 0.2);
+}
+
+.badge-wait-buy, .badge-wait-sell, .radar-action-wait {
+    background: rgba(245, 158, 11, 0.14);
+    color: var(--devil-amber);
+    border: 1px solid rgba(245, 158, 11, 0.5);
+}
+
+.badge-invalidated {
+    background: rgba(168, 85, 247, 0.16);
+    color: #c084fc;
+    border: 1px solid #a855f7;
+}
+
+.badge-no-trade {
+    background: rgba(100, 116, 139, 0.16);
+    color: #94a3b8;
+    border: 1px solid #64748b;
+}
+
+.badge-no-setup {
+    background: rgba(51, 65, 85, 0.2);
+    color: #64748b;
+    border: 1px solid #334155;
+}
+
+.radar-meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+    color: var(--text-secondary);
+}
+
+.radar-setup-name {
+    font-weight: 700;
+    color: #e2e8f0;
     font-size: 10px;
 }
-.radar-level-item { display: flex; justify-content: space-between; align-items: center; }
-.radar-level-lbl { color: var(--text-dim); font-size: 9px; font-weight: 600; }
-.radar-level-val { font-weight: 700; color: #ffffff; }
 
-.radar-status-indicator { display: flex; justify-content: space-between; align-items: center; font-size: 9.5px; color: var(--text-dim); margin-top: 4px; padding-top: 3px; border-top: 1px solid rgba(255, 255, 255, 0.05); }
-.radar-status-indicator .status-left { display: flex; align-items: center; gap: 5px; }
-.radar-status-indicator .status-dot { width: 5px; height: 5px; border-radius: 50%; }
+/* Compact Trade Plan Chip (Requirement 3) */
+.radar-plan-chip {
+    background: rgba(10, 14, 23, 0.85);
+    border: 1px solid rgba(51, 65, 85, 0.5);
+    border-radius: 4px;
+    padding: 3px 6px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    color: #cbd5e1;
+    display: flex;
+    justify-content: space-between;
+    margin: 2px 0;
+}
+
+.radar-plan-chip span { white-space: nowrap; }
+
+.radar-status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 9px;
+    color: var(--text-dim);
+    padding-top: 3px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.radar-status-indicator .status-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
 
 /* ==========================================================================
    LIVE HIGH-IMPACT MACRO ECONOMIC NEWS FEED MODULE
@@ -505,11 +584,11 @@ header.terminal-hud {
    HIGH-PROBABILITY OPPORTUNITY & MANUAL 1-CLICK TRADE DESK
    ========================================================================== */
 .manual-trade-desk {
-    background: rgba(10, 14, 23, 0.75);
+    background: rgba(10, 14, 23, 0.85);
     border: 1px solid var(--accent-cyan);
     border-radius: 6px;
-    padding: 10px;
-    margin-bottom: 10px;
+    padding: 9px;
+    margin-bottom: 8px;
     box-shadow: 0 0 16px rgba(56, 189, 248, 0.12);
 }
 
@@ -517,8 +596,8 @@ header.terminal-hud {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
-    padding-bottom: 5px;
+    margin-bottom: 6px;
+    padding-bottom: 4px;
     border-bottom: 1px solid rgba(51, 65, 85, 0.4);
 }
 
@@ -533,6 +612,35 @@ header.terminal-hud {
     gap: 5px;
 }
 
+/* Live Trade Summary Banner (Requirement 6) */
+.desk-summary-banner {
+    background: rgba(15, 23, 42, 0.9);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    border-radius: 4px;
+    padding: 5px 8px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: #f1f5f9;
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+
+.desk-summary-banner-title {
+    font-weight: 800;
+    color: var(--accent-cyan);
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 2px;
+}
+
+.desk-summary-banner-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2px 6px;
+    color: #cbd5e1;
+    font-size: 9.5px;
+}
+
 .desk-inputs-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -543,7 +651,7 @@ header.terminal-hud {
 .desk-field { display: flex; flex-direction: column; gap: 2px; }
 .desk-field-lbl { font-size: 8.5px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; }
 .desk-input {
-    background: rgba(0, 0, 0, 0.4);
+    background: rgba(0, 0, 0, 0.5);
     border: 1px solid var(--border-subtle);
     color: #ffffff;
     font-family: var(--font-mono);
@@ -565,7 +673,7 @@ header.terminal-hud {
     border: 1px solid var(--neon-bull);
     color: #ffffff;
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 800;
     padding: 7px;
     border-radius: 4px;
@@ -584,7 +692,7 @@ header.terminal-hud {
     border: 1px solid var(--neon-bear);
     color: #ffffff;
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: 11.5px;
     font-weight: 800;
     padding: 7px;
     border-radius: 4px;
@@ -599,7 +707,7 @@ header.terminal-hud {
 }
 
 /* ==========================================================================
-   TradingView Multi-Pane Chart Architecture & Smart Tooltips
+   TradingView Multi-Pane Chart Architecture
    ========================================================================== */
 .chart-header-bar {
     display: flex;
@@ -790,65 +898,98 @@ header.terminal-hud {
 .overlay-supply-ob { background: rgba(255, 59, 92, 0.15); color: var(--neon-bear); border: 1px solid rgba(255, 59, 92, 0.4); }
 .overlay-fvg { background: rgba(56, 189, 248, 0.15); color: var(--accent-cyan); border: 1px solid rgba(56, 189, 248, 0.4); }
 
-/* ==========================================================================
-   MODULE C: The Devil's Advocate & Adversarial Risk Panel
-   ========================================================================== */
-.devil-panel {
-    border-color: rgba(245, 158, 11, 0.35);
-    background: radial-gradient(circle at 100% 0%, rgba(245, 158, 11, 0.06) 0%, rgba(15, 23, 42, 0.85) 60%);
-}
-
-.devil-header-badge {
-    background: rgba(245, 158, 11, 0.15);
-    color: var(--devil-amber);
-    border: 1px solid var(--devil-amber);
-    font-family: var(--font-mono);
-    font-size: 9px;
-    font-weight: 800;
-    padding: 1px 5px;
-    border-radius: 3px;
-}
-
-.devil-gauges-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; }
-
-.devil-gauge-card {
+/* Distinct Section Cards (Requirement 5) */
+.section-card {
     background: rgba(10, 14, 23, 0.7);
-    border: 1px solid rgba(245, 158, 11, 0.25);
+    border: 1px solid var(--border-subtle);
     border-radius: 5px;
-    padding: 6px;
+    padding: 8px;
+    margin-bottom: 8px;
+}
+
+.section-card-header {
+    font-size: 9.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--text-dim);
+}
+
+.section-card-header.amber { color: var(--devil-amber); }
+.section-card-header.cyan { color: var(--accent-cyan); }
+.section-card-header.emerald { color: var(--neon-bull); }
+
+.plan-grid-3col {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+}
+
+.plan-grid-item {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(51, 65, 85, 0.4);
+    border-radius: 4px;
+    padding: 4px 6px;
     display: flex;
     flex-direction: column;
 }
 
-.gauge-lbl { font-size: 8.5px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; }
-.gauge-val { font-family: var(--font-mono); font-size: 14px; font-weight: 800; color: var(--devil-amber); margin: 1px 0 3px 0; }
+.plan-grid-lbl { font-size: 8px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; }
+.plan-grid-val { font-family: var(--font-mono); font-size: 11px; font-weight: 800; color: #ffffff; }
+
+.devil-gauges-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px; }
+
+.devil-gauge-card {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: 4px;
+    padding: 5px 7px;
+    display: flex;
+    flex-direction: column;
+}
+
+.gauge-lbl { font-size: 8px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; }
+.gauge-val { font-family: var(--font-mono); font-size: 13px; font-weight: 800; color: var(--devil-amber); margin: 1px 0 3px 0; }
 .gauge-bar-track { height: 4px; background: rgba(255, 255, 255, 0.08); border-radius: 2px; overflow: hidden; }
 .gauge-bar-fill { height: 100%; background: linear-gradient(90deg, #f59e0b, #ef4444); border-radius: 2px; }
 
 .invalidation-box {
-    background: rgba(239, 68, 68, 0.08);
-    border: 1px dashed rgba(239, 68, 68, 0.45);
+    background: rgba(239, 68, 68, 0.06);
+    border: 1px dashed rgba(239, 68, 68, 0.4);
     border-radius: 5px;
     padding: 6px 8px;
     margin-bottom: 8px;
 }
 
 .invalidation-box-title { font-size: 9px; font-weight: 800; color: var(--neon-bear); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 3px; }
-.invalidation-box-content { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-primary); line-height: 1.35; }
+.invalidation-box-content { font-family: var(--font-mono); font-size: 10px; color: var(--text-primary); line-height: 1.4; }
 
-.threat-vector-list { display: flex; flex-direction: column; gap: 3px; margin-bottom: 8px; }
+.threat-vector-list { display: flex; flex-direction: column; gap: 3px; }
 .threat-item {
-    background: rgba(0, 0, 0, 0.25);
+    background: rgba(0, 0, 0, 0.35);
     border-left: 3px solid var(--devil-amber);
-    padding: 4px 6px;
-    font-size: 10.5px;
+    padding: 3px 6px;
+    font-size: 10px;
     color: var(--text-secondary);
     display: flex;
     gap: 5px;
+    border-radius: 0 3px 3px 0;
 }
 
-.decision-gate-summary { background: rgba(10, 14, 23, 0.6); border: 1px solid var(--border-subtle); border-radius: 5px; padding: 6px; }
-.gate-row { display: flex; justify-content: space-between; align-items: center; font-family: var(--font-mono); font-size: 10px; padding: 1.5px 0; }
+.decision-gate-summary {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    padding: 5px;
+    max-height: 110px;
+    overflow-y: auto;
+}
+
+.gate-row { display: flex; justify-content: space-between; align-items: center; font-family: var(--font-mono); font-size: 9.5px; padding: 1px 0; }
 .gate-pass { color: var(--neon-bull); font-weight: 700; }
 .gate-fail { color: var(--neon-bear); font-weight: 700; }
 
@@ -856,7 +997,7 @@ header.terminal-hud {
     display: inline-block;
     font-family: var(--font-mono);
     font-weight: 800;
-    font-size: 11.5px;
+    font-size: 11px;
     padding: 3px 8px;
     border-radius: 4px;
     margin-bottom: 6px;
@@ -866,22 +1007,22 @@ header.terminal-hud {
 .badge-wait { background-color: rgba(245, 158, 11, 0.15); color: var(--devil-amber); border: 1px solid var(--devil-amber); }
 
 /* ==========================================================================
-   MODULE A: Active Trades (Live Positions HUD with Close Button)
+   MODULE A: Active Trades & Trade History HUD
    ========================================================================== */
 .positions-hud-container { width: 100%; overflow-x: auto; min-height: 0; }
-.positions-table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 11px; text-align: left; }
+.positions-table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 10.5px; text-align: left; }
 .positions-table th {
     background: rgba(22, 32, 53, 0.9);
     color: var(--text-dim);
-    font-size: 9px;
+    font-size: 8.5px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    padding: 5px 8px;
+    padding: 4px 6px;
     border-bottom: 1px solid var(--border-subtle);
     white-space: nowrap;
 }
-.positions-table td { padding: 6px 8px; border-bottom: 1px solid rgba(51, 65, 85, 0.25); white-space: nowrap; }
+.positions-table td { padding: 5px 6px; border-bottom: 1px solid rgba(51, 65, 85, 0.25); white-space: nowrap; }
 .positions-table tr:hover { background: rgba(30, 44, 70, 0.4); }
 
 .position-progress-wrap { display: flex; flex-direction: column; gap: 2px; min-width: 100px; }
@@ -894,9 +1035,9 @@ header.terminal-hud {
     border: 1px solid var(--neon-bear);
     color: var(--neon-bear);
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 9px;
     font-weight: 700;
-    padding: 2px 7px;
+    padding: 2px 6px;
     border-radius: 3px;
     cursor: pointer;
     transition: var(--transition-fast);
@@ -906,6 +1047,17 @@ header.terminal-hud {
     color: #ffffff;
     box-shadow: var(--neon-bear-glow);
 }
+
+.pill {
+    background: rgba(56, 189, 248, 0.12);
+    color: var(--accent-cyan);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-weight: 700;
+}
+
+.bullish-text { color: var(--neon-bull) !important; font-weight: 700; }
+.bearish-text { color: var(--neon-bear) !important; font-weight: 700; }
 
 /* ==========================================================================
    FLOATING JARVIS AI COPILOT WINDOW
@@ -1000,3 +1152,64 @@ header.terminal-hud {
 .command-item { padding: 7px 10px; border-radius: 4px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; font-size: 11.5px; }
 .command-item:hover, .command-item.selected { background: rgba(56, 189, 248, 0.15); color: #ffffff; }
 .command-item-badge { font-family: var(--font-mono); font-size: 9.5px; background: rgba(0, 0, 0, 0.35); padding: 1px 5px; border-radius: 3px; color: var(--text-dim); }
+
+/* ==========================================================================
+   EXECUTOR BADGES & DECISION RATIONALE STYLES
+   ========================================================================== */
+.badge-bot {
+    background: rgba(56, 189, 248, 0.14) !important;
+    color: var(--accent-cyan) !important;
+    border: 1px solid rgba(56, 189, 248, 0.35) !important;
+    font-weight: 700;
+    font-size: 8.5px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+}
+
+.badge-manual {
+    background: rgba(192, 132, 252, 0.14) !important;
+    color: #c084fc !important;
+    border: 1px solid rgba(192, 132, 252, 0.35) !important;
+    font-weight: 700;
+    font-size: 8.5px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    white-space: nowrap;
+}
+
+.rationale-box {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.rationale-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 10.5px;
+    line-height: 1.35;
+    color: var(--text-primary);
+}
+
+.rationale-item .icon {
+    font-size: 11px;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+
+.rationale-item.wait { color: #fde68a; }
+.rationale-item.reject { color: #fca5a5; }
+.rationale-item.ready { color: #86efac; }
+

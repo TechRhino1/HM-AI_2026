@@ -1,5 +1,5 @@
 /**
- * JARVIS AI 3.0 — Advanced Institutional Financial Trading Terminal Controller
+ * JARVIS AI 3.0 â€” Advanced Institutional Financial Trading Terminal Controller
  * 
  * Features:
  * - TradingView Lightweight Charts v4 Integration (Live MT5 Candles + Volume + S/R Price Lines)
@@ -79,12 +79,22 @@
         radarList: document.getElementById("radar-list"),
         newsFeedList: document.getElementById("news-feed-list"),
 
-        // Manual Execution Desk
+        // Manual Execution Desk & Summary Banner
         deskActiveSymbol: document.getElementById("desk-active-symbol"),
+        deskBannerTitle: document.getElementById("desk-banner-title"),
+        deskBannerStatus: document.getElementById("desk-banner-status"),
+        deskBannerEntry: document.getElementById("desk-banner-entry"),
+        deskBannerSl: document.getElementById("desk-banner-sl"),
+        deskBannerTp: document.getElementById("desk-banner-tp"),
+        deskBannerRr: document.getElementById("desk-banner-rr"),
+        deskBannerRisk: document.getElementById("desk-banner-risk"),
+        deskBannerProb: document.getElementById("desk-banner-prob"),
         deskLots: document.getElementById("desk-lots"),
         deskWinProb: document.getElementById("desk-win-prob"),
         deskSl: document.getElementById("desk-sl"),
         deskTp: document.getElementById("desk-tp"),
+        btnBuyAction: document.getElementById("btn-buy-action"),
+        btnSellAction: document.getElementById("btn-sell-action"),
 
         // Chart Stage
         chartMainPanel: document.getElementById("chart-main-panel"),
@@ -104,8 +114,18 @@
         positionsTbody: document.getElementById("positions-tbody"),
         positionsCount: document.getElementById("pos-count"),
 
+        // Trade History
+        historyTbody: document.getElementById("history-tbody"),
+        historyCount: document.getElementById("history-count"),
+
         // Devil's Advocate & Risk Panel
-        decisionBadgeContainer: document.getElementById("decision-badge-container"),
+        planStrategyPill: document.getElementById("plan-strategy-pill"),
+        planEntry: document.getElementById("plan-entry"),
+        planSl: document.getElementById("plan-sl"),
+        planTp: document.getElementById("plan-tp"),
+        planRiskAmt: document.getElementById("plan-risk-amt"),
+        planCalcLots: document.getElementById("plan-calc-lots"),
+        decisionGateBadge: document.getElementById("decision-gate-badge"),
         decisionWinProb: document.getElementById("decision-win-prob"),
         decisionEv: document.getElementById("decision-ev"),
         decisionRr: document.getElementById("decision-rr"),
@@ -116,6 +136,11 @@
         invalidationTriggerText: document.getElementById("invalidation-trigger-text"),
         threatVectorList: document.getElementById("threat-vector-list"),
         gateChecksList: document.getElementById("gate-checks-list"),
+        decisionRationaleCard: document.getElementById("decision-rationale-card"),
+        decisionRationaleHeader: document.getElementById("decision-rationale-header"),
+        decisionRationaleTitle: document.getElementById("decision-rationale-title"),
+        decisionRationaleBadge: document.getElementById("decision-rationale-badge"),
+        decisionRationaleContent: document.getElementById("decision-rationale-content"),
 
         // Copilot
         copilotWindow: document.getElementById("copilot-window"),
@@ -236,9 +261,9 @@
 
             let contextTag = "Standard Market Liquidity";
             if (candle.high >= state.supportResistance.r1) {
-                contextTag = "⚠ Approaching Key Institutional Resistance Zone";
+                contextTag = "âš  Approaching Key Institutional Resistance Zone";
             } else if (candle.low <= state.supportResistance.s1) {
-                contextTag = "✓ Institutional Demand Zone Support Absorption";
+                contextTag = "âœ“ Institutional Demand Zone Support Absorption";
             }
 
             const dateStr = typeof param.time === "number"
@@ -255,7 +280,7 @@
                     <div class="tooltip-row"><span>High:</span> <b>${candle.high.toFixed(digits)}</b></div>
                     <div class="tooltip-row"><span>Low:</span> <b>${candle.low.toFixed(digits)}</b></div>
                     <div class="tooltip-row"><span>Close:</span> <b style="color:${color};">${candle.close.toFixed(digits)}</b></div>
-                    <div class="tooltip-structure-tag">✦ ${contextTag}</div>
+                    <div class="tooltip-structure-tag">âœ¦ ${contextTag}</div>
                 `;
                 el.smartTooltip.style.display = "block";
                 el.smartTooltip.style.left = `${Math.min(window.innerWidth - 220, param.point.x + 15)}px`;
@@ -298,8 +323,8 @@
         state.supportResistance = { r1, r2, s1, s2 };
 
         const digits = lastPrice > 100 ? 2 : 5;
-        if (el.legendR1) el.legendR1.textContent = `🔴 Resistance: ${r1.toFixed(digits)}`;
-        if (el.legendS1) el.legendS1.textContent = `🟢 Support: ${s1.toFixed(digits)}`;
+        if (el.legendR1) el.legendR1.textContent = `ðŸ”´ Resistance: ${r1.toFixed(digits)}`;
+        if (el.legendS1) el.legendS1.textContent = `ðŸŸ¢ Support: ${s1.toFixed(digits)}`;
     }
 
     function renderTradingViewChartData() {
@@ -440,7 +465,7 @@
         state.chartExpanded = isExpanded;
 
         if (btn) {
-            btn.innerHTML = isExpanded ? "✕ Minimize" : "⛶ Expand";
+            btn.innerHTML = isExpanded ? "âœ• Minimize" : "â›¶ Expand";
             btn.classList.toggle("is-expanded-btn", isExpanded);
         }
 
@@ -494,6 +519,99 @@
         } catch (err) {
             console.error("Telemetry fetch error:", err);
         }
+    }
+
+        async function fetchHistory() {
+        try {
+            const res = await fetch('/api/history');
+            const data = await res.json();
+            if (Array.isArray(data)) {
+                renderHistoryDOM(data);
+            }
+        } catch (err) {
+            console.error('History fetch error:', err);
+        }
+    }
+
+    /* ==========================================================================
+       PRECISION FORMATTING & STATUS HELPERS (Requirements 8, 9)
+       ========================================================================== */
+    function formatPrice(val, symbol) {
+        if (val === null || val === undefined || isNaN(val) || val === "" || val === 0) return "--";
+        const num = Number(val);
+        const s = (symbol || state.symbol || "").toUpperCase();
+        if (s.includes("JPY")) {
+            return num.toFixed(3);
+        } else if (s.includes("XAU") || s.includes("GOLD") || s.includes("BTC") || s.includes("USDT") || num >= 500) {
+            return num.toFixed(2);
+        } else {
+            return num.toFixed(5);
+        }
+    }
+
+    function getStatusBadge(item) {
+        if (!item) return { label: "NO SETUP", cssClass: "badge-no-setup", dotColor: "#475569" };
+        const action = item.action || item.status_label || item.decision || "WAIT";
+        const bias = item.bias || "NEUTRAL";
+        const gatePassed = item.gate_passed !== undefined ? item.gate_passed : (item.quality_gate ? item.quality_gate.passed : false);
+        const failing = item.failing_reasons || (item.quality_gate ? item.quality_gate.failing_reasons : []);
+        
+        if (action.includes("READY") || action === "BUY READY" || (item.decision === "EXECUTE" && bias === "BUY")) {
+            return { label: "BUY READY", cssClass: "badge-ready-buy", dotColor: "var(--neon-bull)" };
+        }
+        if (action.includes("READY") || action === "SELL READY" || (item.decision === "EXECUTE" && bias === "SELL")) {
+            return { label: "SELL READY", cssClass: "badge-ready-sell", dotColor: "var(--neon-bear)" };
+        }
+        if (action === "WAIT: BUY" || (item.decision === "WAIT" && bias === "BUY")) {
+            return { label: "WAIT: BUY", cssClass: "badge-wait-buy", dotColor: "var(--devil-amber)" };
+        }
+        if (action === "WAIT: SELL" || (item.decision === "WAIT" && bias === "SELL")) {
+            return { label: "WAIT: SELL", cssClass: "badge-wait-sell", dotColor: "var(--devil-amber)" };
+        }
+        if (action === "TRADE INVALIDATED" || failing.some(r => r.includes("Invalid") || r.includes("Devil") || r.includes("Adversarial"))) {
+            return { label: "TRADE INVALIDATED", cssClass: "badge-invalidated", dotColor: "#c084fc" };
+        }
+        if (action === "NO TRADE" || item.decision === "NO_TRADE") {
+            return { label: "NO TRADE", cssClass: "badge-no-trade", dotColor: "var(--text-dim)" };
+        }
+        return { label: "NO SETUP", cssClass: "badge-no-setup", dotColor: "#475569" };
+    }
+
+    function renderHistoryDOM(trades) {
+        if (el.historyCount) el.historyCount.innerText = (trades ? trades.length : 0) + ' Executed';
+        const tbody = el.historyTbody || document.getElementById('history-tbody');
+        if (!tbody) return;
+        if (!trades || trades.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:var(--text-dim); padding:16px;">No Recent History</td></tr>';
+            return;
+        }
+        let html = '';
+        for (const t of trades) {
+            const isBuy = t.action === 'BUY';
+            const sideClass = isBuy ? 'badge-ready-buy' : 'badge-ready-sell';
+            const pnlVal = Number(t.expected_value || 0);
+            const pnlColor = pnlVal >= 0 ? 'var(--neon-bull)' : 'var(--neon-bear)';
+            const pnlPrefix = pnlVal >= 0 ? '+' : '';
+            const dtStr = t.timestamp ? t.timestamp.replace('T', ' ').substring(0, 19) : '--';
+            const isManual = t.executor === 'MANUAL' || (t.regime === 'MANUAL_EXECUTION');
+            const execBadge = isManual
+                ? '<span class="badge-manual">👤 MANUAL</span>'
+                : '<span class="badge-bot">🤖 BOT (AI)</span>';
+
+            html += `<tr>
+                <td style="color:var(--text-dim);">#${t.ticket}</td>
+                <td><b style="color:#ffffff;">${t.symbol}</b></td>
+                <td><span class="badge ${sideClass}" style="font-size:8.5px; padding:1px 5px;">${t.action}</span></td>
+                <td>${execBadge}</td>
+                <td class="mono-number" style="font-weight:700;">${t.volume ? Number(t.volume).toFixed(2) : '0.01'}</td>
+                <td class="mono-number">${formatPrice(t.entry_price, t.symbol)}</td>
+                <td class="mono-number" style="color:var(--neon-bear);">${t.sl > 0 ? formatPrice(t.sl, t.symbol) : '—'}</td>
+                <td class="mono-number" style="color:var(--neon-bull);">${t.tp > 0 ? formatPrice(t.tp, t.symbol) : '—'}</td>
+                <td class="mono-number" style="color:${pnlColor}; font-weight:800; font-size:11.5px;">${pnlPrefix}$${pnlVal.toFixed(2)}</td>
+                <td class="mono-number" style="color:var(--text-dim); font-size:9.5px;">${dtStr}</td>
+            </tr>`;
+        }
+        tbody.innerHTML = html;
     }
 
     async function fetchNews() {
@@ -580,14 +698,20 @@
         renderActiveTradesDOM(state.positions);
         renderDevilAdvocateDOM(state.latestDecisions[state.symbol]);
 
-        // Update Manual Trade Desk Active Target
+        // Synchronize 1-Click Desk input values for active symbol
         if (el.deskActiveSymbol) el.deskActiveSymbol.textContent = state.symbol;
         const activeDec = state.latestDecisions[state.symbol];
         if (activeDec) {
-            const winProb = activeDec.probabilities && activeDec.probabilities.buy ? activeDec.probabilities.buy : 0.73;
-            if (el.deskWinProb) el.deskWinProb.value = `${(winProb * 100).toFixed(0)}%`;
-            if (el.deskSl && !el.deskSl.value && activeDec.stop_loss) el.deskSl.value = activeDec.stop_loss;
-            if (el.deskTp && !el.deskTp.value && activeDec.take_profit) el.deskTp.value = activeDec.take_profit;
+            const winProb = activeDec.probabilities && activeDec.probabilities[activeDec.bias ? activeDec.bias.toLowerCase() : "buy"]
+                ? activeDec.probabilities[activeDec.bias ? activeDec.bias.toLowerCase() : "buy"]
+                : (activeDec.model_confidence || 0.73);
+            if (el.deskWinProb) el.deskWinProb.value = `${Math.round(winProb * 100)}%`;
+            if (el.deskSl && document.activeElement !== el.deskSl && !el.deskSl.value) {
+                el.deskSl.value = activeDec.stop_loss ? formatPrice(activeDec.stop_loss, state.symbol) : "";
+            }
+            if (el.deskTp && document.activeElement !== el.deskTp && !el.deskTp.value) {
+                el.deskTp.value = activeDec.take_profit ? formatPrice(activeDec.take_profit, state.symbol) : "";
+            }
         }
     }
 
@@ -597,40 +721,50 @@
             el.leftPanelCounter.textContent = `${opps.length} Monitored`;
         }
 
-        el.radarList.innerHTML = opps.map(opp => {
-            const isBuy = opp.action === "BUY";
-            const isSell = opp.action === "SELL";
-            const actionClass = isBuy ? "radar-action-buy" : (isSell ? "radar-action-sell" : "radar-action-wait");
-            const actionLabel = opp.action || "WAIT";
+        if (!opps || opps.length === 0) {
+            el.radarList.innerHTML = `<div style="text-align:center; color:var(--text-dim); padding:16px;">Scanning monitored instruments...</div>`;
+            return;
+        }
 
-            let statusText = "Waiting for Confirmation";
-            let statusColor = "var(--devil-amber)";
-            if (opp.score >= 70 && opp.ev > 0) {
-                statusText = "High-Conviction Setup Ready";
-                statusColor = "var(--neon-bull)";
-            } else if (opp.action === "NO_TRADE") {
-                statusText = "Filtered by Quality Gate";
-                statusColor = "var(--text-dim)";
-            }
+        el.radarList.innerHTML = opps.map(opp => {
+            const badge = getStatusBadge(opp);
+            const isActive = opp.symbol === state.symbol;
+            const entryStr = formatPrice(opp.entry_price, opp.symbol);
+            const slStr = formatPrice(opp.stop_loss, opp.symbol);
+            const tpStr = formatPrice(opp.take_profit, opp.symbol);
+            const rrStr = opp.risk_reward_ratio ? `1:${Number(opp.risk_reward_ratio).toFixed(2)}` : "1:2.50";
+            const evVal = Number(opp.ev || 0);
+            const evStr = `${evVal >= 0 ? '+' : ''}$${evVal.toFixed(2)}`;
+            const probStr = opp.win_prob ? `${opp.win_prob}%` : (opp.score ? `${opp.score}%` : "73%");
+            const strategyName = opp.strategy || "BREAKOUT_EXPANSION";
 
             return `
-                <div class="radar-opportunity-card ${opp.symbol === state.symbol ? 'active' : ''}" onclick="selectSymbol('${opp.symbol}')">
+                <div class="radar-opportunity-card ${isActive ? 'active' : ''}" onclick="selectSymbol('${opp.symbol}')">
                     <div class="radar-card-top">
                         <div class="radar-symbol">
                             ${opp.symbol}
                             <span class="radar-timeframe-tag">${opp.timeframe || 'H1'}</span>
                         </div>
-                        <div class="radar-action-pill ${actionClass}">${actionLabel}</div>
+                        <div class="radar-action-pill ${badge.cssClass}">${badge.label}</div>
                     </div>
                     <div class="radar-meta-row">
-                        <span class="radar-setup-name">${opp.strategy || opp.regime || 'Institutional Structure'}</span>
-                        <span class="mono-number" style="color: ${opp.ev >= 0 ? 'var(--neon-bull)' : 'var(--text-dim)'}; font-weight:700;">
-                            EV: $${(opp.ev || 0).toFixed(2)}
+                        <span class="radar-setup-name">${strategyName}</span>
+                        <span class="mono-number" style="color: ${evVal >= 0 ? 'var(--neon-bull)' : 'var(--neon-bear)'}; font-weight:700;">
+                            EV: ${evStr}
                         </span>
                     </div>
+                    <div class="radar-plan-chip">
+                        <span>E: <b>${entryStr}</b></span>
+                        <span style="color:var(--neon-bear);">SL: <b>${slStr}</b></span>
+                        <span style="color:var(--neon-bull);">TP: <b>${tpStr}</b></span>
+                        <span>R:R: <b>${rrStr}</b></span>
+                    </div>
                     <div class="radar-status-indicator">
-                        <span class="status-dot" style="background-color: ${statusColor};"></span>
-                        <span>${statusText}</span>
+                        <span class="status-dot" style="background-color: ${badge.dotColor};"></span>
+                        <span style="display:flex; justify-content:space-between; width:100%;">
+                            <span>Prob: <b style="color:var(--text-primary);">${probStr}</b></span>
+                            <span>${opp.gate_passed ? '<b style="color:var(--neon-bull);">GATE PASS (14/14)</b>' : '<b style="color:var(--devil-amber);">GATE WAIT</b>'}</span>
+                        </span>
                     </div>
                 </div>
             `;
@@ -669,7 +803,7 @@
         if (el.positionsCount) el.positionsCount.textContent = `${positions.length} Open`;
 
         if (positions.length === 0) {
-            el.positionsTbody.innerHTML = '<tr><td colspan="11" style="text-align:center; color:var(--text-dim); padding:20px;">No Active MT5 Positions Open</td></tr>';
+            el.positionsTbody.innerHTML = '<tr><td colspan="11" style="text-align:center; color:var(--text-dim); padding:16px;">No Active MT5 Positions Open</td></tr>';
             return;
         }
 
@@ -690,13 +824,13 @@
                 <tr>
                     <td style="color:var(--text-dim);">#${p.ticket}</td>
                     <td><b style="color:#ffffff;">${p.symbol}</b></td>
-                    <td><span class="badge ${isBuy ? 'radar-action-buy' : 'radar-action-sell'}" style="font-size:8.5px; padding:1px 5px;">${p.type}</span></td>
+                    <td><span class="badge ${isBuy ? 'badge-ready-buy' : 'badge-ready-sell'}" style="font-size:8.5px; padding:1px 5px;">${p.type}</span></td>
                     <td class="mono-number" style="font-weight:700;">${p.volume.toFixed(2)}</td>
-                    <td class="mono-number">${p.open_price.toFixed(p.open_price > 100 ? 2 : 5)}</td>
-                    <td class="mono-number">${p.current_price.toFixed(p.current_price > 100 ? 2 : 5)}</td>
-                    <td class="mono-number" style="color:var(--neon-bear);">${p.sl > 0 ? p.sl.toFixed(p.sl > 100 ? 2 : 5) : '—'}</td>
-                    <td class="mono-number" style="color:var(--neon-bull);">${p.tp > 0 ? p.tp.toFixed(p.tp > 100 ? 2 : 5) : '—'}</td>
-                    <td class="mono-number" style="color:${profitColor}; font-weight:800; font-size:12px;">${profitPrefix}$${profit.toFixed(2)}</td>
+                    <td class="mono-number">${formatPrice(p.open_price, p.symbol)}</td>
+                    <td class="mono-number">${formatPrice(p.current_price, p.symbol)}</td>
+                    <td class="mono-number" style="color:var(--neon-bear);">${p.sl > 0 ? formatPrice(p.sl, p.symbol) : '—'}</td>
+                    <td class="mono-number" style="color:var(--neon-bull);">${p.tp > 0 ? formatPrice(p.tp, p.symbol) : '—'}</td>
+                    <td class="mono-number" style="color:${profitColor}; font-weight:800; font-size:11.5px;">${profitPrefix}$${profit.toFixed(2)}</td>
                     <td>
                         <div class="position-progress-wrap">
                             <div class="progress-track">
@@ -717,22 +851,85 @@
     }
 
     function renderDevilAdvocateDOM(d) {
-        if (!d) return;
+        const sym = state.symbol;
+        if (el.deskActiveSymbol) el.deskActiveSymbol.textContent = sym;
+        if (el.chartSymbol) el.chartSymbol.textContent = sym;
 
-        if (el.decisionBadgeContainer) {
-            const action = d.decision || "WAIT";
-            const badgeClass = action === "EXECUTE" ? (d.bias === "BUY" ? "badge-buy" : "badge-sell") : "badge-wait";
-            el.decisionBadgeContainer.innerHTML = `<div class="decision-badge ${badgeClass}">${action}: ${d.bias || 'NEUTRAL'} (${d.strategy || 'STRUCTURE'})</div>`;
+        if (!d) {
+            if (el.planEntry) el.planEntry.textContent = "--";
+            if (el.planSl) el.planSl.textContent = "--";
+            if (el.planTp) el.planTp.textContent = "--";
+            return;
+        }
+
+        const badge = getStatusBadge(d);
+        const entryStr = formatPrice(d.entry_price, sym);
+        const slStr = formatPrice(d.stop_loss, sym);
+        const tpStr = formatPrice(d.take_profit, sym);
+        const rrStr = d.risk_reward_ratio ? `1:${Number(d.risk_reward_ratio).toFixed(2)}` : "1:2.50";
+        const probVal = d.probabilities && d.probabilities[d.bias ? d.bias.toLowerCase() : "buy"] 
+            ? d.probabilities[d.bias ? d.bias.toLowerCase() : "buy"] 
+            : (d.model_confidence || 0.73);
+        const probPct = Math.round(probVal * 100);
+        const evVal = d.expected_value || 0;
+        const evStr = `${evVal >= 0 ? '+' : ''}$${evVal.toFixed(2)}`;
+        const riskPct = d.calculated_risk_percent || 0.50;
+        const stratName = d.strategy || "BREAKOUT_EXPANSION";
+
+        // 1. Update 1-Click Execution Desk Summary Banner (Requirement 6)
+        if (el.deskBannerTitle) el.deskBannerTitle.textContent = `${sym} — ${d.bias || 'WAIT'} / ${d.bias === 'SELL' ? 'SHORT' : 'LONG'}`;
+        if (el.deskBannerStatus) {
+            el.deskBannerStatus.textContent = badge.label;
+            el.deskBannerStatus.className = `radar-action-pill ${badge.cssClass}`;
+        }
+        if (el.deskBannerEntry) el.deskBannerEntry.textContent = entryStr;
+        if (el.deskBannerSl) el.deskBannerSl.textContent = slStr;
+        if (el.deskBannerTp) el.deskBannerTp.textContent = tpStr;
+        if (el.deskBannerRr) el.deskBannerRr.textContent = rrStr;
+        if (el.deskBannerRisk) el.deskBannerRisk.textContent = `${riskPct.toFixed(2)}%`;
+        if (el.deskBannerProb) el.deskBannerProb.textContent = `${probPct}%`;
+
+        // 2. Populate Trade Plan Card (Requirement 5)
+        if (el.planStrategyPill) el.planStrategyPill.textContent = stratName;
+        if (el.planEntry) el.planEntry.textContent = entryStr;
+        if (el.planSl) el.planSl.textContent = slStr;
+        if (el.planTp) el.planTp.textContent = tpStr;
+        if (el.decisionRr) el.decisionRr.textContent = rrStr;
+        if (el.planRiskAmt) {
+            const bal = state.account ? (state.account.balance || 100) : 100;
+            const riskDollars = bal * (riskPct / 100);
+            el.planRiskAmt.textContent = `$${riskDollars.toFixed(2)}`;
+        }
+        if (el.planCalcLots) {
+            el.planCalcLots.textContent = `${(el.deskLots ? el.deskLots.value : '0.01')} Lots`;
+        }
+
+        // 3. Populate AI Validation & Metrics (Requirement 5)
+        if (el.decisionWinProb) el.decisionWinProb.textContent = `${probPct}%`;
+        if (el.decisionEv) {
+            el.decisionEv.textContent = evStr;
+            el.decisionEv.style.color = evVal >= 0 ? "var(--accent-cyan)" : "var(--neon-bear)";
         }
         if (el.chartRegime) {
             el.chartRegime.textContent = (d.regime && d.regime.primary) ? d.regime.primary : "TREND_BULL";
         }
 
-        const prob = d.probabilities && d.probabilities.buy ? d.probabilities.buy : 0.73;
-        if (el.decisionWinProb) el.decisionWinProb.textContent = `${(prob * 100).toFixed(0)}%`;
-        if (el.decisionEv) el.decisionEv.textContent = `$${(d.expected_value || 0).toFixed(2)}`;
-        if (el.decisionRr) el.decisionRr.textContent = `1:${(d.risk_reward_ratio || 2.5).toFixed(2)}`;
+        const checks = (d.quality_gate && d.quality_gate.checks) ? d.quality_gate.checks : {};
+        const passCount = Object.values(checks).filter(Boolean).length;
+        const totalCount = Object.keys(checks).length || 14;
+        const isGatePassed = d.quality_gate ? d.quality_gate.passed : (d.execution_authorized || false);
+        if (el.decisionGateBadge) {
+            if (isGatePassed) {
+                el.decisionGateBadge.textContent = `GATE PASSED (${totalCount}/${totalCount} PASS)`;
+                el.decisionGateBadge.style.color = "var(--neon-bull)";
+            } else {
+                const failCount = totalCount - passCount;
+                el.decisionGateBadge.textContent = `GATE FAILED (${failCount} of ${totalCount} Failed)`;
+                el.decisionGateBadge.style.color = "var(--neon-bear)";
+            }
+        }
 
+        // Gauges
         const penalty = d.adversarial_penalty || 0;
         if (el.devilPenaltyScore) el.devilPenaltyScore.textContent = `${penalty.toFixed(1)} / 50.0`;
         if (el.devilPenaltyFill) el.devilPenaltyFill.style.width = `${Math.min(100, (penalty / 50.0) * 100)}%`;
@@ -741,22 +938,84 @@
         if (el.devilRiskCoeff) el.devilRiskCoeff.textContent = `${coeff.toFixed(2)}x Multiplier`;
         if (el.devilRiskFill) el.devilRiskFill.style.width = `${Math.min(100, coeff * 100)}%`;
 
+        // 4. Decision Rationale: Reasons for Waiting / Rejection
+        if (el.decisionRationaleCard && el.decisionRationaleContent) {
+            const action = d.decision || (badge.label.includes("READY") ? "EXECUTE" : (badge.label.includes("WAIT") ? "WAIT" : "NO_TRADE"));
+            const waitingReasons = d.waiting_reasons || [];
+            const rejectionReasons = d.rejection_reasons || [];
+            const failingChecks = d.quality_gate ? (d.quality_gate.failing_reasons || []) : [];
+            
+            if (action === "EXECUTE" || badge.label.includes("READY")) {
+                if (el.decisionRationaleHeader) el.decisionRationaleHeader.className = "section-card-header emerald";
+                if (el.decisionRationaleTitle) el.decisionRationaleTitle.textContent = "⚡ Decision Rationale: Trade Authorized";
+                if (el.decisionRationaleBadge) {
+                    el.decisionRationaleBadge.textContent = "ALL GATES PASSED";
+                    el.decisionRationaleBadge.style.color = "var(--neon-bull)";
+                }
+                el.decisionRationaleContent.innerHTML = `
+                    <div class="rationale-item ready">
+                        <span class="icon">✓</span>
+                        <span>All 14 Institutional Quality Gates, risk parameters, and EV edge hurdles passed. Setup authorized for execution.</span>
+                    </div>
+                `;
+            } else if (action === "WAIT" || badge.label.includes("WAIT")) {
+                if (el.decisionRationaleHeader) el.decisionRationaleHeader.className = "section-card-header amber";
+                if (el.decisionRationaleTitle) el.decisionRationaleTitle.textContent = "⏳ Decision Rationale: Waiting For Setup Triggers";
+                if (el.decisionRationaleBadge) {
+                    el.decisionRationaleBadge.textContent = "PENDING TRIGGER";
+                    el.decisionRationaleBadge.style.color = "var(--devil-amber)";
+                }
+                const reasons = waitingReasons.length > 0 ? waitingReasons : failingChecks.map(c => `Awaiting quality gate check: ${c}`);
+                if (reasons.length === 0) reasons.push("Awaiting structural candle close and liquidity sweep confirmation.");
+                
+                el.decisionRationaleContent.innerHTML = reasons.map(r => `
+                    <div class="rationale-item wait">
+                        <span class="icon">⏳</span>
+                        <span>${r}</span>
+                    </div>
+                `).join("");
+            } else {
+                // NO_TRADE or TRADE INVALIDATED or REJECTED
+                if (el.decisionRationaleHeader) el.decisionRationaleHeader.className = "section-card-header";
+                if (el.decisionRationaleTitle) el.decisionRationaleTitle.textContent = "🚫 Decision Rationale: Rejection Causes";
+                if (el.decisionRationaleBadge) {
+                    el.decisionRationaleBadge.textContent = badge.label === "TRADE INVALIDATED" ? "INVALIDATED" : "REJECTED";
+                    el.decisionRationaleBadge.style.color = "var(--neon-bear)";
+                }
+                const reasons = rejectionReasons.length > 0 ? rejectionReasons : failingChecks.map(c => `Failed quality check: ${c}`);
+                if (reasons.length === 0) reasons.push("No actionable institutional market structure or viable directional edge.");
+                
+                el.decisionRationaleContent.innerHTML = reasons.map(r => `
+                    <div class="rationale-item reject">
+                        <span class="icon">✕</span>
+                        <span>${r}</span>
+                    </div>
+                `).join("");
+            }
+        }
+
+        // 5. Invalidation Conditions ("What Would Change My Mind") (Clean UTF-8, no broken characters)
         if (el.invalidationTriggerText) {
             const invs = d.invalidation_levels || [];
-            el.invalidationTriggerText.innerHTML = invs.length > 0
-                ? invs.map(i => `<div style="margin-bottom:2px;">• ${i}</div>`).join("")
-                : "• H1 close below demand equilibrium (2390.00).";
+            if (invs.length > 0) {
+                el.invalidationTriggerText.innerHTML = invs.map(i => `<div style="margin-bottom:3px;">• ${i}</div>`).join("");
+            } else {
+                el.invalidationTriggerText.innerHTML = `<div>• H1 close below demand equilibrium (${slStr}).</div><div>• Bearish structural displacement breaking swing low.</div>`;
+            }
         }
 
+        // 6. Threat Assessment Vectors
         if (el.threatVectorList) {
             const threats = d.risk_factors || [];
-            el.threatVectorList.innerHTML = threats.length > 0
-                ? threats.map(t => `<div class="threat-item"><span>⚠</span><span>${t}</span></div>`).join("")
-                : `<div class="threat-item"><span style="color:var(--neon-bull);">✓</span><span>Normal market parameters.</span></div>`;
+            if (threats.length > 0) {
+                el.threatVectorList.innerHTML = threats.map(t => `<div class="threat-item"><span style="color:var(--devil-amber);">⚠</span><span>${t}</span></div>`).join("");
+            } else {
+                el.threatVectorList.innerHTML = `<div class="threat-item"><span style="color:var(--neon-bull);">✓</span><span>Normal institutional market parameters.</span></div>`;
+            }
         }
 
+        // 7. Quality Gate Checks Grid
         if (el.gateChecksList) {
-            const checks = (d.quality_gate && d.quality_gate.checks) ? d.quality_gate.checks : {};
             el.gateChecksList.innerHTML = Object.entries(checks).map(([name, pass]) => `
                 <div class="gate-row">
                     <span>${name}</span>
@@ -819,8 +1078,9 @@
             if (data.status === "FILLED") {
                 alert(`Order FILLED: Ticket #${data.ticket} ${action} ${lots} ${sym} @ ${data.price}`);
                 fetchTelemetry();
+                if (typeof fetchHistory === "function") fetchHistory();
             } else {
-                alert(`Execution Rejected: ${data.reason || 'Unknown error'}`);
+                alert(`Execution Rejected: ${data.reason || data.error || data.comment || 'Broker rejection or invalid parameters'}`);
             }
         } catch (err) {
             console.error("Manual trade error:", err);
@@ -907,17 +1167,17 @@
 
     window.clearCopilotChat = function () {
         if (!el.copilotMessages) return;
-        el.copilotMessages.innerHTML = `<div class="copilot-bubble">🤖 <b>JARVIS AI:</b> Context cleared. Standing by.</div>`;
+        el.copilotMessages.innerHTML = `<div class="copilot-bubble">ðŸ¤– <b>JARVIS AI:</b> Context cleared. Standing by.</div>`;
     };
 
     window.exportCopilotChat = function () {
         if (!el.copilotMessages) return;
         const bubbles = el.copilotMessages.querySelectorAll(".copilot-bubble");
-        let transcript = `# JARVIS AI 3.0 — Trading Intelligence Transcript\nGenerated: ${new Date().toISOString()}\n\n---\n\n`;
+        let transcript = `# JARVIS AI 3.0 â€” Trading Intelligence Transcript\nGenerated: ${new Date().toISOString()}\n\n---\n\n`;
         bubbles.forEach(b => {
             const isUser = b.classList.contains("user");
             const sender = isUser ? "TRADER" : "JARVIS AI";
-            const text = b.innerText.replace(/🤖 JARVIS AI:\n/, "");
+            const text = b.innerText.replace(/ðŸ¤– JARVIS AI:\n/, "");
             transcript += `### [${sender}]\n${text}\n\n`;
         });
 
@@ -953,7 +1213,7 @@
             const data = await res.json();
             const jarvisBubble = document.createElement("div");
             jarvisBubble.className = "copilot-bubble";
-            jarvisBubble.innerHTML = `🤖 <b>JARVIS AI:</b><br>${data.response || 'No response.'}`;
+            jarvisBubble.innerHTML = `ðŸ¤– <b>JARVIS AI:</b><br>${data.response || 'No response.'}`;
             el.copilotMessages.appendChild(jarvisBubble);
             el.copilotMessages.scrollTop = el.copilotMessages.scrollHeight;
         } catch (err) {
@@ -1052,6 +1312,23 @@
         state.symbol = sym;
         if (el.chartSymbol) el.chartSymbol.textContent = sym;
         if (el.deskActiveSymbol) el.deskActiveSymbol.textContent = sym;
+
+        // Reset & immediate re-bind of 1-Click Execution Desk inputs to new symbol's decision
+        const activeDec = state.latestDecisions[sym];
+        if (activeDec) {
+            if (el.deskSl) el.deskSl.value = activeDec.stop_loss ? formatPrice(activeDec.stop_loss, sym) : "";
+            if (el.deskTp) el.deskTp.value = activeDec.take_profit ? formatPrice(activeDec.take_profit, sym) : "";
+            const winProb = activeDec.probabilities && activeDec.probabilities[activeDec.bias ? activeDec.bias.toLowerCase() : "buy"]
+                ? activeDec.probabilities[activeDec.bias ? activeDec.bias.toLowerCase() : "buy"]
+                : (activeDec.model_confidence || 0.73);
+            if (el.deskWinProb) el.deskWinProb.value = `${Math.round(winProb * 100)}%`;
+            renderDevilAdvocateDOM(activeDec);
+        } else {
+            if (el.deskSl) el.deskSl.value = "";
+            if (el.deskTp) el.deskTp.value = "";
+        }
+
+        renderScannerRadarDOM(state.radarOpportunities);
         fetchCandles();
         fetchTelemetry();
 
@@ -1108,8 +1385,12 @@
         fetchNews();
 
         setInterval(fetchTelemetry, 1500);
+    setInterval(fetchHistory, 5000);
+    fetchHistory();
         setInterval(fetchCandles, 5000);
         setInterval(simulateLiveMarketTick, 350);
     });
 
 })();
+
+

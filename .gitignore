@@ -40,11 +40,14 @@ env/
 logs/
 *.log
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 dashboard.log
 trades_log.db
 jarvis_trade_memory.db
 jarvis.lock
+jarvis_bandit_state.json
 system_diagnostics.json
 opportunities.json
 trade_plans.json

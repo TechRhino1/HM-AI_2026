@@ -215,6 +215,8 @@ class DecisionObject:
     execution_authorized: bool = False
     sl_distance: float = 0.0
     tp_distance: float = 0.0
+    waiting_reasons: List[str] = field(default_factory=list)
+    rejection_reasons: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -247,6 +249,8 @@ class DecisionObject:
                 "checks": self.quality_gate.checks,
                 "failing_reasons": self.quality_gate.failing_reasons
             },
+            "waiting_reasons": self.waiting_reasons,
+            "rejection_reasons": self.rejection_reasons,
             "decision": self.decision,
             "execution_authorized": self.execution_authorized
         }

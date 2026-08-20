@@ -21,9 +21,10 @@ logger = logging.getLogger("JARVIS_WebServer")
 
 class JarvisRequestHandler(BaseHTTPRequestHandler):
     state_manager: StateManager = GLOBAL_STATE
-    data_feed: DataFeedEngine = DataFeedEngine()
-    copilot: JarvisCopilot = JarvisCopilot(GLOBAL_STATE)
     mt5_client: MT5Client = MT5Client(mode="live")
+    data_feed: DataFeedEngine = DataFeedEngine(mt5_client=mt5_client)
+    copilot: JarvisCopilot = JarvisCopilot(GLOBAL_STATE)
+    
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     root_dir = os.path.dirname(base_dir)
 
@@ -48,8 +49,13 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                 df = self.data_feed.fetch_rates(sym, timeframe=tf, num_bars=150)
                 candles = []
                 for _, r in df.iterrows():
+                    # Ensure timestamp is UTC UNIX seconds
+                    t_val = r["time"]
+                    if hasattr(t_val, "tzinfo") and t_val.tzinfo is None:
+                        t_val = t_val.tz_localize("UTC")
+                    
                     candles.append({
-                        "time": int(r["time"].timestamp()) if hasattr(r["time"], "timestamp") else int(r["time"]),
+                        "time": int(t_val.timestamp()) if hasattr(t_val, "timestamp") else int(t_val),
                         "open": round(float(r["open"]), 2 if "XAU" in sym else 5),
                         "high": round(float(r["high"]), 2 if "XAU" in sym else 5),
                         "low": round(float(r["low"]), 2 if "XAU" in sym else 5),
@@ -59,6 +65,13 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                 self._send_json({"symbol": sym, "timeframe": tf, "candles": candles})
             elif path == "/api/radar":
                 self._send_json({"opportunities": self.state_manager.radar_opportunities})
+            elif path == "/api/history":
+                try:
+                    from jarvis.data.database import TRADE_DB
+                    trades = TRADE_DB.fetch_recent_trades(limit=15)
+                    self._send_json(trades)
+                except Exception as e:
+                    self._send_json({"error": str(e)})
             elif path == "/api/news":
                 # Real-Time Institutional Macro News & Economic Calendar
                 from jarvis.market.news import GLOBAL_NEWS_ENGINE
@@ -138,6 +151,25 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                     tp_price=tp,
                     comment=comment
                 )
+                if res and res.get("status") == "FILLED":
+                    try:
+                        from jarvis.data.database import TRADE_DB
+                        TRADE_DB.log_trade(
+                            ticket=res.get("ticket", 0),
+                            symbol=sym,
+                            action=action,
+                            entry=float(res.get("price", 0.0)),
+                            sl=sl,
+                            tp=tp,
+                            volume=lots,
+                            score=100.0,
+                            regime="MANUAL_EXECUTION",
+                            ev=0.0,
+                            executor="MANUAL"
+                        )
+                    except Exception as ex:
+                        logger.error(f"Error logging manual trade to DB: {ex}")
+
                 fresh_pos = self.mt5_client.get_open_positions()
                 fresh_acc = self.mt5_client.get_account_snapshot()
                 self.state_manager.sync_broker_state(fresh_acc, fresh_pos)

@@ -106,7 +106,8 @@ class DataFeedEngine:
 
         freq_map = {"M1": "1min", "M5": "5min", "M15": "15min", "M30": "30min", "H1": "1h", "H4": "4h", "D1": "1D"}
         freq = freq_map.get(timeframe, "1h")
-        dates = pd.date_range(end=pd.Timestamp.now(), periods=num_bars, freq=freq)
+        import datetime
+        dates = pd.date_range(end=pd.Timestamp.now(tz=datetime.timezone.utc).tz_localize(None), periods=num_bars, freq=freq)
 
         high_noise = np.abs(np.random.normal(0, vol * 0.8, num_bars))
         low_noise = np.abs(np.random.normal(0, vol * 0.8, num_bars))

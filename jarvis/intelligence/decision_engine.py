@@ -4,8 +4,13 @@ Synthesizes multi-agent confluences, applies Devil's Advocate risk penalties, ca
 """
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone
+import logging
 import numpy as np
 
+logger = logging.getLogger("JARVIS_DecisionEngine")
+
+from jarvis.intelligence.order_flow import InstitutionalVolumeOrderFlowEngine
+from jarvis.intelligence.self_learning import SelfLearningEngine
 from jarvis.data.schemas import (
     MarketContext,
     RegimeOutput,
@@ -38,6 +43,8 @@ class DecisionEngine:
         self.ml_predictor = ml_predictor or OnlineMLPredictor()
         self.min_ev_hurdle = min_ev_hurdle
         self.max_devil_penalty = max_devil_penalty
+        self.order_flow = InstitutionalVolumeOrderFlowEngine()
+        self.self_learning = SelfLearningEngine()
 
     def _compute_bias_and_levels(
         self,
@@ -211,54 +218,55 @@ class DecisionEngine:
         is_micro_mode = is_micro_account(account_balance)
         effective_min_ev = get_effective_min_ev(account_balance, planned_risk_dollars)
 
+        from jarvis.data.symbol_registry import resolve as resolve_symbol
+        spec = resolve_symbol(context.symbol)
+        atr_pips = context.volatility.atr / spec.pip_size if spec.pip_size > 0 else 0
+
         if is_micro_mode:
             if account_balance <= 40.0:
                 min_score = 80.0
                 min_rr = 2.0
-                max_spread = 2.5
+                base_spread = 2.5
             elif account_balance <= 70.0:
                 min_score = 80.0
                 min_rr = 2.0
-                max_spread = 3.0
+                base_spread = 3.0
             else:
                 min_score = 78.0
                 min_rr = 1.8
-                max_spread = 3.5
+                base_spread = 3.5
+            
+            dynamic_max_spread = max(base_spread, atr_pips * 0.08)
+            dynamic_max_spread = min(dynamic_max_spread, context.volatility.max_allowed_spread_pips * 0.75)
+            max_spread = round(dynamic_max_spread, 1)
 
             if current_drawdown_pct > 5.0:
                 min_score = max(min_score, 85.0)
-
-            if regime.primary_regime in [MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR] and regime.confidence > 0.7:
-                effective_min_ev *= 0.7
-
-            gate_checks = {
-                "Regime Viability": regime.primary_regime != MarketRegime.EVENT_RISK,
-                "Directional Bias": tentative_bias in ["BUY", "SELL"],
-                "Risk/Reward >= 2.0": rr_ratio >= min_rr,
-                "Positive Expected Value": ev > 0 and ev >= effective_min_ev,
-                "Spread Protection": spread <= max_spread,
-                "AI Score Gate >= 80": ai_score >= min_score,
-                "Devil Penalty Guard": devil_report.penalty_score <= self.max_devil_penalty,
-                "Calibrated Probability >= 55%": calibrated_win_p >= 0.55,
-                "Valid Stop Loss Distance": risk_dist >= (context.volatility.atr * 0.75),
-                "Premium/Discount Zone Valid": premium_discount_valid
-            }
         else:
-            if regime.primary_regime in [MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR] and regime.confidence > 0.7:
-                effective_min_ev *= 0.7
+            min_score = 75.0
+            min_rr = 1.5
+            max_spread = spec.max_spread_pips
 
-            gate_checks = {
-                "Regime Viability": regime.primary_regime != MarketRegime.EVENT_RISK,
-                "Directional Bias": tentative_bias in ["BUY", "SELL"],
-                "Risk/Reward >= 1.5": rr_ratio >= 1.5,
-                "Positive Expected Value": ev > 0 and ev >= effective_min_ev,
-                "Spread Protection": not context.volatility.is_excessive_spread,
-                "Devil Penalty Guard": devil_report.penalty_score <= self.max_devil_penalty,
-                "Calibrated Probability >= 55%": calibrated_win_p >= 0.55,
-                "No Active Macro Shock": regime.primary_regime != MarketRegime.EVENT_RISK,
-                "Valid Stop Loss Distance": risk_dist > 0,
-                "Premium/Discount Zone Valid": premium_discount_valid
-            }
+        if regime.primary_regime in [MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR] and regime.confidence > 0.7:
+            effective_min_ev *= 0.7
+
+        # 14-Point Comprehensive Institutional Quality Gate Matrix
+        gate_checks = {
+            "Regime Viability": regime.primary_regime != MarketRegime.EVENT_RISK,
+            "Directional Bias": tentative_bias in ["BUY", "SELL"],
+            "Risk/Reward >= 1.5": rr_ratio >= min_rr,
+            "Positive Expected Value": ev > 0 and ev >= effective_min_ev,
+            "Spread Protection": spread <= max_spread and not context.volatility.is_excessive_spread,
+            "AI Multi-Score Gate": ai_score >= min_score,
+            "Devil Adversarial Guard": devil_report.penalty_score <= self.max_devil_penalty,
+            "Calibrated Win Prob >= 55%": calibrated_win_p >= 0.55,
+            "Valid Stop Loss Distance": risk_dist >= (context.volatility.atr * (0.75 if is_micro_mode else 0.5)),
+            "Premium/Discount Alignment": premium_discount_valid,
+            "No Active Macro Shock": regime.primary_regime != MarketRegime.EVENT_RISK,
+            "Order Flow Momentum": abs(context.momentum.trend_score) >= 15 or context.structure.bos or context.liquidity.sweep_detected,
+            "Drawdown Safety Guard": current_drawdown_pct <= 10.0,
+            "Margin Capacity Limit": account_balance >= 10.0 and planned_risk_dollars > 0
+        }
 
         failing_reasons = [name for name, passed in gate_checks.items() if not passed]
         gate_passed = len(failing_reasons) == 0
@@ -273,7 +281,8 @@ class DecisionEngine:
         devil_report: DevilAdvocateReport,
         account_balance: float = 10000.0,
         risk_per_trade_pct: float = 0.5,
-        current_drawdown_pct: float = 0.0
+        current_drawdown_pct: float = 0.0,
+        mtf_data=None
     ) -> DecisionObject:
         tentative_bias, entry_price, sl_price, tp_price, risk_dist, rr_ratio = self._compute_bias_and_levels(
             context, regime, analyst_reports
@@ -284,11 +293,29 @@ class DecisionEngine:
         )
         best_strategy = max(strategy_probs.items(), key=lambda x: x[1])[0]
 
+        ai_score = sum(r.score for r in analyst_reports.values()) / max(1, len(analyst_reports)) if analyst_reports else 0.0
+
+        of_res = {"signal": "NEUTRAL", "strength": 0.0, "institutional_activity": False}
+        if mtf_data and "primary" in mtf_data and not mtf_data["primary"].empty:
+            of_res = self.order_flow.analyze_order_flow(mtf_data["primary"])
+            
+            if of_res["institutional_activity"] and of_res["signal"] == tentative_bias:
+                ai_score = min(100.0, ai_score + (of_res["strength"] * 10.0))
+                logger.info(f"[{context.symbol}] Institutional Order Flow aligns with {tentative_bias}! Boosting AI score to {ai_score:.1f}")
+            elif of_res["institutional_activity"] and of_res["signal"] != "NEUTRAL":
+                ai_score = max(0.0, ai_score - (of_res["strength"] * 10.0))
+                logger.warning(f"[{context.symbol}] Institutional Order Flow opposes {tentative_bias}! Penalizing AI score to {ai_score:.1f}")
+
         final_win_p, loss_p, ev, hypotheses, calibrated_win_p = self._compute_blended_probability(
             context, regime, analyst_reports, devil_report, tentative_bias, rr_ratio, risk_dist, account_balance, risk_per_trade_pct
         )
-
-        ai_score = sum(r.score for r in analyst_reports.values()) / max(1, len(analyst_reports)) if analyst_reports else 0.0
+        
+        # Apply Self-Learning Feedback Loop
+        if regime:
+            sl_multiplier = self.self_learning.get_regime_multiplier(regime.primary_regime.value)
+            if sl_multiplier != 1.0:
+                logger.info(f"[{context.symbol}] Self-Learning Engine adjusting {regime.primary_regime.value} Win Prob by {sl_multiplier}x")
+                calibrated_win_p = min(0.99, calibrated_win_p * sl_multiplier)
         
         st = context.structure
         premium_discount_valid = True
@@ -316,6 +343,56 @@ class DecisionEngine:
             decision_action = "WAIT"
         else:
             decision_action = "NO_TRADE"
+
+        waiting_reasons = []
+        rejection_reasons = []
+
+        if decision_action == "WAIT":
+            for reason in failing_reasons:
+                if "Calibrated Win Prob" in reason:
+                    waiting_reasons.append(f"Calibrated probability ({calibrated_win_p*100:.0f}%) below institutional threshold (55%).")
+                elif "Order Flow" in reason:
+                    waiting_reasons.append("Awaiting institutional volume / order flow momentum confirmation.")
+                elif "Premium/Discount" in reason:
+                    zone = context.structure.discount_premium_zone
+                    waiting_reasons.append(f"Price currently in {zone} zone -- awaiting retracement into favorable discount/equilibrium.")
+                elif "Risk/Reward" in reason:
+                    waiting_reasons.append(f"Current setup R:R (1:{rr_ratio:.2f}) awaiting optimal price fill.")
+                elif "Positive Expected Value" in reason:
+                    waiting_reasons.append(f"Expected value (${ev:.2f}) awaiting higher statistical edge.")
+                elif "AI Multi-Score" in reason:
+                    waiting_reasons.append(f"Blended AI score ({ai_score:.1f}) pending multi-agent consensus.")
+                elif "Spread Protection" in reason:
+                    waiting_reasons.append(f"Spread ({context.volatility.current_spread_pips:.1f} pips) elevated — awaiting spread normalization.")
+                else:
+                    waiting_reasons.append(f"Awaiting validation check: {reason}.")
+            if not waiting_reasons:
+                waiting_reasons.append("Awaiting confirmation of institutional entry trigger and candle close.")
+
+        elif decision_action == "NO_TRADE" or not gate_passed:
+            for reason in failing_reasons:
+                if "Positive Expected Value" in reason:
+                    rejection_reasons.append(f"Negative / insufficient mathematical edge (EV: ${ev:.2f}).")
+                elif "Devil Adversarial" in reason:
+                    rejection_reasons.append(f"Adversarial counter-thesis penalty too high ({devil_report.penalty_score:.1f} / {self.max_devil_penalty:.1f}).")
+                elif "Premium/Discount" in reason:
+                    zone = context.structure.discount_premium_zone
+                    rejection_reasons.append(f"Unfavorable pricing zone ({zone}) for {tentative_bias} execution.")
+                elif "Regime Viability" in reason:
+                    rejection_reasons.append(f"Regime {regime.primary_regime.value} classified as hazardous / non-tradable.")
+                elif "Spread Protection" in reason:
+                    rejection_reasons.append(f"Spread {context.volatility.current_spread_pips:.1f} pips exceeds maximum tolerable risk limit.")
+                elif "Drawdown Safety" in reason:
+                    rejection_reasons.append("Account drawdown exceeds safety threshold (5.0%).")
+                elif "Calibrated Win Prob" in reason:
+                    rejection_reasons.append(f"Model win probability ({calibrated_win_p*100:.0f}%) fails minimum hurdle.")
+                else:
+                    rejection_reasons.append(f"Failed quality check: {reason}.")
+            for threat in devil_report.threats_detected[:2]:
+                if threat not in rejection_reasons:
+                    rejection_reasons.append(f"Adversarial risk: {threat}")
+            if not rejection_reasons and tentative_bias == "HOLD":
+                rejection_reasons.append("No actionable institutional market structure or clear directional bias detected.")
 
         bull_case = []
         bear_case = []
@@ -355,6 +432,8 @@ class DecisionEngine:
             bear_case=bear_case[:4],
             risk_factors=devil_report.threats_detected[:4],
             quality_gate=quality_gate,
+            waiting_reasons=waiting_reasons,
+            rejection_reasons=rejection_reasons,
             decision=decision_action,
             execution_authorized=gate_passed
         )

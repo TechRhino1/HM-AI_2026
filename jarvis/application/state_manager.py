@@ -68,6 +68,13 @@ class StateManager:
             self.positions = positions
             self.last_update = datetime.now(timezone.utc)
 
+    def sync_broker_state(self, account: Optional[AccountSnapshot], positions: List[PositionSnapshot]):
+        with self._rw_lock:
+            if account:
+                self.account = account
+            self.positions = positions
+            self.last_update = datetime.now(timezone.utc)
+
     def update_market_context(self, symbol: str, context: MarketContext):
         with self._rw_lock:
             self.market_contexts[symbol] = context

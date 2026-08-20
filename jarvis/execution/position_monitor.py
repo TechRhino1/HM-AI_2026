@@ -274,33 +274,40 @@ class PositionMonitorEngine:
         if pos.type == "BUY":
             profit_pips = c_price - pos.open_price
 
+            # ── 1. Dynamic ATR Chandelier Trailing Stop (Continuous Ratchet) ──
+            if profit_pips >= (atr * 0.75 * atr_mult):
+                dynamic_trail = c_price - (atr * 0.85 * atr_mult)
+                if dynamic_trail > pos.open_price and dynamic_trail > new_sl and dynamic_trail < c_price:
+                    new_sl = dynamic_trail
+                    actions.append(f"DYNAMIC_ATR_TRAIL@{new_sl:.4f}")
+
             if is_micro:
                 # Stage 3 — 60% profit lock
                 if profit_pips >= (atr * STAGE3_ATR_TRIGGER * atr_mult):
                     candidate = pos.open_price + (profit_pips * STAGE3_PROFIT_LOCK_PCT)
-                    if candidate > new_sl:
+                    if candidate > new_sl and candidate < c_price:
                         new_sl = candidate
                         actions.append(f"STAGE3_60%@{new_sl:.4f}")
 
                 # Stage 2 — profit lock 0.75R
-                elif profit_pips >= (atr * STAGE2_ATR_TRIGGER * atr_mult) and new_sl < pos.open_price + (atr * STAGE2_PROFIT_LOCK):
+                elif profit_pips >= (atr * STAGE2_ATR_TRIGGER * atr_mult):
                     candidate = pos.open_price + (atr * STAGE2_PROFIT_LOCK)
-                    if candidate > new_sl:
+                    if candidate > new_sl and candidate < c_price:
                         new_sl = candidate
                         actions.append(f"STAGE2_BE+@{new_sl:.4f}")
 
-                # Stage 1 — breakeven
-                elif profit_pips >= (atr * STAGE1_ATR_TRIGGER * atr_mult) and new_sl < pos.open_price:
+                # Stage 1 — breakeven (+ small buffer)
+                elif profit_pips >= (atr * 0.60 * atr_mult) and new_sl < pos.open_price:
                     candidate = pos.open_price + (atr * STAGE1_BE_BUFFER)
-                    if candidate > new_sl:
+                    if candidate > new_sl and candidate < c_price:
                         new_sl = candidate
                         actions.append(f"STAGE1_BE@{new_sl:.4f}")
 
             else:
-                # Standard: move to breakeven at 1.5× ATR
-                if profit_pips >= (atr * STD_ATR_TRIGGER * atr_mult) and new_sl < pos.open_price:
+                # Standard: move to breakeven at 1.0× ATR
+                if profit_pips >= (atr * 1.0 * atr_mult) and new_sl < pos.open_price:
                     candidate = pos.open_price + (atr * STD_BE_BUFFER)
-                    if candidate > new_sl:
+                    if candidate > new_sl and candidate < c_price:
                         new_sl = candidate
                         actions.append(f"STD_BE@{new_sl:.4f}")
 
@@ -326,29 +333,36 @@ class PositionMonitorEngine:
         elif pos.type == "SELL":
             profit_pips = pos.open_price - c_price
 
+            # ── 1. Dynamic ATR Chandelier Trailing Stop (Continuous Ratchet) ──
+            if profit_pips >= (atr * 0.75 * atr_mult):
+                dynamic_trail = c_price + (atr * 0.85 * atr_mult)
+                if dynamic_trail < pos.open_price and (new_sl == 0 or dynamic_trail < new_sl) and dynamic_trail > c_price:
+                    new_sl = dynamic_trail
+                    actions.append(f"DYNAMIC_ATR_TRAIL@{new_sl:.4f}")
+
             if is_micro:
                 if profit_pips >= (atr * STAGE3_ATR_TRIGGER * atr_mult):
                     candidate = pos.open_price - (profit_pips * STAGE3_PROFIT_LOCK_PCT)
-                    if (new_sl == 0 or candidate < new_sl):
+                    if (new_sl == 0 or candidate < new_sl) and candidate > c_price:
                         new_sl = candidate
                         actions.append(f"STAGE3_60%@{new_sl:.4f}")
 
-                elif profit_pips >= (atr * STAGE2_ATR_TRIGGER * atr_mult) and (new_sl == 0 or new_sl > pos.open_price - (atr * STAGE2_PROFIT_LOCK)):
+                elif profit_pips >= (atr * STAGE2_ATR_TRIGGER * atr_mult):
                     candidate = pos.open_price - (atr * STAGE2_PROFIT_LOCK)
-                    if new_sl == 0 or candidate < new_sl:
+                    if (new_sl == 0 or candidate < new_sl) and candidate > c_price:
                         new_sl = candidate
                         actions.append(f"STAGE2_BE+@{new_sl:.4f}")
 
-                elif profit_pips >= (atr * STAGE1_ATR_TRIGGER * atr_mult) and (new_sl == 0 or new_sl > pos.open_price):
+                elif profit_pips >= (atr * 0.60 * atr_mult) and (new_sl == 0 or new_sl > pos.open_price):
                     candidate = pos.open_price - (atr * STAGE1_BE_BUFFER)
-                    if new_sl == 0 or candidate < new_sl:
+                    if (new_sl == 0 or candidate < new_sl) and candidate > c_price:
                         new_sl = candidate
                         actions.append(f"STAGE1_BE@{new_sl:.4f}")
 
             else:
-                if profit_pips >= (atr * STD_ATR_TRIGGER * atr_mult) and (new_sl == 0 or new_sl > pos.open_price):
+                if profit_pips >= (atr * 1.0 * atr_mult) and (new_sl == 0 or new_sl > pos.open_price):
                     candidate = pos.open_price - (atr * STD_BE_BUFFER)
-                    if new_sl == 0 or candidate < new_sl:
+                    if (new_sl == 0 or candidate < new_sl) and candidate > c_price:
                         new_sl = candidate
                         actions.append(f"STD_BE@{new_sl:.4f}")
 
@@ -366,7 +380,7 @@ class PositionMonitorEngine:
                 )
                 if resistance_levels:
                     key_sl = resistance_levels[0] + (atr * SR_ATR_BUFFER)
-                    if new_sl == 0 or key_sl < new_sl:
+                    if (new_sl == 0 or key_sl < new_sl) and key_sl > c_price:
                         new_sl = key_sl
                         actions.append(f"KEY_LEVEL@{new_sl:.4f}")
 

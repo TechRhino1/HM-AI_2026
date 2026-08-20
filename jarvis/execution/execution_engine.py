@@ -64,5 +64,23 @@ class ExecutionEngine:
                     res["sl"] = actual_sl
                     res["tp"] = actual_tp
                     res["real_fill_anchored"] = True
+                    
+            try:
+                from jarvis.data.database import TRADE_DB
+                TRADE_DB.log_trade(
+                    ticket=ticket,
+                    symbol=decision.symbol,
+                    action=decision.bias,
+                    entry=fill_price,
+                    sl=res.get("sl", decision.stop_loss),
+                    tp=res.get("tp", decision.take_profit),
+                    volume=lots,
+                    score=decision.model_confidence * 100.0,
+                    regime=decision.regime.primary_regime.value if decision.regime else "UNKNOWN",
+                    ev=decision.expected_value,
+                    executor="BOT (AI)"
+                )
+            except Exception as e:
+                logger.error(f"Failed to log trade to DB: {e}")
 
         return res
