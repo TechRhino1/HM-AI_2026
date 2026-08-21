@@ -1,23 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HM AI 4.0 — Institutional Financial Trading Terminal</title>
+    <title>JARVIS AI 3.0 — Institutional Financial Trading Terminal</title>
     <!-- Google Fonts: Inter & JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- TradingView Lightweight Charts & TradingView Widget -->
     <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
     <script src="https://s3.tradingview.com/tv.js"></script>
     <!-- Terminal Stylesheet -->
     <link rel="stylesheet" href="/static/css/terminal.css?v=3.9">
 </head>
-
 <body>
 
     <!-- ==========================================================================
@@ -27,7 +23,7 @@
         <div class="brand-wrapper">
             <div class="brand-logo">
                 <div class="brand-icon">⚡</div>
-                <div class="brand-text">HM <span>AI 3.0</span></div>
+                <div class="brand-text">JARVIS <span>AI 3.0</span></div>
             </div>
             <div id="status-badge" class="badge badge-live">
                 <span class="pulse-dot"></span> OPERATIONAL
@@ -39,28 +35,27 @@
         <div class="hud-telemetry">
             <div class="hud-tile">
                 <span class="hud-tile-label">Broker Server</span>
-                <span id="hud-server" class="hud-tile-value">XMGlobal-MT5 10</span>
+                <span id="hud-server" class="hud-tile-value">Connecting...</span>
             </div>
             <div class="hud-tile">
                 <span class="hud-tile-label">MT5 Login</span>
-                <span id="hud-login" class="hud-tile-value">#345841337</span>
+                <span id="hud-login" class="hud-tile-value">#--</span>
             </div>
             <div class="hud-tile">
                 <span class="hud-tile-label">Balance</span>
-                <span id="hud-balance" class="hud-tile-value mono-number">$102.14</span>
+                <span id="hud-balance" class="hud-tile-value mono-number">$0.00</span>
             </div>
             <div class="hud-tile">
                 <span class="hud-tile-label">Live Equity</span>
-                <span id="hud-equity" class="hud-tile-value mono-number" style="color:var(--neon-bull);">$101.33</span>
+                <span id="hud-equity" class="hud-tile-value mono-number" style="color:var(--neon-bull);">$0.00</span>
             </div>
             <div class="hud-tile">
                 <span class="hud-tile-label">Free Margin</span>
-                <span id="hud-free-margin" class="hud-tile-value mono-number">$97.99</span>
+                <span id="hud-free-margin" class="hud-tile-value mono-number">$0.00</span>
             </div>
             <div class="hud-tile">
                 <span class="hud-tile-label">Margin Level</span>
-                <span id="hud-margin-level" class="hud-tile-value mono-number"
-                    style="color:var(--accent-cyan);">2,741%</span>
+                <span id="hud-margin-level" class="hud-tile-value mono-number" style="color:var(--accent-cyan);">--%</span>
             </div>
             <div class="hud-tile">
                 <span class="hud-tile-label">MT5 State Sync</span>
@@ -89,57 +84,54 @@
          MAIN INSTITUTIONAL GRID WORKSPACE
          ========================================================================== -->
     <main class="terminal-workspace">
-
+        
         <!-- LEFT COLUMN: Verified Account Card + Radar / News Switcher Tabs -->
         <aside class="terminal-panel left-column">
             <div class="panel-header">
                 <div class="tab-switcher">
-                    <button id="tab-btn-radar" class="tab-btn active" onclick="switchLeftTab('radar')">📡 Setups
-                        Radar</button>
+                    <button id="tab-btn-radar" class="tab-btn active" onclick="switchLeftTab('radar')">📡 Setups Radar</button>
                     <button id="tab-btn-news" class="tab-btn" onclick="switchLeftTab('news')">📰 Macro News</button>
                 </div>
-                <span id="left-panel-counter" class="panel-counter">5 Monitored</span>
+                <span id="left-panel-counter" class="panel-counter">0 Monitored</span>
             </div>
             <div class="panel-content">
                 <!-- Verified MT5 Account Card -->
                 <section class="account-hud-card">
                     <div class="account-hud-header">
-                        <span id="acc-name" class="account-name-tag">Live MT5 Trader</span>
-                        <span id="acc-leverage" class="account-leverage-tag">1:1000</span>
+                        <span id="acc-name" class="account-name-tag">MT5 Trader</span>
+                        <span id="acc-leverage" class="account-leverage-tag">--</span>
                     </div>
                     <div class="account-grid">
                         <div class="account-item">
                             <span class="account-item-lbl">Broker</span>
-                            <span id="acc-company" class="account-item-val">XM Global</span>
+                            <span id="acc-company" class="account-item-val">Broker Gateway</span>
                         </div>
                         <div class="account-item">
                             <span class="account-item-lbl">Account #</span>
-                            <span id="acc-login" class="account-item-val">345841337</span>
+                            <span id="acc-login" class="account-item-val">--</span>
                         </div>
                         <div class="account-item">
                             <span class="account-item-lbl">Balance</span>
-                            <span id="acc-balance" class="account-item-val">$119.53</span>
+                            <span id="acc-balance" class="account-item-val">$0.00</span>
                         </div>
                         <div class="account-item">
                             <span class="account-item-lbl">Live Equity</span>
-                            <span id="acc-equity" class="account-item-val"
-                                style="color:var(--neon-bull);">$119.53</span>
+                            <span id="acc-equity" class="account-item-val" style="color:var(--neon-bull);">$0.00</span>
                         </div>
                         <div class="account-item">
                             <span class="account-item-lbl">Floating PnL</span>
-                            <span id="acc-profit" class="account-item-val" style="color:var(--neon-bull);">+$0.00</span>
+                            <span id="acc-profit" class="account-item-val" style="color:var(--neon-bull);">$0.00</span>
                         </div>
                         <div class="account-item">
                             <span class="account-item-lbl">Free Margin</span>
-                            <span id="acc-free-margin" class="account-item-val">$119.53</span>
+                            <span id="acc-free-margin" class="account-item-val">$0.00</span>
                         </div>
                     </div>
                 </section>
 
                 <!-- TAB 1: MODULE B (Upcoming Trades & Scanner Radar) -->
                 <div id="tab-content-radar" style="flex:1; display:flex; flex-direction:column; min-height:0;">
-                    <div
-                        style="font-size:9.5px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+                    <div style="font-size:9.5px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
                         <span>High-Probability Radar</span>
                         <span style="color:var(--neon-bull); font-size:9px;">1-CLICK LOAD</span>
                     </div>
@@ -149,10 +141,8 @@
                 </div>
 
                 <!-- TAB 2: Live Macroeconomic News & Event Shock Calendar -->
-                <div id="tab-content-news"
-                    style="display:none; flex:1; display:flex; flex-direction:column; min-height:0;">
-                    <div
-                        style="font-size:9.5px; font-weight:700; color:var(--devil-amber); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+                <div id="tab-content-news" style="display:none; flex:1; display:flex; flex-direction:column; min-height:0;">
+                    <div style="font-size:9.5px; font-weight:700; color:var(--devil-amber); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
                         <span>Live Economic Calendar</span>
                         <span style="font-size:9px; color:var(--text-dim);">HIGH-IMPACT</span>
                     </div>
@@ -179,10 +169,8 @@
                         <!-- Chart Engine Mode Switcher & Controls -->
                         <div class="chart-controls-group">
                             <div class="tab-switcher">
-                                <button id="btn-mode-tv-live" class="tab-btn active"
-                                    onclick="switchChartMode('tv_live')">⚡ Live MT5</button>
-                                <button id="btn-mode-tv-pro" class="tab-btn" onclick="switchChartMode('tv_pro')">📈 TV
-                                    Pro</button>
+                                <button id="btn-mode-tv-live" class="tab-btn active" onclick="switchChartMode('tv_live')">⚡ Live MT5</button>
+                                <button id="btn-mode-tv-pro" class="tab-btn" onclick="switchChartMode('tv_pro')">📈 TV Pro</button>
                             </div>
                             <div class="timeframe-selector">
                                 <button class="tf-btn" onclick="setTimeframe('M5')">M5</button>
@@ -191,8 +179,7 @@
                                 <button class="tf-btn" onclick="setTimeframe('H4')">H4</button>
                                 <button class="tf-btn" onclick="setTimeframe('D1')">D1</button>
                             </div>
-                            <button id="btn-expand-chart" class="btn-expand-chart" onclick="toggleExpandChart()"
-                                title="Toggle Fullscreen Chart">
+                            <button id="btn-expand-chart" class="btn-expand-chart" onclick="toggleExpandChart()" title="Toggle Fullscreen Chart">
                                 ⛶ Expand
                             </button>
                         </div>
@@ -203,20 +190,16 @@
                 <div class="chart-multipane-wrapper" style="position:relative;">
                     <!-- Institutional Support / Resistance & Overlays Legend -->
                     <div class="chart-overlay-legend">
-                        <span class="overlay-legend-tag overlay-supply-ob" id="legend-r1">🔴 Resistance:
-                            Calculating...</span>
-                        <span class="overlay-legend-tag overlay-demand-ob" id="legend-s1">🟢 Support:
-                            Calculating...</span>
+                        <span class="overlay-legend-tag overlay-supply-ob" id="legend-r1">🔴 Resistance: Calculating...</span>
+                        <span class="overlay-legend-tag overlay-demand-ob" id="legend-s1">🟢 Support: Calculating...</span>
                         <span class="overlay-legend-tag overlay-fvg">📊 Dynamic Volume</span>
                     </div>
 
                     <!-- Mode 1: TradingView Lightweight Charts Canvas Stage (Live MT5 Streaming + S/R + Volume) -->
-                    <div id="tv-lightweight-chart-container"
-                        style="width:100%; height:100%; position:absolute; top:0; left:0;"></div>
+                    <div id="tv-lightweight-chart-container" style="width:100%; height:100%; position:absolute; top:0; left:0;"></div>
 
                     <!-- Mode 2: TradingView Advanced Real-Time Web Widget Container -->
-                    <div id="tv-advanced-widget-container"
-                        style="width:100%; height:100%; position:absolute; top:0; left:0; display:none;"></div>
+                    <div id="tv-advanced-widget-container" style="width:100%; height:100%; position:absolute; top:0; left:0; display:none;"></div>
 
                     <!-- Smart Floating Crosshair Tooltip -->
                     <div id="smart-chart-tooltip" class="smart-chart-tooltip"></div>
@@ -230,8 +213,7 @@
                         <span class="panel-title">Active Trades (Live Positions HUD)</span>
                         <span id="pos-count" class="panel-counter">0 Open</span>
                     </div>
-                    <button class="btn-terminal btn-danger" style="font-size:9.5px; padding:2px 8px;"
-                        onclick="closeAllPositions()">
+                    <button class="btn-terminal btn-danger" style="font-size:9.5px; padding:2px 8px;" onclick="closeAllPositions()">
                         ✕ Close All Positions
                     </button>
                 </div>
@@ -253,10 +235,7 @@
                             </tr>
                         </thead>
                         <tbody id="positions-tbody">
-                            <tr>
-                                <td colspan="11" style="text-align:center; color:var(--text-dim); padding:16px;">No
-                                    Active Positions Open</td>
-                            </tr>
+                            <tr><td colspan="11" style="text-align:center; color:var(--text-dim); padding:16px;">No Active Positions Open</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -287,10 +266,7 @@
                             </tr>
                         </thead>
                         <tbody id="history-tbody">
-                            <tr>
-                                <td colspan="10" style="text-align:center; color:var(--text-dim); padding:16px;">
-                                    Fetching SQLite Trade History...</td>
-                            </tr>
+                            <tr><td colspan="10" style="text-align:center; color:var(--text-dim); padding:16px;">Fetching SQLite Trade History...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -306,58 +282,51 @@
                 <span class="devil-header-badge">LIVE COGNITION</span>
             </div>
             <div class="panel-content" style="gap: 8px;">
-
+                
                 <!-- SECTION 1: 1-CLICK EXECUTION DESK (Requirement 6) -->
                 <section class="manual-trade-desk">
                     <div class="desk-header">
                         <span class="desk-title">⚡ 1-Click Execution Desk</span>
-                        <span id="desk-active-symbol" class="mono-number"
-                            style="font-weight:800; color:#fff;">XAUUSD</span>
+                        <span id="desk-active-symbol" class="mono-number" style="font-weight:800; color:#fff;">XAUUSD</span>
                     </div>
 
                     <!-- Live Trade Preview Summary Banner (Requirement 6) -->
                     <div id="desk-summary-banner" class="desk-summary-banner">
                         <div class="desk-summary-banner-title">
-                            <span id="desk-banner-title">XAUUSD — BUY / LONG</span>
-                            <span id="desk-banner-status" class="radar-action-pill badge-wait-buy">WAIT: BUY</span>
+                            <span id="desk-banner-title">XAUUSD — PENDING ANALYSIS</span>
+                            <span id="desk-banner-status" class="radar-action-pill badge-no-setup">SCANNING</span>
                         </div>
                         <div class="desk-summary-banner-grid">
                             <span>Entry: <b id="desk-banner-entry" class="mono-number">--</b></span>
                             <span>SL: <b id="desk-banner-sl" class="mono-number">--</b></span>
                             <span>TP: <b id="desk-banner-tp" class="mono-number">--</b></span>
-                            <span>R:R: <b id="desk-banner-rr" class="mono-number">1:2.50</b></span>
-                            <span>Risk: <b id="desk-banner-risk" class="mono-number">0.50%</b></span>
-                            <span>Prob: <b id="desk-banner-prob" class="mono-number">73%</b></span>
+                            <span>R:R: <b id="desk-banner-rr" class="mono-number">--</b></span>
+                            <span>Risk: <b id="desk-banner-risk" class="mono-number">--%</b></span>
+                            <span>Prob: <b id="desk-banner-prob" class="mono-number">--%</b></span>
                         </div>
                     </div>
 
                     <div class="desk-inputs-grid">
                         <div class="desk-field">
                             <span class="desk-field-lbl">Volume (Lots)</span>
-                            <input id="desk-lots" class="desk-input mono-number" type="number" step="0.01" value="0.01"
-                                min="0.01">
+                            <input id="desk-lots" class="desk-input mono-number" type="number" step="0.01" value="0.01" min="0.01">
                         </div>
                         <div class="desk-field">
                             <span class="desk-field-lbl">Win Probability</span>
-                            <input id="desk-win-prob" class="desk-input mono-number" value="73%" readonly
-                                style="color:var(--neon-bull); font-weight:700;">
+                            <input id="desk-win-prob" class="desk-input mono-number" value="--%" readonly style="color:var(--neon-bull); font-weight:700;">
                         </div>
                         <div class="desk-field">
                             <span class="desk-field-lbl">Stop Loss ($)</span>
-                            <input id="desk-sl" class="desk-input mono-number" type="number" step="0.001"
-                                placeholder="Auto SL">
+                            <input id="desk-sl" class="desk-input mono-number" type="number" step="0.001" placeholder="Auto SL">
                         </div>
                         <div class="desk-field">
                             <span class="desk-field-lbl">Take Profit ($)</span>
-                            <input id="desk-tp" class="desk-input mono-number" type="number" step="0.001"
-                                placeholder="Auto TP">
+                            <input id="desk-tp" class="desk-input mono-number" type="number" step="0.001" placeholder="Auto TP">
                         </div>
                     </div>
                     <div class="desk-action-buttons">
-                        <button id="btn-buy-action" class="btn-desk-buy" onclick="executeManualTrade('BUY')">BUY /
-                            LONG</button>
-                        <button id="btn-sell-action" class="btn-desk-sell" onclick="executeManualTrade('SELL')">SELL /
-                            SHORT</button>
+                        <button id="btn-buy-action" class="btn-desk-buy" onclick="executeManualTrade('BUY')">BUY / LONG</button>
+                        <button id="btn-sell-action" class="btn-desk-sell" onclick="executeManualTrade('SELL')">SELL / SHORT</button>
                     </div>
                 </section>
 
@@ -365,7 +334,7 @@
                 <div class="section-card">
                     <div class="section-card-header cyan">
                         <span>📐 Trade Plan & Key Levels</span>
-                        <span id="plan-strategy-pill" class="pill">BREAKOUT_EXPANSION</span>
+                        <span id="plan-strategy-pill" class="pill">SYNTHESIZING...</span>
                     </div>
                     <div class="plan-grid-3col">
                         <div class="plan-grid-item">
@@ -382,16 +351,15 @@
                         </div>
                         <div class="plan-grid-item">
                             <span class="plan-grid-lbl">Risk/Reward</span>
-                            <span id="decision-rr" class="plan-grid-val">1:2.50</span>
+                            <span id="decision-rr" class="plan-grid-val">--</span>
                         </div>
                         <div class="plan-grid-item">
                             <span class="plan-grid-lbl">Est. Risk ($)</span>
-                            <span id="plan-risk-amt" class="plan-grid-val"
-                                style="color:var(--accent-cyan);">$0.58</span>
+                            <span id="plan-risk-amt" class="plan-grid-val" style="color:var(--accent-cyan);">--</span>
                         </div>
                         <div class="plan-grid-item">
                             <span class="plan-grid-lbl">Calculated Lots</span>
-                            <span id="plan-calc-lots" class="plan-grid-val">0.01 Lots</span>
+                            <span id="plan-calc-lots" class="plan-grid-val">--</span>
                         </div>
                     </div>
                 </div>
@@ -400,19 +368,14 @@
                 <div class="section-card">
                     <div class="section-card-header emerald">
                         <span>🛡️ AI Validation & Metrics</span>
-                        <span id="decision-gate-badge" class="pill" style="color:var(--neon-bull);">GATE PASSED
-                            (9/9)</span>
+                        <span id="decision-gate-badge" class="pill" style="color:var(--text-dim);">EVALUATING...</span>
                     </div>
 
                     <!-- Dialectical Probability & EV Strip -->
-                    <div
-                        style="background:rgba(0,0,0,0.4); border:1px solid var(--border-subtle); border-radius:4px; padding:6px 8px; margin-bottom:6px;">
-                        <div
-                            style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:11px; margin-bottom:2px;">
-                            <span>Win Probability: <b id="decision-win-prob"
-                                    style="color:var(--neon-bull);">73%</b></span>
-                            <span>Expected Value: <b id="decision-ev"
-                                    style="color:var(--accent-cyan);">+$1.34</b></span>
+                    <div style="background:rgba(0,0,0,0.4); border:1px solid var(--border-subtle); border-radius:4px; padding:6px 8px; margin-bottom:6px;">
+                        <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:11px; margin-bottom:2px;">
+                            <span>Win Probability: <b id="decision-win-prob" style="color:var(--neon-bull);">--%</b></span>
+                            <span>Expected Value: <b id="decision-ev" style="color:var(--accent-cyan);">--</b></span>
                         </div>
                     </div>
 
@@ -427,18 +390,15 @@
                         </div>
                         <div class="devil-gauge-card">
                             <span class="gauge-lbl">Invalidation Risk</span>
-                            <span id="devil-risk-coeff" class="gauge-val" style="color:var(--accent-cyan);">1.00x
-                                Multiplier</span>
+                            <span id="devil-risk-coeff" class="gauge-val" style="color:var(--accent-cyan);">1.00x Multiplier</span>
                             <div class="gauge-bar-track">
-                                <div id="devil-risk-fill" class="gauge-bar-fill"
-                                    style="width:100%; background:linear-gradient(90deg, #38bdf8, #00f59b);"></div>
+                                <div id="devil-risk-fill" class="gauge-bar-fill" style="width:100%; background:linear-gradient(90deg, #38bdf8, #00f59b);"></div>
                             </div>
                         </div>
                     </div>
 
                     <!-- 14-Point Quality Gate Checks Grid -->
-                    <div
-                        style="font-size:8.5px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:3px;">
+                    <div style="font-size:8.5px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:3px;">
                         14-Point Quality Gate Checks
                     </div>
                     <div class="decision-gate-summary">
@@ -489,13 +449,13 @@
     </main>
 
     <!-- ==========================================================================
-         FLOATING & DRAGGABLE HM AI COPILOT WINDOW
+         FLOATING & DRAGGABLE JARVIS AI COPILOT WINDOW
          ========================================================================== -->
     <div id="copilot-window" class="copilot-window floating" style="display:none;">
         <div id="copilot-header" class="copilot-header">
             <div class="copilot-header-title">
                 <span>🤖</span>
-                <span>HM Copilot Intelligence</span>
+                <span>JARVIS Copilot Intelligence</span>
             </div>
             <div class="copilot-header-actions">
                 <button class="copilot-action-btn" title="Clear Context" onclick="clearCopilotChat()">🗑️</button>
@@ -507,13 +467,11 @@
         <div class="copilot-body">
             <div id="copilot-messages" class="copilot-messages">
                 <div class="copilot-bubble">
-                    🤖 <b>HM AI 3.0:</b> Standing by. Ask me about real-time market regimes, economic news shocks, or
-                    click any opportunity in the Radar to trade manually.
+                    🤖 <b>JARVIS AI 3.0:</b> Standing by. Ask me about real-time market regimes, economic news shocks, or click any opportunity in the Radar to trade manually.
                 </div>
             </div>
             <div class="copilot-input-bar">
-                <input id="copilot-input" class="copilot-input"
-                    placeholder="Ask JARVIS (e.g. Analyze Gold pullback setup)..." onkeydown="handleChatKey(event)">
+                <input id="copilot-input" class="copilot-input" placeholder="Ask JARVIS (e.g. Analyze Gold pullback setup)..." onkeydown="handleChatKey(event)">
                 <button class="btn-terminal" style="padding:4px 10px;" onclick="sendChatMessage()">Send</button>
             </div>
         </div>
@@ -527,14 +485,11 @@
     <!-- ==========================================================================
          GLOBAL SPOTLIGHT COMMAND PALETTE (CTRL+K / CMD+K)
          ========================================================================== -->
-    <div id="command-palette-overlay" class="command-palette-overlay"
-        onclick="if(event.target === this) toggleCommandPalette(false)">
+    <div id="command-palette-overlay" class="command-palette-overlay" onclick="if(event.target === this) toggleCommandPalette(false)">
         <div class="command-palette-modal">
             <div class="command-palette-search">
                 <span class="command-palette-icon">⚡</span>
-                <input id="command-palette-input" class="command-palette-input"
-                    placeholder="Type a command (e.g. /buy, /sell, /close-all, /news, /safe)..." autocomplete="off"
-                    spellcheck="false">
+                <input id="command-palette-input" class="command-palette-input" placeholder="Type a command (e.g. /buy, /sell, /close-all, /news, /safe)..." autocomplete="off" spellcheck="false">
             </div>
             <div id="command-palette-results" class="command-palette-results">
                 <!-- Rendered by terminal.js -->
@@ -545,5 +500,4 @@
     <!-- Terminal Controller Script -->
     <script src="/static/js/terminal.js?v=3.9"></script>
 </body>
-
 </html>

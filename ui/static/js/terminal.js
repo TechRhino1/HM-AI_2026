@@ -36,10 +36,10 @@
         activeLeftTab: "radar",
         activeCommandIndex: 0,
         supportResistance: {
-            r1: 2425.00,
-            r2: 2440.00,
-            s1: 2390.00,
-            s2: 2375.00
+            r1: 0,
+            r2: 0,
+            s1: 0,
+            s2: 0
         },
         tvChartInstance: null,
         tvCandleSeries: null,
@@ -660,12 +660,12 @@
     function renderTelemetryDOM() {
         const acc = state.account || {};
 
-        if (el.hudServer) el.hudServer.textContent = acc.server || "XMGlobal-MT5 10";
-        if (el.hudLogin) el.hudLogin.textContent = `#${acc.login || 345841337}`;
-        if (el.hudBalance) el.hudBalance.textContent = `$${(acc.balance || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
-        if (el.hudEquity) el.hudEquity.textContent = `$${(acc.equity || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
-        if (el.hudFreeMargin) el.hudFreeMargin.textContent = `$${(acc.free_margin || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
-        if (el.hudMarginLevel) el.hudMarginLevel.textContent = `${Math.round(acc.margin_level || 0).toLocaleString()}%`;
+        if (el.hudServer) el.hudServer.textContent = acc.server || "Connecting...";
+        if (el.hudLogin) el.hudLogin.textContent = acc.login ? `#${acc.login}` : "#--";
+        if (el.hudBalance) el.hudBalance.textContent = `$${(acc.balance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        if (el.hudEquity) el.hudEquity.textContent = `$${(acc.equity || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        if (el.hudFreeMargin) el.hudFreeMargin.textContent = `$${(acc.free_margin || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+        if (el.hudMarginLevel) el.hudMarginLevel.textContent = acc.margin_level ? `${Math.round(acc.margin_level).toLocaleString()}%` : "--%";
 
         if (el.execModeBadge) el.execModeBadge.textContent = state.executionMode || "LIVE";
         if (el.statusBadge) {
@@ -680,9 +680,9 @@
 
         // Account Details Card
         if (el.accName) el.accName.textContent = acc.name || "Live MT5 Trader";
-        if (el.accLeverage) el.accLeverage.textContent = `1:${acc.leverage || 1000}`;
-        if (el.accCompany) el.accCompany.textContent = acc.company || "XM Global Limited";
-        if (el.accLogin) el.accLogin.textContent = `${acc.login || 345841337}`;
+        if (el.accLeverage) el.accLeverage.textContent = acc.leverage ? `1:${acc.leverage}` : "--";
+        if (el.accCompany) el.accCompany.textContent = acc.company || "Broker Gateway";
+        if (el.accLogin) el.accLogin.textContent = acc.login ? `${acc.login}` : "--";
         if (el.accBalance) el.accBalance.textContent = `$${(acc.balance || 0).toFixed(2)}`;
         if (el.accEquity) el.accEquity.textContent = `$${(acc.equity || 0).toFixed(2)}`;
 
@@ -704,7 +704,7 @@
         if (activeDec) {
             const winProb = activeDec.probabilities && activeDec.probabilities[activeDec.bias ? activeDec.bias.toLowerCase() : "buy"]
                 ? activeDec.probabilities[activeDec.bias ? activeDec.bias.toLowerCase() : "buy"]
-                : (activeDec.model_confidence || 0.73);
+                : (activeDec.model_confidence || 0.50);
             if (el.deskWinProb) el.deskWinProb.value = `${Math.round(winProb * 100)}%`;
             if (el.deskSl && document.activeElement !== el.deskSl && !el.deskSl.value) {
                 el.deskSl.value = activeDec.stop_loss ? formatPrice(activeDec.stop_loss, state.symbol) : "";
@@ -732,11 +732,11 @@
             const entryStr = formatPrice(opp.entry_price, opp.symbol);
             const slStr = formatPrice(opp.stop_loss, opp.symbol);
             const tpStr = formatPrice(opp.take_profit, opp.symbol);
-            const rrStr = opp.risk_reward_ratio ? `1:${Number(opp.risk_reward_ratio).toFixed(2)}` : "1:2.50";
+            const rrStr = opp.risk_reward_ratio ? `1:${Number(opp.risk_reward_ratio).toFixed(2)}` : "--";
             const evVal = Number(opp.ev || 0);
             const evStr = `${evVal >= 0 ? '+' : ''}$${evVal.toFixed(2)}`;
-            const probStr = opp.win_prob ? `${opp.win_prob}%` : (opp.score ? `${opp.score}%` : "73%");
-            const strategyName = opp.strategy || "BREAKOUT_EXPANSION";
+            const probStr = opp.win_prob ? `${opp.win_prob}%` : (opp.score ? `${opp.score}%` : "--%");
+            const strategyName = opp.strategy || "MARKET_STRUCTURE";
 
             return `
                 <div class="radar-opportunity-card ${isActive ? 'active' : ''}" onclick="selectSymbol('${opp.symbol}')">
@@ -856,9 +856,34 @@
         if (el.chartSymbol) el.chartSymbol.textContent = sym;
 
         if (!d) {
+            if (el.planStrategyPill) el.planStrategyPill.textContent = "SYNTHESIZING...";
             if (el.planEntry) el.planEntry.textContent = "--";
             if (el.planSl) el.planSl.textContent = "--";
             if (el.planTp) el.planTp.textContent = "--";
+            if (el.decisionRr) el.decisionRr.textContent = "--";
+            if (el.planRiskAmt) el.planRiskAmt.textContent = "--";
+            if (el.planCalcLots) el.planCalcLots.textContent = "--";
+            if (el.decisionWinProb) el.decisionWinProb.textContent = "--%";
+            if (el.decisionEv) el.decisionEv.textContent = "--";
+            if (el.decisionGateBadge) {
+                el.decisionGateBadge.textContent = "EVALUATING...";
+                el.decisionGateBadge.style.color = "var(--text-dim)";
+            }
+            if (el.deskBannerTitle) el.deskBannerTitle.textContent = `${sym} — PENDING ANALYSIS`;
+            if (el.deskBannerStatus) {
+                el.deskBannerStatus.textContent = "SCANNING";
+                el.deskBannerStatus.className = "radar-action-pill badge-no-setup";
+            }
+            if (el.deskBannerEntry) el.deskBannerEntry.textContent = "--";
+            if (el.deskBannerSl) el.deskBannerSl.textContent = "--";
+            if (el.deskBannerTp) el.deskBannerTp.textContent = "--";
+            if (el.deskBannerRr) el.deskBannerRr.textContent = "--";
+            if (el.deskBannerRisk) el.deskBannerRisk.textContent = "--%";
+            if (el.deskBannerProb) el.deskBannerProb.textContent = "--%";
+            if (el.devilPenaltyScore) el.devilPenaltyScore.textContent = "0.0 / 50.0";
+            if (el.devilPenaltyFill) el.devilPenaltyFill.style.width = "0%";
+            if (el.devilRiskCoeff) el.devilRiskCoeff.textContent = "1.00x Multiplier";
+            if (el.devilRiskFill) el.devilRiskFill.style.width = "100%";
             return;
         }
 
@@ -866,18 +891,18 @@
         const entryStr = formatPrice(d.entry_price, sym);
         const slStr = formatPrice(d.stop_loss, sym);
         const tpStr = formatPrice(d.take_profit, sym);
-        const rrStr = d.risk_reward_ratio ? `1:${Number(d.risk_reward_ratio).toFixed(2)}` : "1:2.50";
+        const rrStr = d.risk_reward_ratio ? `1:${Number(d.risk_reward_ratio).toFixed(2)}` : "--";
         const probVal = d.probabilities && d.probabilities[d.bias ? d.bias.toLowerCase() : "buy"] 
             ? d.probabilities[d.bias ? d.bias.toLowerCase() : "buy"] 
-            : (d.model_confidence || 0.73);
+            : (d.model_confidence || 0.50);
         const probPct = Math.round(probVal * 100);
         const evVal = d.expected_value || 0;
         const evStr = `${evVal >= 0 ? '+' : ''}$${evVal.toFixed(2)}`;
         const riskPct = d.calculated_risk_percent || 0.50;
-        const stratName = d.strategy || "BREAKOUT_EXPANSION";
+        const stratName = d.strategy || "MARKET_STRUCTURE";
 
         // 1. Update 1-Click Execution Desk Summary Banner (Requirement 6)
-        if (el.deskBannerTitle) el.deskBannerTitle.textContent = `${sym} — ${d.bias || 'WAIT'} / ${d.bias === 'SELL' ? 'SHORT' : 'LONG'}`;
+        if (el.deskBannerTitle) el.deskBannerTitle.textContent = `${sym} — ${d.bias || 'WAIT'} / ${d.bias === 'SELL' ? 'SHORT' : (d.bias === 'BUY' ? 'LONG' : 'MONITOR')}`;
         if (el.deskBannerStatus) {
             el.deskBannerStatus.textContent = badge.label;
             el.deskBannerStatus.className = `radar-action-pill ${badge.cssClass}`;
@@ -896,9 +921,9 @@
         if (el.planTp) el.planTp.textContent = tpStr;
         if (el.decisionRr) el.decisionRr.textContent = rrStr;
         if (el.planRiskAmt) {
-            const bal = state.account ? (state.account.balance || 100) : 100;
+            const bal = state.account ? (state.account.balance || 0) : 0;
             const riskDollars = bal * (riskPct / 100);
-            el.planRiskAmt.textContent = `$${riskDollars.toFixed(2)}`;
+            el.planRiskAmt.textContent = riskDollars > 0 ? `$${riskDollars.toFixed(2)}` : "--";
         }
         if (el.planCalcLots) {
             el.planCalcLots.textContent = `${(el.deskLots ? el.deskLots.value : '0.01')} Lots`;
@@ -911,7 +936,7 @@
             el.decisionEv.style.color = evVal >= 0 ? "var(--accent-cyan)" : "var(--neon-bear)";
         }
         if (el.chartRegime) {
-            el.chartRegime.textContent = (d.regime && d.regime.primary) ? d.regime.primary : "TREND_BULL";
+            el.chartRegime.textContent = (d.regime && d.regime.primary) ? d.regime.primary : ((d.regime && typeof d.regime === "string") ? d.regime : "MONITORING");
         }
 
         const checks = (d.quality_gate && d.quality_gate.checks) ? d.quality_gate.checks : {};
@@ -920,12 +945,12 @@
         const isGatePassed = d.quality_gate ? d.quality_gate.passed : (d.execution_authorized || false);
         if (el.decisionGateBadge) {
             if (isGatePassed) {
-                el.decisionGateBadge.textContent = `GATE PASSED (${totalCount}/${totalCount} PASS)`;
+                el.decisionGateBadge.textContent = `GATE PASSED (${passCount}/${totalCount} PASS)`;
                 el.decisionGateBadge.style.color = "var(--neon-bull)";
             } else {
                 const failCount = totalCount - passCount;
-                el.decisionGateBadge.textContent = `GATE FAILED (${failCount} of ${totalCount} Failed)`;
-                el.decisionGateBadge.style.color = "var(--neon-bear)";
+                el.decisionGateBadge.textContent = `GATE WAITING (${failCount} of ${totalCount} Failed)`;
+                el.decisionGateBadge.style.color = "var(--devil-amber)";
             }
         }
 
@@ -994,13 +1019,14 @@
             }
         }
 
-        // 5. Invalidation Conditions ("What Would Change My Mind") (Clean UTF-8, no broken characters)
+        // 5. Invalidation Conditions ("What Would Change My Mind")
         if (el.invalidationTriggerText) {
             const invs = d.invalidation_levels || [];
             if (invs.length > 0) {
                 el.invalidationTriggerText.innerHTML = invs.map(i => `<div style="margin-bottom:3px;">• ${i}</div>`).join("");
             } else {
-                el.invalidationTriggerText.innerHTML = `<div>• H1 close below demand equilibrium (${slStr}).</div><div>• Bearish structural displacement breaking swing low.</div>`;
+                const triggerSide = d.bias === 'BUY' ? 'demand support' : 'supply resistance';
+                el.invalidationTriggerText.innerHTML = `<div>• H1 close violating ${triggerSide} (${slStr}).</div><div>• Bearish structural displacement breaking swing structure.</div>`;
             }
         }
 

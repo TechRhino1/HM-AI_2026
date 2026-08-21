@@ -35,27 +35,27 @@
         <div class="hud-telemetry">
             <div class="hud-tile">
                 <span class="hud-tile-label">Broker Server</span>
-                <span id="hud-server" class="hud-tile-value">XMGlobal-MT5 10</span>
+                <span id="hud-server" class="hud-tile-value">Connecting...</span>
             </div>
             <div class="hud-tile">
                 <span class="hud-tile-label">MT5 Login</span>
-                <span id="hud-login" class="hud-tile-value">#345841337</span>
+                <span id="hud-login" class="hud-tile-value">#--</span>
             </div>
             <div class="hud-tile">
                 <span class="hud-tile-label">Balance</span>
-                <span id="hud-balance" class="hud-tile-value mono-number">$102.14</span>
+                <span id="hud-balance" class="hud-tile-value mono-number">$0.00</span>
             </div>
             <div class="hud-tile">
                 <span class="hud-tile-label">Live Equity</span>
-                <span id="hud-equity" class="hud-tile-value mono-number" style="color:var(--neon-bull);">$101.33</span>
+                <span id="hud-equity" class="hud-tile-value mono-number" style="color:var(--neon-bull);">$0.00</span>
             </div>
             <div class="hud-tile">
                 <span class="hud-tile-label">Free Margin</span>
-                <span id="hud-free-margin" class="hud-tile-value mono-number">$97.99</span>
+                <span id="hud-free-margin" class="hud-tile-value mono-number">$0.00</span>
             </div>
             <div class="hud-tile">
                 <span class="hud-tile-label">Margin Level</span>
-                <span id="hud-margin-level" class="hud-tile-value mono-number" style="color:var(--accent-cyan);">2,741%</span>
+                <span id="hud-margin-level" class="hud-tile-value mono-number" style="color:var(--accent-cyan);">--%</span>
             </div>
             <div class="hud-tile">
                 <span class="hud-tile-label">MT5 State Sync</span>
@@ -92,39 +92,39 @@
                     <button id="tab-btn-radar" class="tab-btn active" onclick="switchLeftTab('radar')">📡 Setups Radar</button>
                     <button id="tab-btn-news" class="tab-btn" onclick="switchLeftTab('news')">📰 Macro News</button>
                 </div>
-                <span id="left-panel-counter" class="panel-counter">5 Monitored</span>
+                <span id="left-panel-counter" class="panel-counter">0 Monitored</span>
             </div>
             <div class="panel-content">
                 <!-- Verified MT5 Account Card -->
                 <section class="account-hud-card">
                     <div class="account-hud-header">
-                        <span id="acc-name" class="account-name-tag">Live MT5 Trader</span>
-                        <span id="acc-leverage" class="account-leverage-tag">1:1000</span>
+                        <span id="acc-name" class="account-name-tag">MT5 Trader</span>
+                        <span id="acc-leverage" class="account-leverage-tag">--</span>
                     </div>
                     <div class="account-grid">
                         <div class="account-item">
                             <span class="account-item-lbl">Broker</span>
-                            <span id="acc-company" class="account-item-val">XM Global</span>
+                            <span id="acc-company" class="account-item-val">Broker Gateway</span>
                         </div>
                         <div class="account-item">
                             <span class="account-item-lbl">Account #</span>
-                            <span id="acc-login" class="account-item-val">345841337</span>
+                            <span id="acc-login" class="account-item-val">--</span>
                         </div>
                         <div class="account-item">
                             <span class="account-item-lbl">Balance</span>
-                            <span id="acc-balance" class="account-item-val">$119.53</span>
+                            <span id="acc-balance" class="account-item-val">$0.00</span>
                         </div>
                         <div class="account-item">
                             <span class="account-item-lbl">Live Equity</span>
-                            <span id="acc-equity" class="account-item-val" style="color:var(--neon-bull);">$119.53</span>
+                            <span id="acc-equity" class="account-item-val" style="color:var(--neon-bull);">$0.00</span>
                         </div>
                         <div class="account-item">
                             <span class="account-item-lbl">Floating PnL</span>
-                            <span id="acc-profit" class="account-item-val" style="color:var(--neon-bull);">+$0.00</span>
+                            <span id="acc-profit" class="account-item-val" style="color:var(--neon-bull);">$0.00</span>
                         </div>
                         <div class="account-item">
                             <span class="account-item-lbl">Free Margin</span>
-                            <span id="acc-free-margin" class="account-item-val">$119.53</span>
+                            <span id="acc-free-margin" class="account-item-val">$0.00</span>
                         </div>
                     </div>
                 </section>
@@ -293,16 +293,16 @@
                     <!-- Live Trade Preview Summary Banner (Requirement 6) -->
                     <div id="desk-summary-banner" class="desk-summary-banner">
                         <div class="desk-summary-banner-title">
-                            <span id="desk-banner-title">XAUUSD — BUY / LONG</span>
-                            <span id="desk-banner-status" class="radar-action-pill badge-wait-buy">WAIT: BUY</span>
+                            <span id="desk-banner-title">XAUUSD — PENDING ANALYSIS</span>
+                            <span id="desk-banner-status" class="radar-action-pill badge-no-setup">SCANNING</span>
                         </div>
                         <div class="desk-summary-banner-grid">
                             <span>Entry: <b id="desk-banner-entry" class="mono-number">--</b></span>
                             <span>SL: <b id="desk-banner-sl" class="mono-number">--</b></span>
                             <span>TP: <b id="desk-banner-tp" class="mono-number">--</b></span>
-                            <span>R:R: <b id="desk-banner-rr" class="mono-number">1:2.50</b></span>
-                            <span>Risk: <b id="desk-banner-risk" class="mono-number">0.50%</b></span>
-                            <span>Prob: <b id="desk-banner-prob" class="mono-number">73%</b></span>
+                            <span>R:R: <b id="desk-banner-rr" class="mono-number">--</b></span>
+                            <span>Risk: <b id="desk-banner-risk" class="mono-number">--%</b></span>
+                            <span>Prob: <b id="desk-banner-prob" class="mono-number">--%</b></span>
                         </div>
                     </div>
 
@@ -313,7 +313,7 @@
                         </div>
                         <div class="desk-field">
                             <span class="desk-field-lbl">Win Probability</span>
-                            <input id="desk-win-prob" class="desk-input mono-number" value="73%" readonly style="color:var(--neon-bull); font-weight:700;">
+                            <input id="desk-win-prob" class="desk-input mono-number" value="--%" readonly style="color:var(--neon-bull); font-weight:700;">
                         </div>
                         <div class="desk-field">
                             <span class="desk-field-lbl">Stop Loss ($)</span>
@@ -334,7 +334,7 @@
                 <div class="section-card">
                     <div class="section-card-header cyan">
                         <span>📐 Trade Plan & Key Levels</span>
-                        <span id="plan-strategy-pill" class="pill">BREAKOUT_EXPANSION</span>
+                        <span id="plan-strategy-pill" class="pill">SYNTHESIZING...</span>
                     </div>
                     <div class="plan-grid-3col">
                         <div class="plan-grid-item">
@@ -351,15 +351,15 @@
                         </div>
                         <div class="plan-grid-item">
                             <span class="plan-grid-lbl">Risk/Reward</span>
-                            <span id="decision-rr" class="plan-grid-val">1:2.50</span>
+                            <span id="decision-rr" class="plan-grid-val">--</span>
                         </div>
                         <div class="plan-grid-item">
                             <span class="plan-grid-lbl">Est. Risk ($)</span>
-                            <span id="plan-risk-amt" class="plan-grid-val" style="color:var(--accent-cyan);">$0.58</span>
+                            <span id="plan-risk-amt" class="plan-grid-val" style="color:var(--accent-cyan);">--</span>
                         </div>
                         <div class="plan-grid-item">
                             <span class="plan-grid-lbl">Calculated Lots</span>
-                            <span id="plan-calc-lots" class="plan-grid-val">0.01 Lots</span>
+                            <span id="plan-calc-lots" class="plan-grid-val">--</span>
                         </div>
                     </div>
                 </div>
@@ -368,14 +368,14 @@
                 <div class="section-card">
                     <div class="section-card-header emerald">
                         <span>🛡️ AI Validation & Metrics</span>
-                        <span id="decision-gate-badge" class="pill" style="color:var(--neon-bull);">GATE PASSED (9/9)</span>
+                        <span id="decision-gate-badge" class="pill" style="color:var(--text-dim);">EVALUATING...</span>
                     </div>
 
                     <!-- Dialectical Probability & EV Strip -->
                     <div style="background:rgba(0,0,0,0.4); border:1px solid var(--border-subtle); border-radius:4px; padding:6px 8px; margin-bottom:6px;">
                         <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:11px; margin-bottom:2px;">
-                            <span>Win Probability: <b id="decision-win-prob" style="color:var(--neon-bull);">73%</b></span>
-                            <span>Expected Value: <b id="decision-ev" style="color:var(--accent-cyan);">+$1.34</b></span>
+                            <span>Win Probability: <b id="decision-win-prob" style="color:var(--neon-bull);">--%</b></span>
+                            <span>Expected Value: <b id="decision-ev" style="color:var(--accent-cyan);">--</b></span>
                         </div>
                     </div>
 
