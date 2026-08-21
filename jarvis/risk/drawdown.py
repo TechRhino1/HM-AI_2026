@@ -8,16 +8,19 @@ from typing import Dict, Any
 from datetime import datetime, timezone
 
 class DrawdownGuard:
-    def __init__(self, max_daily_loss_pct: float = 4.0, max_total_drawdown_pct: float = 10.0):
+    def __init__(self, max_daily_loss_pct: float = 4.0, max_total_drawdown_pct: float = 10.0, db_path: str = "jarvis_drawdown_state.db"):
         self.max_daily_loss_pct = max_daily_loss_pct
         self.max_total_drawdown_pct = max_total_drawdown_pct
         self.daily_start_equity: float = 0.0
         self.peak_equity: float = 0.0
-        self.db_path = "jarvis_drawdown_state.db"
-        self._init_db()
-        self._load_state()
+        self.db_path = db_path
+        if self.db_path:
+            self._init_db()
+            self._load_state()
 
     def _init_db(self):
+        if not self.db_path:
+            return
         with sqlite3.connect(self.db_path) as conn:
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS drawdown_state (
@@ -30,6 +33,8 @@ class DrawdownGuard:
             conn.commit()
 
     def _load_state(self):
+        if not self.db_path:
+            return
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute('SELECT daily_start_equity, peak_equity, last_saved_date FROM drawdown_state WHERE id = 1')
             row = cursor.fetchone()
@@ -47,6 +52,8 @@ class DrawdownGuard:
                 conn.commit()
 
     def _save_state(self):
+        if not self.db_path:
+            return
         with sqlite3.connect(self.db_path) as conn:
             current_date = datetime.now(timezone.utc).date().isoformat()
             conn.execute('''
@@ -61,12 +68,13 @@ class DrawdownGuard:
         
         # True daily reset check in case process stays open across midnight
         current_date = datetime.now(timezone.utc).date().isoformat()
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute('SELECT last_saved_date FROM drawdown_state WHERE id = 1')
-            row = cursor.fetchone()
-            if row and row[0] != current_date:
-                self.daily_start_equity = 0.0
-                changed = True
+        if self.db_path:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute('SELECT last_saved_date FROM drawdown_state WHERE id = 1')
+                row = cursor.fetchone()
+                if row and row[0] != current_date:
+                    self.daily_start_equity = 0.0
+                    changed = True
 
         if self.daily_start_equity <= 0 or current_balance > self.daily_start_equity or self.daily_start_equity > current_balance * 1.5:
             self.daily_start_equity = current_balance
@@ -75,7 +83,7 @@ class DrawdownGuard:
             self.peak_equity = current_equity
             changed = True
             
-        if changed:
+        if changed and self.db_path:
             self._save_state()
 
     def get_risk_multiplier(self, current_equity: float) -> float:

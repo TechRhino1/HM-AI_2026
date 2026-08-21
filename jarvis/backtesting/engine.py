@@ -29,9 +29,9 @@ class BacktestEngine:
 
         self.context_engine = MarketContextEngine()
         self.regime_classifier = MarketRegimeClassifier()
-        self.analyst_cluster = ParallelAnalystCluster()
+        self.analyst_cluster = ParallelAnalystCluster(parallel=False)
         self.decision_engine = DecisionEngine()
-        self.risk_engine = RiskEngine(max_risk_per_trade_pct=risk_per_trade_pct)
+        self.risk_engine = RiskEngine(max_risk_per_trade_pct=risk_per_trade_pct, is_backtest=True)
 
     def run_backtest(
         self,
@@ -45,7 +45,9 @@ class BacktestEngine:
         open_trade: Optional[Dict[str, Any]] = None
 
         min_window = 60
-        point_multiplier = 100.0 if "XAU" in symbol else 100000.0
+        spec = resolve_symbol(symbol)
+        point_multiplier = spec.contract_size
+        slippage_delta = self.slippage_pips * spec.pip_size
 
         for i in range(min_window, len(df_h1) - 1):
             history_slice = df_h1.iloc[:i]
@@ -75,7 +77,7 @@ class BacktestEngine:
 
                 if open_trade["type"] == "BUY":
                     if low <= open_trade["sl"]:
-                        exit_price = open_trade["sl"] - (self.slippage_pips * (0.01 if "XAU" in symbol else 0.0001))
+                        exit_price = open_trade["sl"] - slippage_delta
                         result = "SL"
                         closed = True
                     elif high >= open_trade["tp"]:
@@ -84,7 +86,7 @@ class BacktestEngine:
                         closed = True
                 elif open_trade["type"] == "SELL":
                     if high >= open_trade["sl"]:
-                        exit_price = open_trade["sl"] + (self.slippage_pips * (0.01 if "XAU" in symbol else 0.0001))
+                        exit_price = open_trade["sl"] + slippage_delta
                         result = "SL"
                         closed = True
                     elif low <= open_trade["tp"]:
@@ -93,7 +95,8 @@ class BacktestEngine:
                         closed = True
 
                 if closed:
-                    pnl_raw = (exit_price - open_trade["entry"]) * open_trade["lots"] * point_multiplier if open_trade["type"] == "BUY" else (open_trade["entry"] - exit_price) * open_trade["lots"] * point_multiplier
+                    pips = ((exit_price - open_trade["entry"]) if open_trade["type"] == "BUY" else (open_trade["entry"] - exit_price)) / spec.pip_size
+                    pnl_raw = pips * spec.pip_value_per_lot * open_trade["lots"]
                     comm = open_trade["lots"] * self.commission_per_lot
                     pnl_net = pnl_raw - comm
                     balance += pnl_net

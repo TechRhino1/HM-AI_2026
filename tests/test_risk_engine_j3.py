@@ -17,7 +17,8 @@ class TestRiskEngineJ3(unittest.TestCase):
             max_drawdown_pct=10.0,
             max_open_positions=2,
             max_symbol_positions=1,
-            max_risk_per_trade_pct=0.5
+            max_risk_per_trade_pct=0.5,
+            is_backtest=True
         )
 
         regime = RegimeOutput(primary_regime=MarketRegime.TREND_BULL, probabilities={"TREND_BULL": 0.8}, confidence=0.85)

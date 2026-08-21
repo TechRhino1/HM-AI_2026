@@ -27,6 +27,7 @@ class MT5Client:
         self.timeout_sec = timeout_sec
         self.is_connected = False
         self.symbol_alias_cache: Dict[str, str] = {}
+        self._paper_positions: Dict[int, PositionSnapshot] = {}
         self._lock = threading.RLock()
         self.init_connection()
 
@@ -176,7 +177,11 @@ class MT5Client:
     def get_open_positions(self, symbol: Optional[str] = None) -> List[PositionSnapshot]:
         self._reconnect_if_needed()
         if self.mode == "paper" or not self.is_connected or not MT5_AVAILABLE:
-            return []
+            with self._lock:
+                if symbol:
+                    resolved = self.resolve_symbol_name(symbol)
+                    return [p for p in self._paper_positions.values() if p.symbol == resolved or p.symbol == symbol]
+                return list(self._paper_positions.values())
 
         try:
             with self._lock:
@@ -221,16 +226,36 @@ class MT5Client:
         resolved = self.resolve_symbol_name(symbol)
         
         if self.mode == "paper" or not MT5_AVAILABLE:
-            price = 2400.0 if "XAU" in symbol else 1.0850
-            return {
-                "status": "FILLED",
-                "ticket": int(time.time() * 1000) % 100000000,
-                "symbol": resolved,
-                "type": order_type,
-                "volume": volume,
-                "price": price,
-                "comment": f"[PAPER] {comment}"
-            }
+            with self._lock:
+                price = 2400.0 if "XAU" in symbol else (1.0850 if "EUR" in symbol else (65000.0 if "BTC" in symbol else (155.0 if "JPY" in symbol else 1.2700)))
+                ticket = int(time.time() * 1000) % 100000000
+                pos = PositionSnapshot(
+                    ticket=ticket,
+                    symbol=resolved,
+                    type=order_type,
+                    volume=volume,
+                    open_price=price,
+                    current_price=price,
+                    sl=float(sl_price),
+                    tp=float(tp_price),
+                    profit=0.0,
+                    swap=0.0,
+                    commission=0.0,
+                    open_time=time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
+                    magic=self.magic_number,
+                    comment=f"[PAPER] {comment}"
+                )
+                self._paper_positions[ticket] = pos
+                logger.info(f"[PAPER] Order FILLED: #{ticket} {order_type} {volume} {resolved} @ {price}")
+                return {
+                    "status": "FILLED",
+                    "ticket": ticket,
+                    "symbol": resolved,
+                    "type": order_type,
+                    "volume": volume,
+                    "price": price,
+                    "comment": f"[PAPER] {comment}"
+                }
 
         def _send():
             with self._lock:
@@ -303,8 +328,13 @@ class MT5Client:
     def close_position(self, ticket: int) -> Dict[str, Any]:
         """Closes a specific open MT5 position by ticket."""
         if self.mode == "paper" or not MT5_AVAILABLE or not self.is_connected:
-            logger.info(f"[PAPER] Closed simulated position #{ticket}")
-            return {"status": "CLOSED", "ticket": ticket}
+            with self._lock:
+                if ticket in self._paper_positions:
+                    pos = self._paper_positions.pop(ticket)
+                    logger.info(f"[PAPER] Closed simulated position #{ticket} ({pos.symbol})")
+                    return {"status": "SUCCESS", "ticket": ticket, "pnl": pos.profit}
+                logger.info(f"[PAPER] Position #{ticket} not found or already closed")
+                return {"status": "SUCCESS", "ticket": ticket, "pnl": 0.0}
 
         def _close():
             with self._lock:
@@ -352,8 +382,13 @@ class MT5Client:
     def modify_position(self, ticket: int, sl: float, tp: float) -> Dict[str, Any]:
         """Modifies Stop Loss and Take Profit of an open MT5 position."""
         if self.mode == "paper" or not MT5_AVAILABLE or not self.is_connected:
-            logger.info(f"[PAPER] Modified position #{ticket} -> SL: {sl}, TP: {tp}")
-            return {"status": "MODIFIED", "ticket": ticket, "sl": sl, "tp": tp}
+            with self._lock:
+                if ticket in self._paper_positions:
+                    self._paper_positions[ticket].sl = float(sl)
+                    self._paper_positions[ticket].tp = float(tp)
+                    logger.info(f"[PAPER] Modified position #{ticket} -> SL: {sl}, TP: {tp}")
+                    return {"status": "SUCCESS", "ticket": ticket, "sl": sl, "tp": tp}
+                return {"status": "FAILED", "reason": f"Position #{ticket} not found in paper positions"}
 
         def _modify():
             with self._lock:

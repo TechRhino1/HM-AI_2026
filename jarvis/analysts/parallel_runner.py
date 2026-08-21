@@ -18,9 +18,10 @@ from jarvis.analysts.devil_advocate import DevilAdvocateAnalyst
 from jarvis.application.timeout_guard import TimeoutGuard
 
 class ParallelAnalystCluster:
-    """Runs all 7 specialized analyst agents concurrently to minimize latency."""
-    def __init__(self, timeout_sec: float = 2.0):
+    """Runs all 7 specialized analyst agents concurrently or sequentially to minimize latency."""
+    def __init__(self, timeout_sec: float = 2.0, parallel: bool = True):
         self.timeout_sec = timeout_sec
+        self.parallel = parallel
         self.structure_analyst = StructureAnalyst()
         self.momentum_analyst = MomentumAnalyst()
         self.liquidity_analyst = LiquidityAnalyst()
@@ -28,7 +29,7 @@ class ParallelAnalystCluster:
         self.macro_analyst = MacroAnalyst()
         self.risk_analyst = RiskAnalyst()
         self.devil_advocate = DevilAdvocateAnalyst()
-        self._executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="analyst_worker")
+        self._executor = ThreadPoolExecutor(max_workers=8, thread_name_prefix="analyst_worker") if parallel else None
 
     def run_all_parallel(
         self,
@@ -37,9 +38,21 @@ class ParallelAnalystCluster:
         tentative_bias: str = "BUY"
     ) -> Tuple[Dict[str, AnalystReport], DevilAdvocateReport]:
         """
-        Executes all analysts concurrently in parallel.
+        Executes all analysts concurrently in parallel or sequentially.
         Returns a tuple of (Dict of domain AnalystReports, DevilAdvocateReport).
         """
+        if not self.parallel or self._executor is None:
+            reports = {
+                "STRUCTURE": self.structure_analyst.analyze(context, regime),
+                "MOMENTUM": self.momentum_analyst.analyze(context, regime),
+                "LIQUIDITY": self.liquidity_analyst.analyze(context, regime),
+                "VOLATILITY": self.volatility_analyst.analyze(context, regime),
+                "MACRO": self.macro_analyst.analyze(context, regime),
+                "RISK": self.risk_analyst.analyze(context, regime),
+            }
+            devil_report = self.devil_advocate.critique_opportunity(context, regime, tentative_bias)
+            return reports, devil_report
+
         futures = {
             "STRUCTURE": self._executor.submit(self.structure_analyst.analyze, context, regime),
             "MOMENTUM": self._executor.submit(self.momentum_analyst.analyze, context, regime),

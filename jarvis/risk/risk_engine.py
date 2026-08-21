@@ -19,13 +19,19 @@ class RiskEngine:
         max_drawdown_pct: float = 10.0,
         max_open_positions: int = 3,
         max_symbol_positions: int = 1,
-        max_risk_per_trade_pct: float = 0.5
+        max_risk_per_trade_pct: float = 0.5,
+        is_backtest: bool = False
     ):
         self._lock = threading.RLock()
         self.max_risk_per_trade_pct = max_risk_per_trade_pct
-        self.drawdown_guard = DrawdownGuard(max_daily_loss_pct, max_drawdown_pct)
+        self.drawdown_guard = DrawdownGuard(
+            max_daily_loss_pct, max_drawdown_pct,
+            db_path="" if is_backtest else "jarvis_drawdown_state.db"
+        )
         self.exposure_manager = ExposureManager(max_open_positions, max_symbol_positions)
-        self.circuit_breaker = CircuitBreaker()
+        self.circuit_breaker = CircuitBreaker(
+            db_path="" if is_backtest else "jarvis_circuit_state.db"
+        )
         self.position_sizer = PositionSizer()
         self.trade_guard = TradeGuard()
         self.correlation_engine = DynamicCorrelationEngine()

@@ -7,17 +7,20 @@ import sqlite3
 from typing import Dict, Any
 
 class CircuitBreaker:
-    def __init__(self):
+    def __init__(self, db_path: str = "jarvis_circuit_state.db"):
         self.enabled = True
         self.consecutive_losses = 0
         self.is_tripped = False
         self.tripped_timestamp = 0.0
         self.trip_reason = ""
-        self.db_path = "jarvis_circuit_state.db"
-        self._init_db()
-        self._load_state()
+        self.db_path = db_path
+        if self.db_path:
+            self._init_db()
+            self._load_state()
 
     def _init_db(self):
+        if not self.db_path:
+            return
         with sqlite3.connect(self.db_path) as conn:
             conn.execute('''
                 CREATE TABLE IF NOT EXISTS circuit_state (
@@ -31,6 +34,8 @@ class CircuitBreaker:
             conn.commit()
 
     def _load_state(self):
+        if not self.db_path:
+            return
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute('SELECT consecutive_losses, is_tripped, tripped_timestamp, trip_reason FROM circuit_state WHERE id = 1')
             row = cursor.fetchone()
@@ -42,6 +47,8 @@ class CircuitBreaker:
                 conn.commit()
 
     def _save_state(self):
+        if not self.db_path:
+            return
         with sqlite3.connect(self.db_path) as conn:
             conn.execute('''
                 UPDATE circuit_state

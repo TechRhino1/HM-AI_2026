@@ -189,7 +189,7 @@ class DecisionEngine:
             return final_win_p, loss_p, 0.0, hypotheses, calibrated_win_p
 
         est_lots = max(0.01, planned_risk_dollars / (max(risk_dist, 1e-4) * contract_size))
-        pip_val_per_lot = contract_size * pip_size
+        pip_val_per_lot = spec.pip_value_per_lot
         spread_cost = context.volatility.current_spread_pips * pip_val_per_lot * est_lots
         expected_slippage = (context.volatility.atr * 0.02) * est_lots
 
