@@ -459,6 +459,12 @@ header.terminal-hud {
     border: 1px solid #334155;
 }
 
+.badge-market-closed {
+    background: rgba(255, 59, 92, 0.14);
+    color: #ff5277;
+    border: 1px solid rgba(255, 59, 92, 0.45);
+}
+
 .radar-meta-row {
     display: flex;
     justify-content: space-between;

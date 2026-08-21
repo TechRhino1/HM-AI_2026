@@ -392,8 +392,15 @@
         // Update Live Header Price
         const last = state.candles[state.candles.length - 1];
         if (last && el.chartLivePrice) {
-            el.chartLivePrice.textContent = last.close.toFixed(digits);
-            el.chartLivePrice.style.color = last.close >= last.open ? "var(--neon-bull)" : "var(--neon-bear)";
+            const sym = state.symbol || "XAUUSD";
+            const statusObj = (state.marketStatuses && state.marketStatuses[sym]) || computeClientMarketStatus(sym);
+            if (statusObj.is_open) {
+                el.chartLivePrice.textContent = last.close.toFixed(digits);
+                el.chartLivePrice.style.color = last.close >= last.open ? "var(--neon-bull)" : "var(--neon-bear)";
+            } else {
+                el.chartLivePrice.innerHTML = `${last.close.toFixed(digits)} <span style="font-size:9px; color:#ff5277; font-weight:800; margin-left:4px; padding:1px 4px; border-radius:2px; background:rgba(255,59,92,0.14);">CLOSED</span>`;
+                el.chartLivePrice.style.color = "var(--text-secondary)";
+            }
         }
     }
 
@@ -558,6 +565,13 @@
 
     function getStatusBadge(item) {
         if (!item) return { label: "NO SETUP", cssClass: "badge-no-setup", dotColor: "#475569" };
+        const sym = item.symbol || state.symbol || "XAUUSD";
+        const statusObj = (state.marketStatuses && state.marketStatuses[sym]) || computeClientMarketStatus(sym);
+        
+        if (!statusObj.is_open) {
+            return { label: "🔒 CLOSED", cssClass: "badge-market-closed", dotColor: "#ff5277" };
+        }
+
         const action = item.action || item.status_label || item.decision || "WAIT";
         const bias = item.bias || "NEUTRAL";
         const gatePassed = item.gate_passed !== undefined ? item.gate_passed : (item.quality_gate ? item.quality_gate.passed : false);
@@ -636,6 +650,11 @@
 
     function simulateLiveMarketTick() {
         if (!state.candles || state.candles.length === 0 || state.chartMode !== "tv_live") return;
+        const sym = state.symbol || "XAUUSD";
+        const statusObj = (state.marketStatuses && state.marketStatuses[sym]) || computeClientMarketStatus(sym);
+        // FREEZE CHART IF MARKET IS CLOSED: Do not simulate price movements on closed markets
+        if (!statusObj.is_open) return;
+
         const last = state.candles[state.candles.length - 1];
         const volStep = (Math.random() - 0.495) * (last.close > 100 ? 0.35 : 0.00015);
         last.close = Math.max(last.low * 0.999, last.close + volStep);
@@ -821,6 +840,11 @@
                 if (el.deskMarketTime) el.deskMarketTime.textContent = `Re-opens: ${statusObj.next_open_ist} (in ${statusObj.countdown_formatted})`;
             }
         }
+
+        // 4. Chart Stage Controls Label
+        if (el.btnModeTvLive) {
+            el.btnModeTvLive.textContent = statusObj.is_open ? "⚡ Live MT5" : "📊 MT5 Close (Frozen)";
+        }
     }
 
     function tickMarketCountdown() {
@@ -830,8 +854,10 @@
     let _lastRadarSnapshot = "";
     function renderScannerRadarDOM(opps) {
         if (!el.radarList) return;
+        const currentSymStatus = (state.marketStatuses && state.marketStatuses[state.symbol]) || computeClientMarketStatus(state.symbol);
+        
         if (state.activeLeftTab === "radar" && el.leftPanelCounter) {
-            el.leftPanelCounter.textContent = `${opps.length} Monitored`;
+            el.leftPanelCounter.textContent = currentSymStatus.is_open ? `${opps.length} Monitored` : `🔒 CLOSED | ${opps.length} Monitored`;
         }
 
         if (!opps || opps.length === 0) {
@@ -840,13 +866,16 @@
             return;
         }
 
-        const snapshot = JSON.stringify({ activeSym: state.symbol, data: opps });
+        const snapshot = JSON.stringify({ activeSym: state.symbol, data: opps, mktOpen: currentSymStatus.is_open });
         if (snapshot === _lastRadarSnapshot) {
             return; // Zero DOM thrashing when data is unchanged
         }
         _lastRadarSnapshot = snapshot;
 
         el.radarList.innerHTML = opps.map(opp => {
+            const sym = opp.symbol || "XAUUSD";
+            const symStatus = (state.marketStatuses && state.marketStatuses[sym]) || computeClientMarketStatus(sym);
+            const isMarketClosed = !symStatus.is_open;
             const badge = getStatusBadge(opp);
             const isActive = opp.symbol === state.symbol;
             const entryStr = formatPrice(opp.entry_price, opp.symbol);
@@ -857,6 +886,14 @@
             const evStr = `${evVal >= 0 ? '+' : ''}$${evVal.toFixed(2)}`;
             const probStr = opp.win_prob ? `${opp.win_prob}%` : (opp.score ? `${opp.score}%` : "--%");
             const strategyName = opp.strategy || "MARKET_STRUCTURE";
+
+            const gateLabel = isMarketClosed 
+                ? `<b style="color:#ff5277;">🔒 WEEKEND CLOSE</b>`
+                : (opp.gate_passed ? '<b style="color:var(--neon-bull);">GATE PASS (14/14)</b>' : '<b style="color:var(--devil-amber);">GATE WAIT</b>');
+
+            const evLabel = isMarketClosed
+                ? `<span class="mono-number" style="color: var(--text-dim); font-size:9.5px;">Re-opens ${symStatus.next_open_ist ? symStatus.next_open_ist.split(',')[0] : 'Mon'}</span>`
+                : `<span class="mono-number" style="color: ${evVal >= 0 ? 'var(--neon-bull)' : 'var(--neon-bear)'}; font-weight:700;">EV: ${evStr}</span>`;
 
             return `
                 <div class="radar-opportunity-card ${isActive ? 'active' : ''}" onclick="selectSymbol('${opp.symbol}')">
@@ -869,9 +906,7 @@
                     </div>
                     <div class="radar-meta-row">
                         <span class="radar-setup-name">${strategyName}</span>
-                        <span class="mono-number" style="color: ${evVal >= 0 ? 'var(--neon-bull)' : 'var(--neon-bear)'}; font-weight:700;">
-                            EV: ${evStr}
-                        </span>
+                        ${evLabel}
                     </div>
                     <div class="radar-plan-chip">
                         <span>E: <b>${entryStr}</b></span>
@@ -883,7 +918,7 @@
                         <span class="status-dot" style="background-color: ${badge.dotColor};"></span>
                         <span style="display:flex; justify-content:space-between; width:100%;">
                             <span>Prob: <b style="color:var(--text-primary);">${probStr}</b></span>
-                            <span>${opp.gate_passed ? '<b style="color:var(--neon-bull);">GATE PASS (14/14)</b>' : '<b style="color:var(--devil-amber);">GATE WAIT</b>'}</span>
+                            <span>${gateLabel}</span>
                         </span>
                     </div>
                 </div>

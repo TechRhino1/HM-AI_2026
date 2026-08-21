@@ -75,8 +75,14 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                             d = de.evaluate(ctx, regime, reports, devil, account_balance=account.equity, mtf_data=mtf)
                             cls.state_manager.record_decision(sym, d)
 
+                            from jarvis.market.sessions import SessionEngine
+                            mkt_status = SessionEngine.get_market_trading_status(sym)
+                            is_mkt_open = mkt_status.get("is_open", True)
+
                             win_p = d.probabilities.get(d.bias.lower(), d.model_confidence) if d.bias in ["BUY", "SELL"] else d.model_confidence
-                            if d.decision == "EXECUTE":
+                            if not is_mkt_open:
+                                status_label = "MARKET CLOSED"
+                            elif d.decision == "EXECUTE":
                                 status_label = f"{d.bias} READY"
                             elif d.decision == "WAIT" and d.bias in ["BUY", "SELL"]:
                                 status_label = f"WAIT: {d.bias}"
