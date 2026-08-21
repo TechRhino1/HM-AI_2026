@@ -1,7 +1,8 @@
 /* ==========================================================================
    JARVIS AI 4.0 — Institutional Financial Trading Terminal CSS
    Design: Obsidian/Deep Navy Slate, Glassmorphism, Precision Alignment,
-           Tabular Monospace Metrics, Institutional Charting & Execution Desk
+           Tabular Monospace Metrics, Institutional Charting & Execution Desk,
+           Fully Mobile Responsive Architecture (Desktop, Tablet, Mobile)
    ========================================================================== */
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
@@ -290,6 +291,48 @@ header.terminal-hud {
 .cmd-hint-btn:hover {
     background: rgba(56, 189, 248, 0.2);
     border-color: var(--accent-cyan);
+}
+
+/* ==========================================================================
+   MOBILE NAVIGATION TAB BAR (VISIBLE ON MOBILE SCREENS <= 900PX)
+   ========================================================================== */
+.mobile-nav-bar {
+    display: none;
+    background: rgba(10, 14, 23, 0.98);
+    backdrop-filter: var(--glass-blur);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 4px 6px;
+    gap: 4px;
+    overflow-x: auto;
+    flex-shrink: 0;
+    z-index: 45;
+    -webkit-overflow-scrolling: touch;
+}
+
+.mob-tab-btn {
+    background: rgba(18, 26, 43, 0.85);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    padding: 5px 8px;
+    font-family: var(--font-sans);
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+    flex: 1;
+    text-align: center;
+    transition: var(--transition-fast);
+}
+
+.mob-tab-btn:hover { color: #ffffff; }
+
+.mob-tab-btn.active {
+    background: var(--accent-cyan);
+    color: #000000;
+    font-weight: 800;
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
 }
 
 /* ==========================================================================
@@ -798,6 +841,7 @@ header.terminal-hud {
     align-items: center;
     gap: 6px;
     flex-shrink: 0;
+    flex-wrap: wrap;
 }
 
 .active-symbol-title {
@@ -995,6 +1039,7 @@ header.terminal-hud {
     overflow-x: auto; 
     overflow-y: auto; 
     min-height: 0; 
+    -webkit-overflow-scrolling: touch;
 }
 
 .positions-table { 
@@ -1003,6 +1048,7 @@ header.terminal-hud {
     font-family: var(--font-mono); 
     font-size: 10px; 
     text-align: left; 
+    min-width: 500px;
 }
 
 .positions-table th {
@@ -1161,9 +1207,9 @@ header.terminal-hud {
     background: rgba(0, 0, 0, 0.4);
     border: 1px solid var(--border-subtle);
     border-radius: 3px;
-    padding: 3px 6px;
+    padding: 4px 6px;
     color: #ffffff;
-    font-size: 10px;
+    font-size: 10.5px;
     outline: none;
     transition: var(--transition-fast);
 }
@@ -1181,9 +1227,9 @@ header.terminal-hud {
     border: 1px solid var(--neon-bull);
     color: var(--neon-bull);
     font-family: var(--font-sans);
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 800;
-    padding: 6px 0;
+    padding: 7px 0;
     border-radius: 3px;
     cursor: pointer;
     text-transform: uppercase;
@@ -1200,9 +1246,9 @@ header.terminal-hud {
     border: 1px solid var(--neon-bear);
     color: var(--neon-bear);
     font-family: var(--font-sans);
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 800;
-    padding: 6px 0;
+    padding: 7px 0;
     border-radius: 3px;
     cursor: pointer;
     text-transform: uppercase;
@@ -1510,7 +1556,7 @@ header.terminal-hud {
 
 .command-palette-modal {
     width: 500px;
-    max-width: 90vw;
+    max-width: 92vw;
     background: rgba(14, 22, 38, 0.98);
     border: 1px solid var(--accent-cyan);
     border-radius: 6px;
@@ -1585,7 +1631,7 @@ header.terminal-hud {
     align-items: center;
     justify-content: center;
     z-index: 250 !important;
-    padding: 20px;
+    padding: 16px;
 }
 
 .macro-news-modal-content {
@@ -1676,4 +1722,259 @@ header.terminal-hud {
     0% { transform: scale(0.95); opacity: 0.8; }
     50% { transform: scale(1.15); opacity: 1; }
     100% { transform: scale(0.95); opacity: 0.8; }
+}
+
+/* ==========================================================================
+   RESPONSIVE MEDIA QUERIES (DESKTOP, TABLET & MOBILE VIEWPORTS)
+   ========================================================================== */
+
+/* 1. COMPACT DESKTOPS & TABLETS IN LANDSCAPE (1025px - 1280px) */
+@media (max-width: 1280px) {
+    .terminal-workspace {
+        grid-template-columns: 260px 1fr 310px;
+        gap: 5px;
+        padding: 5px;
+    }
+    .hud-telemetry {
+        gap: 8px;
+    }
+}
+
+/* 2. TABLETS & SMALL LAPTOPS (901px - 1024px) */
+@media (max-width: 1024px) {
+    .terminal-workspace {
+        grid-template-columns: 240px 1fr 280px;
+        gap: 4px;
+        padding: 4px;
+    }
+    .hud-tile-value {
+        font-size: 10px;
+    }
+    .active-symbol-title {
+        font-size: 12px;
+    }
+    .chart-live-price {
+        font-size: 12px;
+    }
+    .cognition-telemetry-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* 3. MOBILE PHONES & TOUCH TABLETS (<= 900px) */
+@media (max-width: 900px) {
+    body {
+        height: 100vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Top HUD in Mobile */
+    header.terminal-hud {
+        height: auto;
+        min-height: 44px;
+        padding: 6px 8px;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .brand-wrapper {
+        flex-shrink: 0;
+    }
+
+    .brand-text {
+        font-size: 12.5px;
+    }
+
+    .hud-actions {
+        order: 2;
+        gap: 4px;
+    }
+
+    .btn-terminal, .cmd-hint-btn {
+        padding: 3px 6px;
+        font-size: 9.5px;
+    }
+
+    .hud-telemetry {
+        order: 3;
+        width: 100%;
+        justify-content: flex-start;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 4px 0 2px 0;
+        gap: 6px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .hud-tile {
+        flex-shrink: 0;
+        background: rgba(0, 0, 0, 0.35);
+        border: 1px solid var(--border-glass);
+        padding: 2px 6px;
+        border-radius: 3px;
+    }
+
+    /* Activate Mobile View Navigation Bar */
+    .mobile-nav-bar {
+        display: flex;
+    }
+
+    /* Terminal Workspace Stacks Vertically with Touch Scroll */
+    .terminal-workspace {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 86px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 6px;
+        gap: 8px;
+    }
+
+    .middle-column-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        height: auto;
+        overflow: visible;
+    }
+
+    .terminal-panel {
+        width: 100% !important;
+        min-width: 100% !important;
+        max-width: 100% !important;
+        flex-shrink: 0;
+        min-height: auto;
+    }
+
+    /* Chart Height on Mobile */
+    #chart-main-panel {
+        min-height: 300px;
+        height: 340px;
+        flex-shrink: 0;
+    }
+
+    .chart-header-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+    }
+
+    .chart-controls-group {
+        width: 100%;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    .btn-expand-chart {
+        display: none;
+    }
+
+    /* Position Tables Full Touch Scroll */
+    .positions-hud-container {
+        max-height: 240px;
+    }
+
+    .positions-table {
+        min-width: 580px;
+    }
+
+    /* Modals & Dialogs on Mobile */
+    .copilot-window.floating {
+        position: fixed !important;
+        top: 44px !important;
+        bottom: 8px !important;
+        left: 6px !important;
+        right: 6px !important;
+        width: auto !important;
+        height: auto !important;
+        max-width: 100vw !important;
+    }
+
+    .copilot-fab {
+        bottom: 12px;
+        right: 12px;
+        width: 36px;
+        height: 36px;
+        font-size: 16px;
+    }
+
+    .command-palette-overlay {
+        padding-top: 8vh;
+    }
+
+    .command-palette-modal {
+        width: 95vw !important;
+        max-width: 95vw !important;
+    }
+
+    .macro-news-modal-content {
+        width: 96vw !important;
+        max-width: 96vw !important;
+        padding: 12px;
+        max-height: 85vh;
+    }
+
+    .macro-news-metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+/* 4. COMPACT MOBILE SCREENS (<= 480px) */
+@media (max-width: 480px) {
+    body {
+        font-size: 11px;
+    }
+
+    .brand-text {
+        font-size: 12px;
+    }
+
+    .brand-icon {
+        width: 20px;
+        height: 20px;
+        font-size: 11px;
+    }
+
+    .btn-terminal, .cmd-hint-btn {
+        font-size: 9px;
+        padding: 2px 5px;
+    }
+
+    .mob-tab-btn {
+        font-size: 9.5px;
+        padding: 6px 3px;
+    }
+
+    .active-symbol-title {
+        font-size: 12px;
+    }
+
+    .chart-live-price {
+        font-size: 12px;
+    }
+
+    #chart-main-panel {
+        min-height: 280px;
+        height: 300px;
+    }
+
+    .cognition-telemetry-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .plan-grid-3col {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .desk-inputs-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .btn-desk-buy, .btn-desk-sell {
+        padding: 9px 0;
+        font-size: 11px;
+    }
 }

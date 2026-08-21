@@ -1834,6 +1834,10 @@
         fetchCandles();
         fetchTelemetry();
 
+        if (window.innerWidth <= 900 && state.activeMobileView === "radar") {
+            switchMobileView("chart");
+        }
+
         if (state.chartMode === "tv_pro") {
             initTradingViewAdvancedWidget();
         }
@@ -1869,7 +1873,115 @@
         updateMarketStatusDisplay(state.symbol);
     };
 
+    window.switchMobileView = function (view) {
+        state.activeMobileView = view;
+
+        const btnChart = document.getElementById("mob-btn-chart");
+        const btnRadar = document.getElementById("mob-btn-radar");
+        const btnCognition = document.getElementById("mob-btn-cognition");
+        const btnOrders = document.getElementById("mob-btn-orders");
+        const btnAll = document.getElementById("mob-btn-all");
+
+        if (btnChart) btnChart.classList.toggle("active", view === "chart");
+        if (btnRadar) btnRadar.classList.toggle("active", view === "radar");
+        if (btnCognition) btnCognition.classList.toggle("active", view === "cognition");
+        if (btnOrders) btnOrders.classList.toggle("active", view === "orders");
+        if (btnAll) btnAll.classList.toggle("active", view === "all");
+
+        const leftPanel = document.getElementById("panel-left");
+        const middlePanel = document.getElementById("panel-middle");
+        const rightPanel = document.getElementById("panel-right");
+        const chartPanel = document.getElementById("chart-main-panel");
+        const posSection = document.getElementById("section-positions");
+        const histSection = document.getElementById("section-history");
+
+        if (window.innerWidth <= 900) {
+            if (view === "chart") {
+                if (leftPanel) leftPanel.style.display = "none";
+                if (middlePanel) {
+                    middlePanel.style.display = "flex";
+                    if (chartPanel) chartPanel.style.display = "flex";
+                    if (posSection) posSection.style.display = "none";
+                    if (histSection) histSection.style.display = "none";
+                }
+                if (rightPanel) {
+                    rightPanel.style.display = "flex";
+                    switchRightTab("desk");
+                }
+            } else if (view === "radar") {
+                if (leftPanel) leftPanel.style.display = "flex";
+                if (middlePanel) middlePanel.style.display = "none";
+                if (rightPanel) rightPanel.style.display = "none";
+            } else if (view === "cognition") {
+                if (leftPanel) leftPanel.style.display = "none";
+                if (middlePanel) middlePanel.style.display = "none";
+                if (rightPanel) {
+                    rightPanel.style.display = "flex";
+                    switchRightTab("cognition");
+                }
+            } else if (view === "orders") {
+                if (leftPanel) leftPanel.style.display = "none";
+                if (middlePanel) {
+                    middlePanel.style.display = "flex";
+                    if (chartPanel) chartPanel.style.display = "none";
+                    if (posSection) posSection.style.display = "flex";
+                    if (histSection) histSection.style.display = "flex";
+                }
+                if (rightPanel) rightPanel.style.display = "none";
+            } else if (view === "all") {
+                if (leftPanel) leftPanel.style.display = "flex";
+                if (middlePanel) {
+                    middlePanel.style.display = "flex";
+                    if (chartPanel) chartPanel.style.display = "flex";
+                    if (posSection) posSection.style.display = "flex";
+                    if (histSection) histSection.style.display = "flex";
+                }
+                if (rightPanel) rightPanel.style.display = "flex";
+            }
+        } else {
+            // Restore desktop multi-column view
+            if (leftPanel) leftPanel.style.display = "flex";
+            if (middlePanel) {
+                middlePanel.style.display = "flex";
+                if (chartPanel) chartPanel.style.display = "flex";
+                if (posSection) posSection.style.display = "flex";
+                if (histSection) histSection.style.display = "flex";
+            }
+            if (rightPanel) rightPanel.style.display = "flex";
+        }
+
+        setTimeout(() => {
+            if (state.tvChartInstance && el.tvLiveContainer) {
+                state.tvChartInstance.applyOptions({
+                    width: el.tvLiveContainer.clientWidth || (window.innerWidth - 20),
+                    height: el.tvLiveContainer.clientHeight || 300
+                });
+            }
+        }, 80);
+    };
+
     window.addEventListener("resize", () => {
+        if (window.innerWidth > 900) {
+            const leftPanel = document.getElementById("panel-left");
+            const middlePanel = document.getElementById("panel-middle");
+            const rightPanel = document.getElementById("panel-right");
+            const chartPanel = document.getElementById("chart-main-panel");
+            const posSection = document.getElementById("section-positions");
+            const histSection = document.getElementById("section-history");
+            if (leftPanel) leftPanel.style.display = "flex";
+            if (middlePanel) {
+                middlePanel.style.display = "flex";
+                if (chartPanel) chartPanel.style.display = "flex";
+                if (posSection) posSection.style.display = "flex";
+                if (histSection) histSection.style.display = "flex";
+            }
+            if (rightPanel) rightPanel.style.display = "flex";
+        } else {
+            if (state.activeMobileView) {
+                switchMobileView(state.activeMobileView);
+            }
+        }
+
         if (state.tvChartInstance && el.tvLiveContainer) {
             state.tvChartInstance.applyOptions({
                 width: el.tvLiveContainer.clientWidth,
@@ -1887,6 +1999,10 @@
         fetchCandles();
         fetchTelemetry();
         fetchNews();
+
+        if (window.innerWidth <= 900) {
+            switchMobileView("chart");
+        }
 
         setInterval(fetchTelemetry, 1500);
         setInterval(fetchHistory, 5000);

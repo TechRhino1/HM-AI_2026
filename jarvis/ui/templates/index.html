@@ -85,12 +85,23 @@
     </header>
 
     <!-- ==========================================================================
+         MOBILE NAVIGATION TAB BAR (VISIBLE ON TOUCH / MOBILE SCREENS <= 900PX)
+         ========================================================================== -->
+    <nav class="mobile-nav-bar" id="mobile-nav-bar">
+        <button id="mob-btn-chart" class="mob-tab-btn active" onclick="switchMobileView('chart')">📊 Chart & Desk</button>
+        <button id="mob-btn-radar" class="mob-tab-btn" onclick="switchMobileView('radar')">📡 Setups Radar</button>
+        <button id="mob-btn-cognition" class="mob-tab-btn" onclick="switchMobileView('cognition')">🛡️ AI Gates</button>
+        <button id="mob-btn-orders" class="mob-tab-btn" onclick="switchMobileView('orders')">📋 Orders & Log</button>
+        <button id="mob-btn-all" class="mob-tab-btn" onclick="switchMobileView('all')">🌐 All</button>
+    </nav>
+
+    <!-- ==========================================================================
          MAIN INSTITUTIONAL GRID WORKSPACE
          ========================================================================== -->
-    <main class="terminal-workspace">
+    <main class="terminal-workspace" id="terminal-workspace">
         
         <!-- LEFT COLUMN: Verified Account Card + Radar / News Switcher Tabs -->
-        <aside class="terminal-panel left-column">
+        <aside id="panel-left" class="terminal-panel left-column">
             <div class="panel-header">
                 <div class="tab-switcher">
                     <button id="tab-btn-radar" class="tab-btn active" onclick="switchLeftTab('radar')">📡 Setups Radar</button>
@@ -158,7 +169,7 @@
         </aside>
 
         <!-- MIDDLE COLUMN: Multi-Pane Chart + Active Trades HUD + SQLite Trade History -->
-        <div class="middle-column-stack">
+        <div id="panel-middle" class="middle-column-stack">
             <!-- 1. TradingView Multi-Pane Financial Chart Stage -->
             <section id="chart-main-panel" class="terminal-panel chart-panel" style="flex: 1.3; min-height: 250px;">
                 <div class="panel-header">
@@ -211,7 +222,7 @@
             </section>
 
             <!-- 2. Active Trades (Live Positions HUD with 1-Click Close) -->
-            <section class="terminal-panel" style="flex: 0.9; min-height: 120px;">
+            <section id="section-positions" class="terminal-panel" style="flex: 0.9; min-height: 120px;">
                 <div class="panel-header">
                     <div class="panel-title-wrap">
                         <span class="panel-title">Active Trades (Live Positions HUD)</span>
@@ -246,7 +257,7 @@
             </section>
 
             <!-- 3. Self-Learning Trade History (SQLite) -->
-            <section class="terminal-panel" style="flex: 0.8; min-height: 110px;">
+            <section id="section-history" class="terminal-panel" style="flex: 0.8; min-height: 110px;">
                 <div class="panel-header">
                     <div class="panel-title-wrap">
                         <span class="panel-title">Self-Learning Trade History (SQLite)</span>
@@ -278,7 +289,7 @@
         </div>
 
         <!-- RIGHT COLUMN: THE DEVIL'S ADVOCATE & 1-CLICK EXECUTION DESK -->
-        <aside class="terminal-panel devil-panel">
+        <aside id="panel-right" class="terminal-panel devil-panel">
             <div class="panel-header">
                 <div class="tab-switcher">
                     <button id="tab-btn-desk" class="tab-btn active" onclick="switchRightTab('desk')">⚡ Desk & Plan</button>
