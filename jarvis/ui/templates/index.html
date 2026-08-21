@@ -383,33 +383,51 @@
 
                 <!-- TAB 2: AI COGNITION, 14 QUALITY GATES & DEVIL'S ADVOCATE -->
                 <div id="tab-content-cognition" class="right-tab-pane" style="display:none;">
-                    <!-- AI VALIDATION & METRICS -->
-                    <div class="section-card">
+                    <!-- SECTION 1: AI COGNITION & VALIDATION METRICS -->
+                    <div class="section-card cognition-hero-card">
                         <div class="section-card-header emerald">
-                            <span>🛡️ AI Validation & Metrics</span>
+                            <span style="display:flex; align-items:center; gap:5px;">
+                                <span>🛡️</span> AI Cognition & Validation
+                            </span>
                             <span id="decision-gate-badge" class="pill" style="color:var(--text-dim);">EVALUATING...</span>
                         </div>
 
-                        <!-- Dialectical Probability & EV Strip -->
-                        <div style="background:rgba(0,0,0,0.4); border:1px solid var(--border-subtle); border-radius:4px; padding:6px 8px; margin-bottom:6px;">
-                            <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:11px; margin-bottom:2px;">
-                                <span>Win Probability: <b id="decision-win-prob" style="color:var(--neon-bull);">--%</b></span>
-                                <span>Expected Value: <b id="decision-ev" style="color:var(--accent-cyan);">--</b></span>
+                        <!-- 4-Tile High-Conviction AI Telemetry Grid -->
+                        <div class="cognition-telemetry-grid">
+                            <div class="cognition-stat-tile">
+                                <span class="stat-tile-label">Win Probability</span>
+                                <span id="decision-win-prob" class="stat-tile-val mono-number" style="color:var(--neon-bull);">--%</span>
+                            </div>
+                            <div class="cognition-stat-tile">
+                                <span class="stat-tile-label">Expected Value</span>
+                                <span id="decision-ev" class="stat-tile-val mono-number" style="color:var(--accent-cyan);">--</span>
+                            </div>
+                            <div class="cognition-stat-tile">
+                                <span class="stat-tile-label">Risk/Reward</span>
+                                <span id="cognition-rr" class="stat-tile-val mono-number">--</span>
+                            </div>
+                            <div class="cognition-stat-tile">
+                                <span class="stat-tile-label">Strategy Edge</span>
+                                <span id="cognition-strat" class="stat-tile-val mono-number" style="font-size:9.5px; color:#ffffff;">--</span>
                             </div>
                         </div>
 
                         <!-- Adversarial Penalty & Invalidation Multiplier Gauges -->
                         <div class="devil-gauges-grid">
                             <div class="devil-gauge-card">
-                                <span class="gauge-lbl">Adversarial Penalty</span>
-                                <span id="devil-penalty-score" class="gauge-val">0.0 / 50.0</span>
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <span class="gauge-lbl">Devil's Penalty</span>
+                                    <span id="devil-penalty-score" class="gauge-val">0.0 / 50.0</span>
+                                </div>
                                 <div class="gauge-bar-track">
                                     <div id="devil-penalty-fill" class="gauge-bar-fill" style="width:0%;"></div>
                                 </div>
                             </div>
                             <div class="devil-gauge-card">
-                                <span class="gauge-lbl">Invalidation Risk</span>
-                                <span id="devil-risk-coeff" class="gauge-val" style="color:var(--accent-cyan);">1.00x Multiplier</span>
+                                <div style="display:flex; justify-content:space-between; align-items:center;">
+                                    <span class="gauge-lbl">Invalidation Multiplier</span>
+                                    <span id="devil-risk-coeff" class="gauge-val" style="color:var(--accent-cyan);">1.00x</span>
+                                </div>
                                 <div class="gauge-bar-track">
                                     <div id="devil-risk-fill" class="gauge-bar-fill" style="width:100%; background:linear-gradient(90deg, #38bdf8, #00f59b);"></div>
                                 </div>
@@ -417,8 +435,9 @@
                         </div>
 
                         <!-- 14-Point Quality Gate Checks Grid -->
-                        <div style="font-size:8.5px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:3px;">
-                            14-Point Quality Gate Checks
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px; margin-bottom:3px;">
+                            <span style="font-size:8.5px; font-weight:800; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em;">14-Point Quality Gate Matrix</span>
+                            <span id="gate-pass-count-tag" style="font-family:var(--font-mono); font-size:8.5px; font-weight:700; color:var(--accent-cyan);">-- / 14</span>
                         </div>
                         <div class="decision-gate-summary">
                             <div id="gate-checks-list">
@@ -427,7 +446,7 @@
                         </div>
                     </div>
 
-                    <!-- DECISION RATIONALE -->
+                    <!-- SECTION 2: DECISION RATIONALE -->
                     <div id="decision-rationale-card" class="section-card">
                         <div id="decision-rationale-header" class="section-card-header amber">
                             <span id="decision-rationale-title">🔍 Decision Rationale</span>
@@ -441,7 +460,7 @@
                         </div>
                     </div>
 
-                    <!-- WHAT WOULD CHANGE MY MIND -->
+                    <!-- SECTION 3: WHAT WOULD CHANGE MY MIND -->
                     <div class="invalidation-box">
                         <div class="invalidation-box-title">
                             <span>✕</span> WHAT WOULD CHANGE MY MIND (INVALIDATION)
@@ -452,7 +471,7 @@
                         </div>
                     </div>
 
-                    <!-- THREAT ASSESSMENT VECTORS -->
+                    <!-- SECTION 4: THREAT ASSESSMENT VECTORS -->
                     <div class="section-card">
                         <div class="section-card-header amber">
                             <span>⚠️ Threat Assessment Vectors</span>

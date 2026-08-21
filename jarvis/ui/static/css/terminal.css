@@ -373,6 +373,7 @@ header.terminal-hud {
     flex-direction: column;
     min-height: 0;
     overflow-y: auto;
+    gap: 6px;
 }
 
 .pane-subheader {
@@ -1237,6 +1238,7 @@ header.terminal-hud {
 .section-card-header.amber { color: var(--devil-amber); }
 .section-card-header.cyan { color: var(--accent-cyan); }
 .section-card-header.emerald { color: var(--neon-bull); }
+.section-card-header.closed { color: #ff5277; }
 
 .pill {
     background: rgba(56, 189, 248, 0.12);
@@ -1263,6 +1265,45 @@ header.terminal-hud {
 }
 .plan-grid-lbl { font-size: 7.5px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; }
 .plan-grid-val { font-family: var(--font-mono); font-size: 10px; font-weight: 800; color: #ffffff; }
+
+/* ==========================================================================
+   AI COGNITION & VALIDATION HERO WIDGET
+   ========================================================================== */
+.cognition-hero-card {
+    border-color: rgba(56, 189, 248, 0.3);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.cognition-telemetry-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    padding: 5px 6px;
+}
+
+.cognition-stat-tile {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 1px;
+}
+.stat-tile-label {
+    font-size: 7.5px;
+    font-weight: 700;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    line-height: 1;
+}
+.stat-tile-val {
+    font-size: 11px;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.2;
+}
 
 .devil-gauges-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
 .devil-gauge-card {
@@ -1299,7 +1340,7 @@ header.terminal-hud {
     font-family: var(--font-mono);
 }
 .gate-check-pass { color: var(--neon-bull); font-weight: 700; }
-.gate-check-fail { color: var(--neon-bear); font-weight: 700; }
+.gate-check-fail { color: var(--devil-amber); font-weight: 700; }
 
 .rationale-box {
     background: rgba(0, 0, 0, 0.35);
@@ -1313,6 +1354,7 @@ header.terminal-hud {
 .rationale-item.ready { color: var(--neon-bull); }
 .rationale-item.wait { color: var(--devil-amber); }
 .rationale-item.reject { color: var(--neon-bear); }
+.rationale-item.closed { color: #ff5277; }
 
 .invalidation-box {
     background: rgba(255, 59, 92, 0.08);

@@ -417,6 +417,22 @@ class JarvisOrchestrator:
                             logger.error(f"Parallel scan error for {sym}: {e}", exc_info=True)
 
                     if radar_results:
+                        def _radar_sort_key(item):
+                            act = item.get("action", "")
+                            is_open = 0 if "CLOSED" in act else 1
+                            if "READY" in act:
+                                conv = 3
+                            elif "WAIT" in act:
+                                conv = 2
+                            elif "NO TRADE" in act or "INVALID" in act:
+                                conv = 1
+                            else:
+                                conv = 0
+                            prob = item.get("win_prob", 0) or item.get("score", 0) or 0
+                            ev = item.get("ev", 0) or 0
+                            return (is_open, conv, prob, ev)
+
+                        radar_results.sort(key=_radar_sort_key, reverse=True)
                         self.state_manager.update_radar(radar_results)
                 except Exception as e:
                     logger.error(f"Orchestration loop error: {e}", exc_info=True)

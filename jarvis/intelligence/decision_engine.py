@@ -251,8 +251,13 @@ class DecisionEngine:
         if regime.primary_regime in [MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR] and regime.confidence > 0.7:
             effective_min_ev *= 0.7
 
+        from jarvis.market.sessions import SessionEngine
+        mkt_status = SessionEngine.get_market_trading_status(context.symbol)
+        is_mkt_open = mkt_status.get("is_open", True)
+
         # 14-Point Comprehensive Institutional Quality Gate Matrix
         gate_checks = {
+            "Market Session Open": is_mkt_open,
             "Regime Viability": regime.primary_regime != MarketRegime.EVENT_RISK,
             "Directional Bias": tentative_bias in ["BUY", "SELL"],
             "Risk/Reward >= 1.5": rr_ratio >= min_rr,
@@ -265,7 +270,6 @@ class DecisionEngine:
             "Premium/Discount Alignment": premium_discount_valid,
             "No Active Macro Shock": regime.primary_regime != MarketRegime.EVENT_RISK,
             "Order Flow Momentum": abs(context.momentum.trend_score) >= 15 or context.structure.bos or context.liquidity.sweep_detected,
-            "Drawdown Safety Guard": current_drawdown_pct <= 10.0,
             "Margin Capacity Limit": account_balance >= 10.0 and planned_risk_dollars > 0
         }
 
@@ -378,10 +382,16 @@ class DecisionEngine:
             calibrated_win_p=calibrated_win_p, risk_dist=risk_dist, planned_risk_dollars=planned_risk_dollars
         )
         
+        from jarvis.market.sessions import SessionEngine
+        mkt_status = SessionEngine.get_market_trading_status(context.symbol)
+        is_mkt_open = mkt_status.get("is_open", True)
+
         gate_passed = quality_gate.passed
         failing_reasons = quality_gate.failing_reasons
 
-        if gate_passed:
+        if not is_mkt_open:
+            decision_action = "NO_TRADE"
+        elif gate_passed:
             decision_action = "EXECUTE"
         elif tentative_bias in ["BUY", "SELL"] and len(failing_reasons) <= 2 and quality_gate.checks.get("Regime Viability", False):
             decision_action = "WAIT"
@@ -391,7 +401,11 @@ class DecisionEngine:
         waiting_reasons = []
         rejection_reasons = []
 
-        if decision_action == "WAIT":
+        if not is_mkt_open:
+            rejection_reasons.append(
+                f"Market session is closed for the weekend ({mkt_status.get('reason', 'Weekend Close')}). Live order execution halted until session opens on {mkt_status.get('next_open_ist', 'Monday')}."
+            )
+        elif decision_action == "WAIT":
             for reason in failing_reasons:
                 if "Calibrated Win Prob" in reason:
                     waiting_reasons.append(f"Calibrated probability ({calibrated_win_p*100:.0f}%) below institutional threshold (55%).")

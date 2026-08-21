@@ -136,6 +136,11 @@
         planTp: document.getElementById("plan-tp"),
         planRiskAmt: document.getElementById("plan-risk-amt"),
         planCalcLots: document.getElementById("plan-calc-lots"),
+        btnBuyAction: document.getElementById("btn-buy-action"),
+        btnSellAction: document.getElementById("btn-sell-action"),
+        cognitionRr: document.getElementById("cognition-rr"),
+        cognitionStrat: document.getElementById("cognition-strat"),
+        gatePassCountTag: document.getElementById("gate-pass-count-tag"),
         decisionGateBadge: document.getElementById("decision-gate-badge"),
         decisionWinProb: document.getElementById("decision-win-prob"),
         decisionEv: document.getElementById("decision-ev"),
@@ -878,13 +883,52 @@
             return;
         }
 
-        const snapshot = JSON.stringify({ activeSym: state.symbol, data: opps, mktOpen: currentSymStatus.is_open });
+        // Institutional Multi-Factor Priority Ranking:
+        // 1. Open / Live markets (e.g. BTCUSD continuous 24/7) rank ABOVE closed weekend markets
+        // 2. Action Conviction: READY > WAIT > NO_TRADE > CLOSED
+        // 3. AI Win Probability: highest win rate first
+        // 4. Mathematical Expected Value (EV)
+        const sortedOpps = [...opps].sort((a, b) => {
+            const symA = a.symbol || "XAUUSD";
+            const symB = b.symbol || "XAUUSD";
+            const statusA = (state.marketStatuses && state.marketStatuses[symA]) || computeClientMarketStatus(symA);
+            const statusB = (state.marketStatuses && state.marketStatuses[symB]) || computeClientMarketStatus(symB);
+            
+            if (statusA.is_open !== statusB.is_open) {
+                return statusA.is_open ? -1 : 1;
+            }
+            
+            const getConviction = (item) => {
+                const act = item.action || item.status_label || "";
+                if (act.includes("READY")) return 3;
+                if (act.includes("WAIT")) return 2;
+                if (act.includes("NO TRADE") || act.includes("INVALID")) return 1;
+                return 0;
+            };
+            const convA = getConviction(a);
+            const convB = getConviction(b);
+            if (convA !== convB) {
+                return convB - convA;
+            }
+            
+            const probA = Number(a.win_prob || a.score || 0);
+            const probB = Number(b.win_prob || b.score || 0);
+            if (probA !== probB) {
+                return probB - probA;
+            }
+            
+            const evA = Number(a.ev || 0);
+            const evB = Number(b.ev || 0);
+            return evB - evA;
+        });
+
+        const snapshot = JSON.stringify({ activeSym: state.symbol, data: sortedOpps, mktOpen: currentSymStatus.is_open });
         if (snapshot === _lastRadarSnapshot) {
             return; // Zero DOM thrashing when data is unchanged
         }
         _lastRadarSnapshot = snapshot;
 
-        el.radarList.innerHTML = opps.map(opp => {
+        el.radarList.innerHTML = sortedOpps.map(opp => {
             const sym = opp.symbol || "XAUUSD";
             const symStatus = (state.marketStatuses && state.marketStatuses[sym]) || computeClientMarketStatus(sym);
             const isMarketClosed = !symStatus.is_open;
@@ -1218,24 +1262,42 @@
         if (el.deskActiveSymbol) el.deskActiveSymbol.textContent = sym;
         if (el.chartSymbol) el.chartSymbol.textContent = sym;
 
+        const symStatus = (state.marketStatuses && state.marketStatuses[sym]) || computeClientMarketStatus(sym);
+        const isMarketClosed = !symStatus.is_open;
+
+        // Enable or disable 1-click execution buttons based on market open status
+        if (el.btnBuyAction) {
+            el.btnBuyAction.disabled = isMarketClosed;
+            el.btnBuyAction.style.opacity = isMarketClosed ? "0.35" : "1.0";
+            el.btnBuyAction.style.cursor = isMarketClosed ? "not-allowed" : "pointer";
+        }
+        if (el.btnSellAction) {
+            el.btnSellAction.disabled = isMarketClosed;
+            el.btnSellAction.style.opacity = isMarketClosed ? "0.35" : "1.0";
+            el.btnSellAction.style.cursor = isMarketClosed ? "not-allowed" : "pointer";
+        }
+
         if (!d) {
             if (el.planStrategyPill) el.planStrategyPill.textContent = "SYNTHESIZING...";
             if (el.planEntry) el.planEntry.textContent = "--";
             if (el.planSl) el.planSl.textContent = "--";
             if (el.planTp) el.planTp.textContent = "--";
             if (el.decisionRr) el.decisionRr.textContent = "--";
+            if (el.cognitionRr) el.cognitionRr.textContent = "--";
+            if (el.cognitionStrat) el.cognitionStrat.textContent = "--";
             if (el.planRiskAmt) el.planRiskAmt.textContent = "--";
             if (el.planCalcLots) el.planCalcLots.textContent = "--";
             if (el.decisionWinProb) el.decisionWinProb.textContent = "--%";
             if (el.decisionEv) el.decisionEv.textContent = "--";
             if (el.decisionGateBadge) {
-                el.decisionGateBadge.textContent = "EVALUATING...";
-                el.decisionGateBadge.style.color = "var(--text-dim)";
+                el.decisionGateBadge.textContent = isMarketClosed ? "🔒 MARKET CLOSED" : "EVALUATING...";
+                el.decisionGateBadge.style.color = isMarketClosed ? "#ff5277" : "var(--text-dim)";
             }
+            if (el.gatePassCountTag) el.gatePassCountTag.textContent = isMarketClosed ? "PAUSED" : "-- / 14";
             if (el.deskBannerTitle) el.deskBannerTitle.textContent = `${sym} — PENDING ANALYSIS`;
             if (el.deskBannerStatus) {
-                el.deskBannerStatus.textContent = "SCANNING";
-                el.deskBannerStatus.className = "radar-action-pill badge-no-setup";
+                el.deskBannerStatus.textContent = isMarketClosed ? "🔒 CLOSED" : "SCANNING";
+                el.deskBannerStatus.className = isMarketClosed ? "radar-action-pill badge-market-closed" : "radar-action-pill badge-no-setup";
             }
             if (el.deskBannerEntry) el.deskBannerEntry.textContent = "--";
             if (el.deskBannerSl) el.deskBannerSl.textContent = "--";
@@ -1245,7 +1307,7 @@
             if (el.deskBannerProb) el.deskBannerProb.textContent = "--%";
             if (el.devilPenaltyScore) el.devilPenaltyScore.textContent = "0.0 / 50.0";
             if (el.devilPenaltyFill) el.devilPenaltyFill.style.width = "0%";
-            if (el.devilRiskCoeff) el.devilRiskCoeff.textContent = "1.00x Multiplier";
+            if (el.devilRiskCoeff) el.devilRiskCoeff.textContent = "1.00x";
             if (el.devilRiskFill) el.devilRiskFill.style.width = "100%";
             return;
         }
@@ -1264,7 +1326,7 @@
         const riskPct = d.calculated_risk_percent || 0.50;
         const stratName = d.strategy || "MARKET_STRUCTURE";
 
-        // 1. Update 1-Click Execution Desk Summary Banner (Requirement 6)
+        // 1. Update 1-Click Execution Desk Summary Banner
         if (el.deskBannerTitle) el.deskBannerTitle.textContent = `${sym} — ${d.bias || 'WAIT'} / ${d.bias === 'SELL' ? 'SHORT' : (d.bias === 'BUY' ? 'LONG' : 'MONITOR')}`;
         if (el.deskBannerStatus) {
             el.deskBannerStatus.textContent = badge.label;
@@ -1277,7 +1339,7 @@
         if (el.deskBannerRisk) el.deskBannerRisk.textContent = `${riskPct.toFixed(2)}%`;
         if (el.deskBannerProb) el.deskBannerProb.textContent = `${probPct}%`;
 
-        // 2. Populate Trade Plan Card (Requirement 5)
+        // 2. Populate Trade Plan Card
         if (el.planStrategyPill) el.planStrategyPill.textContent = stratName;
         if (el.planEntry) el.planEntry.textContent = entryStr;
         if (el.planSl) el.planSl.textContent = slStr;
@@ -1292,22 +1354,36 @@
             el.planCalcLots.textContent = `${(el.deskLots ? el.deskLots.value : '0.01')} Lots`;
         }
 
-        // 3. Populate AI Validation & Metrics (Requirement 5)
+        // 3. Populate AI Validation & Cognition Metrics
         if (el.decisionWinProb) el.decisionWinProb.textContent = `${probPct}%`;
         if (el.decisionEv) {
             el.decisionEv.textContent = evStr;
             el.decisionEv.style.color = evVal >= 0 ? "var(--accent-cyan)" : "var(--neon-bear)";
         }
+        if (el.cognitionRr) el.cognitionRr.textContent = rrStr;
+        if (el.cognitionStrat) el.cognitionStrat.textContent = stratName;
         if (el.chartRegime) {
             el.chartRegime.textContent = (d.regime && d.regime.primary) ? d.regime.primary : ((d.regime && typeof d.regime === "string") ? d.regime : "MONITORING");
         }
 
-        const checks = (d.quality_gate && d.quality_gate.checks) ? d.quality_gate.checks : {};
+        const checks = (d.quality_gate && d.quality_gate.checks) ? { ...d.quality_gate.checks } : {};
+        if (isMarketClosed) {
+            checks["Market Session Open"] = false;
+        }
         const passCount = Object.values(checks).filter(Boolean).length;
         const totalCount = Object.keys(checks).length || 14;
-        const isGatePassed = d.quality_gate ? d.quality_gate.passed : (d.execution_authorized || false);
+        const isGatePassed = !isMarketClosed && (d.quality_gate ? d.quality_gate.passed : (d.execution_authorized || false));
+        
+        if (el.gatePassCountTag) {
+            el.gatePassCountTag.textContent = isMarketClosed ? "PAUSED (CLOSED)" : `${passCount} / ${totalCount} PASS`;
+            el.gatePassCountTag.style.color = isMarketClosed ? "#ff5277" : (passCount === totalCount ? "var(--neon-bull)" : "var(--devil-amber)");
+        }
+
         if (el.decisionGateBadge) {
-            if (isGatePassed) {
+            if (isMarketClosed) {
+                el.decisionGateBadge.textContent = "🔒 MARKET CLOSED (WEEKEND)";
+                el.decisionGateBadge.style.color = "#ff5277";
+            } else if (isGatePassed) {
                 el.decisionGateBadge.textContent = `GATE PASSED (${passCount}/${totalCount} PASS)`;
                 el.decisionGateBadge.style.color = "var(--neon-bull)";
             } else {
@@ -1320,20 +1396,40 @@
         // Gauges
         const penalty = d.adversarial_penalty || 0;
         if (el.devilPenaltyScore) el.devilPenaltyScore.textContent = `${penalty.toFixed(1)} / 50.0`;
-        if (el.devilPenaltyFill) el.devilPenaltyFill.style.width = `${Math.min(100, (penalty / 50.0) * 100)}%`;
+        if (el.devilPenaltyFill) {
+            el.devilPenaltyFill.style.width = `${Math.min(100, (penalty / 50.0) * 100)}%`;
+            el.devilPenaltyFill.style.background = penalty > 25 ? "var(--neon-bear)" : (penalty > 15 ? "var(--devil-amber)" : "var(--neon-bull)");
+        }
 
         const coeff = d.calculated_risk_percent ? Math.min(1.0, d.calculated_risk_percent / 0.5) : 1.0;
         if (el.devilRiskCoeff) el.devilRiskCoeff.textContent = `${coeff.toFixed(2)}x Multiplier`;
         if (el.devilRiskFill) el.devilRiskFill.style.width = `${Math.min(100, coeff * 100)}%`;
 
-        // 4. Decision Rationale: Reasons for Waiting / Rejection
+        // 4. Decision Rationale: Closed Market vs Waiting vs Authorized
         if (el.decisionRationaleCard && el.decisionRationaleContent) {
-            const action = d.decision || (badge.label.includes("READY") ? "EXECUTE" : (badge.label.includes("WAIT") ? "WAIT" : "NO_TRADE"));
+            const action = isMarketClosed ? "MARKET_CLOSED" : (d.decision || (badge.label.includes("READY") ? "EXECUTE" : (badge.label.includes("WAIT") ? "WAIT" : "NO_TRADE")));
             const waitingReasons = d.waiting_reasons || [];
             const rejectionReasons = d.rejection_reasons || [];
             const failingChecks = d.quality_gate ? (d.quality_gate.failing_reasons || []) : [];
             
-            if (action === "EXECUTE" || badge.label.includes("READY")) {
+            if (isMarketClosed) {
+                if (el.decisionRationaleHeader) el.decisionRationaleHeader.className = "section-card-header closed";
+                if (el.decisionRationaleTitle) el.decisionRationaleTitle.textContent = "🔒 Session Intermission: Weekend Close";
+                if (el.decisionRationaleBadge) {
+                    el.decisionRationaleBadge.textContent = "MARKET CLOSED";
+                    el.decisionRationaleBadge.style.color = "#ff5277";
+                }
+                el.decisionRationaleContent.innerHTML = `
+                    <div class="rationale-item" style="color:#ff5277; display:flex; gap:5px;">
+                        <span class="icon">🔒</span>
+                        <span>Trading session is closed for the weekend. Live execution and automated order dispatch are halted until session re-opens on <b>${symStatus.next_open_ist || 'Monday'}</b>.</span>
+                    </div>
+                    <div class="rationale-item" style="color:var(--text-secondary); margin-top:4px; display:flex; gap:5px;">
+                        <span class="icon">📐</span>
+                        <span>Pre-market structural levels, targets, and hypotheses are preserved for trade planning only.</span>
+                    </div>
+                `;
+            } else if (action === "EXECUTE" || badge.label.includes("READY")) {
                 if (el.decisionRationaleHeader) el.decisionRationaleHeader.className = "section-card-header emerald";
                 if (el.decisionRationaleTitle) el.decisionRationaleTitle.textContent = "⚡ Decision Rationale: Trade Authorized";
                 if (el.decisionRationaleBadge) {
@@ -1343,7 +1439,7 @@
                 el.decisionRationaleContent.innerHTML = `
                     <div class="rationale-item ready">
                         <span class="icon">✓</span>
-                        <span>All 14 Institutional Quality Gates, risk parameters, and EV edge hurdles passed. Setup authorized for execution.</span>
+                        <span>All 14 Institutional Quality Gates, risk parameters, and EV edge hurdles passed. Setup authorized for live execution.</span>
                     </div>
                 `;
             } else if (action === "WAIT" || badge.label.includes("WAIT")) {
@@ -1405,12 +1501,20 @@
 
         // 7. Quality Gate Checks Grid
         if (el.gateChecksList) {
-            el.gateChecksList.innerHTML = Object.entries(checks).map(([name, pass]) => `
-                <div class="gate-check-row">
-                    <span>${name}</span>
-                    <span class="${pass ? 'gate-check-pass' : 'gate-check-fail'}">${pass ? '✓ PASS' : '⏳ WAIT'}</span>
-                </div>
-            `).join("");
+            el.gateChecksList.innerHTML = Object.entries(checks).map(([name, pass]) => {
+                let badgeHtml = `<span class="gate-check-fail">⏳ WAIT</span>`;
+                if (name === "Market Session Open") {
+                    badgeHtml = pass ? `<span class="gate-check-pass">✓ OPEN</span>` : `<span style="color:#ff5277; font-weight:700;">🔒 CLOSED</span>`;
+                } else if (pass) {
+                    badgeHtml = `<span class="gate-check-pass">✓ PASS</span>`;
+                }
+                return `
+                    <div class="gate-check-row">
+                        <span>${name}</span>
+                        ${badgeHtml}
+                    </div>
+                `;
+            }).join("");
         }
     }
 
