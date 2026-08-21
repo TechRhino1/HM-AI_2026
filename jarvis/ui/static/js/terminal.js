@@ -1132,12 +1132,16 @@
         const warnEl = document.getElementById("mn-modal-warning");
         if (warnEl) warnEl.textContent = item.execution_warning || item.shock_alert;
 
+        modal.style.display = "flex";
         modal.classList.add("active");
     }
 
     function closeNewsDetailModal() {
         const modal = document.getElementById("macro-news-modal");
-        if (modal) modal.classList.remove("active");
+        if (modal) {
+            modal.style.display = "none";
+            modal.classList.remove("active");
+        }
     }
 
     window.openNewsDetailModal = openNewsDetailModal;

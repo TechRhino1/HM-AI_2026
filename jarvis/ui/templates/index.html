@@ -505,7 +505,7 @@
     <!-- ==========================================================================
          GLOBAL SPOTLIGHT COMMAND PALETTE (CTRL+K / CMD+K)
          ========================================================================== -->
-    <div id="command-palette-overlay" class="command-palette-overlay" onclick="if(event.target === this) toggleCommandPalette(false)">
+    <div id="command-palette-overlay" class="command-palette-overlay" style="display:none;" onclick="if(event.target === this) toggleCommandPalette(false)">
         <div class="command-palette-modal">
             <div class="command-palette-search">
                 <span class="command-palette-icon">⚡</span>
@@ -520,7 +520,7 @@
     <!-- ==========================================================================
          MACRO NEWS INTELLIGENCE MODAL (CLICK TO VIEW DEEP EVENT SHOCK DETAILS)
          ========================================================================== -->
-    <div id="macro-news-modal" class="macro-news-modal-overlay" onclick="if(event.target === this) closeNewsDetailModal()">
+    <div id="macro-news-modal" class="macro-news-modal-overlay" style="display:none;" onclick="if(event.target === this) closeNewsDetailModal()">
         <div class="macro-news-modal-content">
             <div class="macro-news-modal-header">
                 <div style="display:flex; align-items:center; gap:8px;">
