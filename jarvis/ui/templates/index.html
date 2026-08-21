@@ -34,11 +34,11 @@
         <!-- Real-Time Broker Telemetry Metrics -->
         <div class="hud-telemetry">
             <div class="hud-tile">
-                <span class="hud-tile-label">Broker Server</span>
+                <span class="hud-tile-label">Broker</span>
                 <span id="hud-server" class="hud-tile-value">Connecting...</span>
             </div>
             <div class="hud-tile">
-                <span class="hud-tile-label">MT5 Login</span>
+                <span class="hud-tile-label">Login</span>
                 <span id="hud-login" class="hud-tile-value">#--</span>
             </div>
             <div class="hud-tile">
@@ -46,7 +46,7 @@
                 <span id="hud-balance" class="hud-tile-value mono-number">$0.00</span>
             </div>
             <div class="hud-tile">
-                <span class="hud-tile-label">Live Equity</span>
+                <span class="hud-tile-label">Equity</span>
                 <span id="hud-equity" class="hud-tile-value mono-number" style="color:var(--neon-bull);">$0.00</span>
             </div>
             <div class="hud-tile">
@@ -58,12 +58,12 @@
                 <span id="hud-margin-level" class="hud-tile-value mono-number" style="color:var(--accent-cyan);">--%</span>
             </div>
             <div class="hud-tile">
-                <span class="hud-tile-label">MT5 State Sync</span>
+                <span class="hud-tile-label">State</span>
                 <span id="hud-sync" class="hud-tile-value" style="color:var(--neon-bull);">ONLINE</span>
             </div>
             <div class="hud-tile">
-                <span class="hud-tile-label">Global Market</span>
-                <span id="hud-market-status" class="hud-tile-value" style="color:var(--neon-bear); font-weight:700; font-size:11px;">CLOSED (WEEKEND)</span>
+                <span class="hud-tile-label">Market</span>
+                <span id="hud-market-status" class="hud-tile-value" style="color:var(--neon-bear); font-weight:700; font-size:11px;">CLOSED</span>
             </div>
         </div>
 
@@ -102,55 +102,54 @@
                 <!-- Verified MT5 Account Card -->
                 <section class="account-hud-card">
                     <div class="account-hud-header">
-                        <span id="acc-name" class="account-name-tag">MT5 Trader</span>
-                        <span id="acc-leverage" class="account-leverage-tag">--</span>
+                        <div class="account-title-group">
+                            <span id="acc-name" class="account-name-tag">Demo Account</span>
+                            <span id="acc-company" class="account-company-sub">Broker Gateway</span>
+                        </div>
+                        <span id="acc-leverage" class="account-leverage-tag">1:1000</span>
                     </div>
                     <div class="account-grid">
                         <div class="account-item">
-                            <span class="account-item-lbl">Broker</span>
-                            <span id="acc-company" class="account-item-val">Broker Gateway</span>
-                        </div>
-                        <div class="account-item">
                             <span class="account-item-lbl">Account #</span>
-                            <span id="acc-login" class="account-item-val">--</span>
+                            <span id="acc-login" class="account-item-val mono-number">--</span>
                         </div>
                         <div class="account-item">
                             <span class="account-item-lbl">Balance</span>
-                            <span id="acc-balance" class="account-item-val">$0.00</span>
+                            <span id="acc-balance" class="account-item-val mono-number">$0.00</span>
                         </div>
                         <div class="account-item">
                             <span class="account-item-lbl">Live Equity</span>
-                            <span id="acc-equity" class="account-item-val" style="color:var(--neon-bull);">$0.00</span>
+                            <span id="acc-equity" class="account-item-val mono-number" style="color:var(--neon-bull);">$0.00</span>
                         </div>
                         <div class="account-item">
                             <span class="account-item-lbl">Floating PnL</span>
-                            <span id="acc-profit" class="account-item-val" style="color:var(--neon-bull);">$0.00</span>
+                            <span id="acc-profit" class="account-item-val mono-number" style="color:var(--neon-bull);">$0.00</span>
                         </div>
                         <div class="account-item">
                             <span class="account-item-lbl">Free Margin</span>
-                            <span id="acc-free-margin" class="account-item-val">$0.00</span>
+                            <span id="acc-free-margin" class="account-item-val mono-number">$0.00</span>
                         </div>
                     </div>
                 </section>
 
                 <!-- TAB 1: MODULE B (Upcoming Trades & Scanner Radar) -->
-                <div id="tab-content-radar" style="flex:1; display:flex; flex-direction:column; min-height:0;">
-                    <div style="font-size:9.5px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+                <div id="tab-content-radar" class="left-tab-pane active">
+                    <div class="pane-subheader">
                         <span>High-Probability Radar</span>
-                        <span style="color:var(--neon-bull); font-size:9px;">1-CLICK LOAD</span>
+                        <span class="action-hint">1-CLICK LOAD</span>
                     </div>
-                    <div id="radar-list" class="scanner-radar-list" style="flex:1; overflow-y:auto;">
+                    <div id="radar-list" class="scanner-radar-list">
                         <!-- Rendered dynamically by terminal.js -->
                     </div>
                 </div>
 
                 <!-- TAB 2: Live Macroeconomic News & Event Shock Calendar -->
-                <div id="tab-content-news" style="display:none; flex:1; display:flex; flex-direction:column; min-height:0;">
-                    <div style="font-size:9.5px; font-weight:700; color:var(--devil-amber); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+                <div id="tab-content-news" class="left-tab-pane" style="display:none;">
+                    <div class="pane-subheader amber">
                         <span>Live Economic Calendar</span>
-                        <span style="font-size:9px; color:var(--text-dim);">HIGH-IMPACT</span>
+                        <span class="action-hint">HIGH-IMPACT</span>
                     </div>
-                    <div id="news-feed-list" class="news-feed-list" style="flex:1; overflow-y:auto;">
+                    <div id="news-feed-list" class="news-feed-list">
                         <!-- Rendered dynamically by terminal.js -->
                     </div>
                 </div>
@@ -281,179 +280,186 @@
         <!-- RIGHT COLUMN: THE DEVIL'S ADVOCATE & 1-CLICK EXECUTION DESK -->
         <aside class="terminal-panel devil-panel">
             <div class="panel-header">
-                <div class="panel-title-wrap">
-                    <span class="panel-title" style="color:var(--devil-amber);">The Devil's Advocate & Desk</span>
+                <div class="tab-switcher">
+                    <button id="tab-btn-desk" class="tab-btn active" onclick="switchRightTab('desk')">⚡ Desk & Plan</button>
+                    <button id="tab-btn-cognition" class="tab-btn" onclick="switchRightTab('cognition')">🛡️ AI Cognition & Gates</button>
                 </div>
-                <span class="devil-header-badge">LIVE COGNITION</span>
+                <span class="devil-header-badge">LIVE AI</span>
             </div>
-            <div class="panel-content" style="gap: 8px;">
+            <div class="panel-content" style="gap: 6px; padding: 6px;">
                 
-                <!-- SECTION 1: 1-CLICK EXECUTION DESK (Requirement 6) -->
-                <section class="manual-trade-desk">
-                    <div class="desk-header">
-                        <span class="desk-title">⚡ 1-Click Execution Desk</span>
-                        <span id="desk-active-symbol" class="mono-number" style="font-weight:800; color:#fff;">XAUUSD</span>
-                    </div>
+                <!-- TAB 1: 1-CLICK EXECUTION DESK & TRADE PLAN -->
+                <div id="tab-content-desk" class="right-tab-pane active">
+                    <!-- SECTION 1: 1-CLICK EXECUTION DESK -->
+                    <section class="manual-trade-desk">
+                        <div class="desk-header">
+                            <span class="desk-title">⚡ 1-Click Execution Desk</span>
+                            <span id="desk-active-symbol" class="mono-number" style="font-weight:800; color:#fff;">XAUUSD</span>
+                        </div>
 
-                    <!-- Market Closed Notification Banner -->
-                    <div id="desk-market-status-banner" class="desk-market-closed-banner" style="display:none;">
-                        <span class="desk-market-icon">🔒</span>
-                        <div class="desk-market-info">
-                            <b id="desk-market-title">MARKET CLOSED FOR WEEKEND</b>
-                            <span id="desk-market-time">Re-opens Mon Aug 24, 02:30 AM IST</span>
+                        <!-- Market Closed Notification Banner -->
+                        <div id="desk-market-status-banner" class="desk-market-closed-banner" style="display:none;">
+                            <span class="desk-market-icon">🔒</span>
+                            <div class="desk-market-info">
+                                <b id="desk-market-title">MARKET CLOSED FOR WEEKEND</b>
+                                <span id="desk-market-time">Re-opens Mon Aug 24, 02:30 AM IST</span>
+                            </div>
                         </div>
-                    </div>
 
-                    <!-- Live Trade Preview Summary Banner (Requirement 6) -->
-                    <div id="desk-summary-banner" class="desk-summary-banner">
-                        <div class="desk-summary-banner-title">
-                            <span id="desk-banner-title">XAUUSD — PENDING ANALYSIS</span>
-                            <span id="desk-banner-status" class="radar-action-pill badge-no-setup">SCANNING</span>
+                        <!-- Live Trade Preview Summary Banner -->
+                        <div id="desk-summary-banner" class="desk-summary-banner">
+                            <div class="desk-summary-banner-title">
+                                <span id="desk-banner-title">XAUUSD — PENDING ANALYSIS</span>
+                                <span id="desk-banner-status" class="radar-action-pill badge-no-setup">SCANNING</span>
+                            </div>
+                            <div class="desk-summary-banner-grid">
+                                <span>Entry: <b id="desk-banner-entry" class="mono-number">--</b></span>
+                                <span>SL: <b id="desk-banner-sl" class="mono-number">--</b></span>
+                                <span>TP: <b id="desk-banner-tp" class="mono-number">--</b></span>
+                                <span>R:R: <b id="desk-banner-rr" class="mono-number">--</b></span>
+                                <span>Risk: <b id="desk-banner-risk" class="mono-number">--%</b></span>
+                                <span>Prob: <b id="desk-banner-prob" class="mono-number">--%</b></span>
+                            </div>
                         </div>
-                        <div class="desk-summary-banner-grid">
-                            <span>Entry: <b id="desk-banner-entry" class="mono-number">--</b></span>
-                            <span>SL: <b id="desk-banner-sl" class="mono-number">--</b></span>
-                            <span>TP: <b id="desk-banner-tp" class="mono-number">--</b></span>
-                            <span>R:R: <b id="desk-banner-rr" class="mono-number">--</b></span>
-                            <span>Risk: <b id="desk-banner-risk" class="mono-number">--%</b></span>
-                            <span>Prob: <b id="desk-banner-prob" class="mono-number">--%</b></span>
-                        </div>
-                    </div>
 
-                    <div class="desk-inputs-grid">
-                        <div class="desk-field">
-                            <span class="desk-field-lbl">Volume (Lots)</span>
-                            <input id="desk-lots" class="desk-input mono-number" type="number" step="0.01" value="0.01" min="0.01">
+                        <div class="desk-inputs-grid">
+                            <div class="desk-field">
+                                <span class="desk-field-lbl">Volume (Lots)</span>
+                                <input id="desk-lots" class="desk-input mono-number" type="number" step="0.01" value="0.01" min="0.01">
+                            </div>
+                            <div class="desk-field">
+                                <span class="desk-field-lbl">Win Probability</span>
+                                <input id="desk-win-prob" class="desk-input mono-number" value="--%" readonly style="color:var(--neon-bull); font-weight:700;">
+                            </div>
+                            <div class="desk-field">
+                                <span class="desk-field-lbl">Stop Loss ($)</span>
+                                <input id="desk-sl" class="desk-input mono-number" type="number" step="0.001" placeholder="Auto SL">
+                            </div>
+                            <div class="desk-field">
+                                <span class="desk-field-lbl">Take Profit ($)</span>
+                                <input id="desk-tp" class="desk-input mono-number" type="number" step="0.001" placeholder="Auto TP">
+                            </div>
                         </div>
-                        <div class="desk-field">
-                            <span class="desk-field-lbl">Win Probability</span>
-                            <input id="desk-win-prob" class="desk-input mono-number" value="--%" readonly style="color:var(--neon-bull); font-weight:700;">
+                        <div class="desk-action-buttons">
+                            <button id="btn-buy-action" class="btn-desk-buy" onclick="executeManualTrade('BUY')">BUY / LONG</button>
+                            <button id="btn-sell-action" class="btn-desk-sell" onclick="executeManualTrade('SELL')">SELL / SHORT</button>
                         </div>
-                        <div class="desk-field">
-                            <span class="desk-field-lbl">Stop Loss ($)</span>
-                            <input id="desk-sl" class="desk-input mono-number" type="number" step="0.001" placeholder="Auto SL">
-                        </div>
-                        <div class="desk-field">
-                            <span class="desk-field-lbl">Take Profit ($)</span>
-                            <input id="desk-tp" class="desk-input mono-number" type="number" step="0.001" placeholder="Auto TP">
-                        </div>
-                    </div>
-                    <div class="desk-action-buttons">
-                        <button id="btn-buy-action" class="btn-desk-buy" onclick="executeManualTrade('BUY')">BUY / LONG</button>
-                        <button id="btn-sell-action" class="btn-desk-sell" onclick="executeManualTrade('SELL')">SELL / SHORT</button>
-                    </div>
-                </section>
+                    </section>
 
-                <!-- SECTION 2: TRADE PLAN & TARGETS (Requirement 5) -->
-                <div class="section-card">
-                    <div class="section-card-header cyan">
-                        <span>📐 Trade Plan & Key Levels</span>
-                        <span id="plan-strategy-pill" class="pill">SYNTHESIZING...</span>
-                    </div>
-                    <div class="plan-grid-3col">
-                        <div class="plan-grid-item">
-                            <span class="plan-grid-lbl">Entry Target</span>
-                            <span id="plan-entry" class="plan-grid-val">--</span>
+                    <!-- SECTION 2: TRADE PLAN & TARGETS -->
+                    <div class="section-card">
+                        <div class="section-card-header cyan">
+                            <span>📐 Trade Plan & Key Levels</span>
+                            <span id="plan-strategy-pill" class="pill">SYNTHESIZING...</span>
                         </div>
-                        <div class="plan-grid-item">
-                            <span class="plan-grid-lbl">Stop Loss</span>
-                            <span id="plan-sl" class="plan-grid-val" style="color:var(--neon-bear);">--</span>
-                        </div>
-                        <div class="plan-grid-item">
-                            <span class="plan-grid-lbl">Take Profit</span>
-                            <span id="plan-tp" class="plan-grid-val" style="color:var(--neon-bull);">--</span>
-                        </div>
-                        <div class="plan-grid-item">
-                            <span class="plan-grid-lbl">Risk/Reward</span>
-                            <span id="decision-rr" class="plan-grid-val">--</span>
-                        </div>
-                        <div class="plan-grid-item">
-                            <span class="plan-grid-lbl">Est. Risk ($)</span>
-                            <span id="plan-risk-amt" class="plan-grid-val" style="color:var(--accent-cyan);">--</span>
-                        </div>
-                        <div class="plan-grid-item">
-                            <span class="plan-grid-lbl">Calculated Lots</span>
-                            <span id="plan-calc-lots" class="plan-grid-val">--</span>
+                        <div class="plan-grid-3col">
+                            <div class="plan-grid-item">
+                                <span class="plan-grid-lbl">Entry Target</span>
+                                <span id="plan-entry" class="plan-grid-val">--</span>
+                            </div>
+                            <div class="plan-grid-item">
+                                <span class="plan-grid-lbl">Stop Loss</span>
+                                <span id="plan-sl" class="plan-grid-val" style="color:var(--neon-bear);">--</span>
+                            </div>
+                            <div class="plan-grid-item">
+                                <span class="plan-grid-lbl">Take Profit</span>
+                                <span id="plan-tp" class="plan-grid-val" style="color:var(--neon-bull);">--</span>
+                            </div>
+                            <div class="plan-grid-item">
+                                <span class="plan-grid-lbl">Risk/Reward</span>
+                                <span id="decision-rr" class="plan-grid-val">--</span>
+                            </div>
+                            <div class="plan-grid-item">
+                                <span class="plan-grid-lbl">Est. Risk ($)</span>
+                                <span id="plan-risk-amt" class="plan-grid-val" style="color:var(--accent-cyan);">--</span>
+                            </div>
+                            <div class="plan-grid-item">
+                                <span class="plan-grid-lbl">Calculated Lots</span>
+                                <span id="plan-calc-lots" class="plan-grid-val">--</span>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- SECTION 3: AI VALIDATION & QUALITY GATES (Requirement 5) -->
-                <div class="section-card">
-                    <div class="section-card-header emerald">
-                        <span>🛡️ AI Validation & Metrics</span>
-                        <span id="decision-gate-badge" class="pill" style="color:var(--text-dim);">EVALUATING...</span>
-                    </div>
-
-                    <!-- Dialectical Probability & EV Strip -->
-                    <div style="background:rgba(0,0,0,0.4); border:1px solid var(--border-subtle); border-radius:4px; padding:6px 8px; margin-bottom:6px;">
-                        <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:11px; margin-bottom:2px;">
-                            <span>Win Probability: <b id="decision-win-prob" style="color:var(--neon-bull);">--%</b></span>
-                            <span>Expected Value: <b id="decision-ev" style="color:var(--accent-cyan);">--</b></span>
+                <!-- TAB 2: AI COGNITION, 14 QUALITY GATES & DEVIL'S ADVOCATE -->
+                <div id="tab-content-cognition" class="right-tab-pane" style="display:none;">
+                    <!-- AI VALIDATION & METRICS -->
+                    <div class="section-card">
+                        <div class="section-card-header emerald">
+                            <span>🛡️ AI Validation & Metrics</span>
+                            <span id="decision-gate-badge" class="pill" style="color:var(--text-dim);">EVALUATING...</span>
                         </div>
-                    </div>
 
-                    <!-- Adversarial Penalty & Invalidation Multiplier Gauges -->
-                    <div class="devil-gauges-grid">
-                        <div class="devil-gauge-card">
-                            <span class="gauge-lbl">Adversarial Penalty</span>
-                            <span id="devil-penalty-score" class="gauge-val">0.0 / 50.0</span>
-                            <div class="gauge-bar-track">
-                                <div id="devil-penalty-fill" class="gauge-bar-fill" style="width:0%;"></div>
+                        <!-- Dialectical Probability & EV Strip -->
+                        <div style="background:rgba(0,0,0,0.4); border:1px solid var(--border-subtle); border-radius:4px; padding:6px 8px; margin-bottom:6px;">
+                            <div style="display:flex; justify-content:space-between; font-family:var(--font-mono); font-size:11px; margin-bottom:2px;">
+                                <span>Win Probability: <b id="decision-win-prob" style="color:var(--neon-bull);">--%</b></span>
+                                <span>Expected Value: <b id="decision-ev" style="color:var(--accent-cyan);">--</b></span>
                             </div>
                         </div>
-                        <div class="devil-gauge-card">
-                            <span class="gauge-lbl">Invalidation Risk</span>
-                            <span id="devil-risk-coeff" class="gauge-val" style="color:var(--accent-cyan);">1.00x Multiplier</span>
-                            <div class="gauge-bar-track">
-                                <div id="devil-risk-fill" class="gauge-bar-fill" style="width:100%; background:linear-gradient(90deg, #38bdf8, #00f59b);"></div>
+
+                        <!-- Adversarial Penalty & Invalidation Multiplier Gauges -->
+                        <div class="devil-gauges-grid">
+                            <div class="devil-gauge-card">
+                                <span class="gauge-lbl">Adversarial Penalty</span>
+                                <span id="devil-penalty-score" class="gauge-val">0.0 / 50.0</span>
+                                <div class="gauge-bar-track">
+                                    <div id="devil-penalty-fill" class="gauge-bar-fill" style="width:0%;"></div>
+                                </div>
+                            </div>
+                            <div class="devil-gauge-card">
+                                <span class="gauge-lbl">Invalidation Risk</span>
+                                <span id="devil-risk-coeff" class="gauge-val" style="color:var(--accent-cyan);">1.00x Multiplier</span>
+                                <div class="gauge-bar-track">
+                                    <div id="devil-risk-fill" class="gauge-bar-fill" style="width:100%; background:linear-gradient(90deg, #38bdf8, #00f59b);"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 14-Point Quality Gate Checks Grid -->
+                        <div style="font-size:8.5px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:3px;">
+                            14-Point Quality Gate Checks
+                        </div>
+                        <div class="decision-gate-summary">
+                            <div id="gate-checks-list">
+                                <!-- Rendered dynamically by terminal.js -->
                             </div>
                         </div>
                     </div>
 
-                    <!-- 14-Point Quality Gate Checks Grid -->
-                    <div style="font-size:8.5px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:3px;">
-                        14-Point Quality Gate Checks
+                    <!-- DECISION RATIONALE -->
+                    <div id="decision-rationale-card" class="section-card">
+                        <div id="decision-rationale-header" class="section-card-header amber">
+                            <span id="decision-rationale-title">🔍 Decision Rationale</span>
+                            <span id="decision-rationale-badge" class="pill">WAITING</span>
+                        </div>
+                        <div id="decision-rationale-content" class="rationale-box">
+                            <div class="rationale-item wait">
+                                <span class="icon">⏳</span>
+                                <span>Awaiting initial market analysis cycle...</span>
+                            </div>
+                        </div>
                     </div>
-                    <div class="decision-gate-summary">
-                        <div id="gate-checks-list">
+
+                    <!-- WHAT WOULD CHANGE MY MIND -->
+                    <div class="invalidation-box">
+                        <div class="invalidation-box-title">
+                            <span>✕</span> WHAT WOULD CHANGE MY MIND (INVALIDATION)
+                        </div>
+                        <div id="invalidation-trigger-text" class="invalidation-box-content">
+                            • H1 candle close below demand equilibrium.<br>
+                            • Bearish displacement breaking recent swing low.
+                        </div>
+                    </div>
+
+                    <!-- THREAT ASSESSMENT VECTORS -->
+                    <div class="section-card">
+                        <div class="section-card-header amber">
+                            <span>⚠️ Threat Assessment Vectors</span>
+                        </div>
+                        <div id="threat-vector-list" class="threat-vector-list">
                             <!-- Rendered dynamically by terminal.js -->
                         </div>
-                    </div>
-                </div>
-
-                <!-- SECTION 4: DECISION RATIONALE: REASONS FOR WAITING / REJECTION -->
-                <div id="decision-rationale-card" class="section-card">
-                    <div id="decision-rationale-header" class="section-card-header amber">
-                        <span id="decision-rationale-title">🔍 Decision Rationale</span>
-                        <span id="decision-rationale-badge" class="pill">WAITING</span>
-                    </div>
-                    <div id="decision-rationale-content" class="rationale-box">
-                        <div class="rationale-item wait">
-                            <span class="icon">⏳</span>
-                            <span>Awaiting initial market analysis cycle...</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- SECTION 5: WHAT WOULD CHANGE MY MIND (INVALIDATION) (Requirement 5) -->
-                <div class="invalidation-box">
-                    <div class="invalidation-box-title">
-                        <span>✕</span> WHAT WOULD CHANGE MY MIND (INVALIDATION)
-                    </div>
-                    <div id="invalidation-trigger-text" class="invalidation-box-content">
-                        • H1 candle close below demand equilibrium.<br>
-                        • Bearish displacement breaking recent swing low.
-                    </div>
-                </div>
-
-                <!-- SECTION 5: THREAT ASSESSMENT VECTORS (Requirement 5) -->
-                <div class="section-card">
-                    <div class="section-card-header amber">
-                        <span>⚠️ Threat Assessment Vectors</span>
-                    </div>
-                    <div id="threat-vector-list" class="threat-vector-list">
-                        <!-- Rendered dynamically by terminal.js -->
                     </div>
                 </div>
 

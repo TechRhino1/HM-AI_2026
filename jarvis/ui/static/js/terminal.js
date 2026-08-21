@@ -80,6 +80,12 @@
         radarList: document.getElementById("radar-list"),
         newsFeedList: document.getElementById("news-feed-list"),
 
+        // Right Panel Switcher
+        tabBtnDesk: document.getElementById("tab-btn-desk"),
+        tabBtnCognition: document.getElementById("tab-btn-cognition"),
+        tabContentDesk: document.getElementById("tab-content-desk"),
+        tabContentCognition: document.getElementById("tab-content-cognition"),
+
         // Manual Execution Desk & Summary Banner
         deskActiveSymbol: document.getElementById("desk-active-symbol"),
         deskMarketStatusBanner: document.getElementById("desk-market-status-banner"),
@@ -172,6 +178,8 @@
         { id: "close_all", title: "Close All Active Positions", desc: "Emergency kill-switch closing all open tickets", shortcut: "X", action: () => closeAllPositions() },
         { id: "news", title: "View Macro News Calendar", desc: "Switch left sidebar to High-Impact News feed", shortcut: "N", action: () => switchLeftTab("news") },
         { id: "radar", title: "View High-Probability Radar", desc: "Switch left sidebar to Setup Radar", shortcut: "R", action: () => switchLeftTab("radar") },
+        { id: "desk", title: "View 1-Click Desk & Plan", desc: "Switch right panel to Trade Desk & Targets", shortcut: "D", action: () => switchRightTab("desk") },
+        { id: "cognition", title: "View AI Cognition & Gates", desc: "Switch right panel to 14 Quality Gates & Analysis", shortcut: "A", action: () => switchRightTab("cognition") },
         { id: "copilot", title: "Toggle HM AI 4.0 Copilot", desc: "Open / Close intelligent assistant modal", shortcut: "C", action: () => toggleCopilotModal() },
         { id: "safe", title: "Toggle Emergency Safe Mode", desc: "Pause or unpause all autonomous executions", shortcut: "Esc", action: () => toggleSafeMode() },
         { id: "refresh", title: "Force Refresh Telemetry", desc: "Poll latest MT5 broker state immediately", shortcut: "F5", action: () => refreshData() }
@@ -608,9 +616,9 @@
         }
         let html = '';
         for (const t of trades) {
-            const isBuy = t.action === 'BUY';
+            const isBuy = (t.action || t.type) === 'BUY';
             const sideClass = isBuy ? 'badge-ready-buy' : 'badge-ready-sell';
-            const pnlVal = Number(t.expected_value || 0);
+            const pnlVal = Number(t.realized_pnl !== undefined ? t.realized_pnl : (t.profit !== undefined ? t.profit : (t.expected_value || 0)));
             const pnlColor = pnlVal >= 0 ? 'var(--neon-bull)' : 'var(--neon-bear)';
             const pnlPrefix = pnlVal >= 0 ? '+' : '';
             const dtStr = t.timestamp ? t.timestamp.replace('T', ' ').substring(0, 19) : '--';
@@ -618,18 +626,22 @@
             const execBadge = isManual
                 ? '<span class="badge-manual">👤 MANUAL</span>'
                 : '<span class="badge-bot">🤖 BOT (AI)</span>';
+            const ticketVal = t.ticket || t.id || '--';
+            const volVal = Number(t.volume || t.lot_size || 0.01).toFixed(2);
+            const slVal = t.sl || t.stop_loss || 0;
+            const tpVal = t.tp || t.take_profit || 0;
 
             html += `<tr>
-                <td style="color:var(--text-dim);">#${t.ticket}</td>
+                <td style="color:var(--text-dim);">#${ticketVal}</td>
                 <td><b style="color:#ffffff;">${t.symbol}</b></td>
-                <td><span class="badge ${sideClass}" style="font-size:8.5px; padding:1px 5px;">${t.action}</span></td>
+                <td><span class="badge ${sideClass}" style="font-size:8.5px; padding:1px 5px;">${t.action || t.type}</span></td>
                 <td>${execBadge}</td>
-                <td class="mono-number" style="font-weight:700;">${t.volume ? Number(t.volume).toFixed(2) : '0.01'}</td>
-                <td class="mono-number">${formatPrice(t.entry_price, t.symbol)}</td>
-                <td class="mono-number" style="color:var(--neon-bear);">${t.sl > 0 ? formatPrice(t.sl, t.symbol) : '—'}</td>
-                <td class="mono-number" style="color:var(--neon-bull);">${t.tp > 0 ? formatPrice(t.tp, t.symbol) : '—'}</td>
-                <td class="mono-number" style="color:${pnlColor}; font-weight:800; font-size:11.5px;">${pnlPrefix}$${pnlVal.toFixed(2)}</td>
-                <td class="mono-number" style="color:var(--text-dim); font-size:9.5px;">${dtStr}</td>
+                <td class="mono-number" style="font-weight:700;">${volVal}</td>
+                <td class="mono-number">${formatPrice(t.entry_price || t.open_price || 0, t.symbol)}</td>
+                <td class="mono-number" style="color:var(--neon-bear);">${slVal > 0 ? formatPrice(slVal, t.symbol) : '—'}</td>
+                <td class="mono-number" style="color:var(--neon-bull);">${tpVal > 0 ? formatPrice(tpVal, t.symbol) : '—'}</td>
+                <td class="mono-number" style="color:${pnlColor}; font-weight:800; font-size:11px;">${pnlPrefix}$${pnlVal.toFixed(2)}</td>
+                <td class="mono-number" style="color:var(--text-dim); font-size:9px;">${dtStr}</td>
             </tr>`;
         }
         tbody.innerHTML = html;
@@ -1381,18 +1393,18 @@
         if (el.threatVectorList) {
             const threats = d.risk_factors || [];
             if (threats.length > 0) {
-                el.threatVectorList.innerHTML = threats.map(t => `<div class="threat-item"><span style="color:var(--devil-amber);">⚠</span><span>${t}</span></div>`).join("");
+                el.threatVectorList.innerHTML = threats.map(t => `<div class="threat-vector-item"><span style="color:var(--devil-amber);">⚠</span><span>${t}</span></div>`).join("");
             } else {
-                el.threatVectorList.innerHTML = `<div class="threat-item"><span style="color:var(--neon-bull);">✓</span><span>Normal institutional market parameters.</span></div>`;
+                el.threatVectorList.innerHTML = `<div class="threat-vector-item"><span style="color:var(--neon-bull);">✓</span><span>Normal institutional market parameters.</span></div>`;
             }
         }
 
         // 7. Quality Gate Checks Grid
         if (el.gateChecksList) {
             el.gateChecksList.innerHTML = Object.entries(checks).map(([name, pass]) => `
-                <div class="gate-row">
+                <div class="gate-check-row">
                     <span>${name}</span>
-                    <span class="${pass ? 'gate-pass' : 'gate-fail'}">${pass ? 'PASS' : 'FAIL'}</span>
+                    <span class="${pass ? 'gate-check-pass' : 'gate-check-fail'}">${pass ? '✓ PASS' : '⏳ WAIT'}</span>
                 </div>
             `).join("");
         }
@@ -1469,6 +1481,14 @@
 
         if (tab === "news") fetchNews();
         else fetchTelemetry();
+    };
+
+    window.switchRightTab = function (tab) {
+        state.activeRightTab = tab;
+        if (el.tabBtnDesk) el.tabBtnDesk.classList.toggle("active", tab === "desk");
+        if (el.tabBtnCognition) el.tabBtnCognition.classList.toggle("active", tab === "cognition");
+        if (el.tabContentDesk) el.tabContentDesk.style.display = tab === "desk" ? "flex" : "none";
+        if (el.tabContentCognition) el.tabContentCognition.style.display = tab === "cognition" ? "flex" : "none";
     };
 
     /* ==========================================================================
