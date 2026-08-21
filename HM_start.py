@@ -62,7 +62,7 @@ def main():
     local_ip = get_local_ip()
 
     print("\n" + "="*70)
-    print("       HM_v3 — JARVIS AI 3.0 UNIFIED TRADING TERMINAL        ")
+    print("       HM_v4 — JARVIS AI 4.0 UNIFIED TRADING TERMINAL        ")
     print("="*70)
     print("[+] Initializing MT5 terminal, Risk Engine & 14-Point Quality Gates...")
 
@@ -84,12 +84,12 @@ def main():
     acc = snap.get("account") or {}
 
     print("\n" + "="*70)
-    print("                     JARVIS AI 3.0 COMMAND CENTER                     ")
+    print("                     JARVIS AI 4.0 COMMAND CENTER                     ")
     print("="*70)
     status_str = "ACTIVE (LIVE)" if not snap.get("safe_mode") else "SAFE MODE"
     print(f"STATUS:          {status_str}")
     print(f"EXECUTION MODE:  {snap.get('execution_mode')} (14-Point Quality Gate Active)")
-    print(f"BROKER SERVER:   {acc.get('server', 'XMGlobal-MT5')} (#{acc.get('login', 345841337)})")
+    print(f"BROKER SERVER:   {acc.get('server', 'Connected MT5')} (#{acc.get('login', '--')})")
     print(f"BALANCE / EQ:    ${acc.get('balance', 0):,.2f} / ${acc.get('equity', 0):,.2f}")
     print("-"*70)
     print("ACCESS LINKS (PC & MOBILE PHONE):")
