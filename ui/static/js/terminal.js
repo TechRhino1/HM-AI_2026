@@ -773,6 +773,7 @@
 
     function renderNewsDOM(news) {
         if (!el.newsFeedList) return;
+        window.RAW_NEWS_FEED = news || [];
         if (!news || news.length === 0) {
             el.newsFeedList.innerHTML = '<div style="text-align:center; color:var(--text-dim); padding:20px; font-size:11px;">Scanning live institutional macro calendar...</div>';
             if (state.activeLeftTab === "news" && el.leftPanelCounter) {
@@ -844,8 +845,10 @@
                     ? "color:var(--accent-cyan); font-weight:800;" 
                     : (n.actual && n.actual !== "Upcoming" && n.actual !== "—" ? "color:var(--neon-bull); font-weight:700;" : "color:var(--text-dim);"));
 
+            const istDisplay = n.time_ist ? `🇮🇳 ${n.time_ist}` : `🇮🇳 ${n.time}`;
+
             return `
-                <div class="${cardClass}">
+                <div class="${cardClass}" onclick="openNewsDetailModal(${idx})" title="Click to view deep shock analysis and Indian Standard Time schedule">
                     <div class="news-card-header">
                         <div style="display:flex; align-items:center; gap:4px;">
                             <span class="news-currency-tag">${n.currency}</span>
@@ -854,6 +857,9 @@
                         <span class="news-status-pill ${statusPillClass}">${statusText}</span>
                     </div>
                     <div class="news-title">${n.event}</div>
+                    <div style="font-size:10px; color:var(--text-dim); font-family:var(--font-mono); margin-top:2px;">
+                        ${istDisplay}
+                    </div>
                     <div class="news-metrics-row">
                         <span>Fcst: <b>${n.forecast}</b></span>
                         <span>Prev: <b>${n.previous}</b></span>
@@ -861,10 +867,103 @@
                     </div>
                     ${shockBannerHtml}
                     ${affectedHtml}
+                    <div style="font-size:9px; color:var(--text-dim); text-align:right; margin-top:3px; opacity:0.8;">
+                        🔍 Click for full intelligence & details ➔
+                    </div>
                 </div>
             `;
         }).join("");
     }
+
+    function openNewsDetailModal(idx) {
+        const feed = window.RAW_NEWS_FEED || [];
+        const item = feed[idx];
+        if (!item) return;
+
+        const modal = document.getElementById("macro-news-modal");
+        if (!modal) return;
+
+        // Set Currency, Impact, Status
+        const currEl = document.getElementById("mn-modal-curr");
+        const impactEl = document.getElementById("mn-modal-impact");
+        const statusEl = document.getElementById("mn-modal-status");
+        if (currEl) currEl.textContent = item.currency;
+        if (impactEl) {
+            impactEl.textContent = item.impact;
+            impactEl.className = item.impact === "HIGH" ? "news-impact-high" : (item.impact === "MEDIUM" ? "news-impact-med" : "news-impact-low");
+        }
+        if (statusEl) {
+            statusEl.textContent = item.is_live ? "🔴 LIVE NOW" : (item.is_most_recent || idx === 0 ? "⚡ LATEST RELEASE" : (item.is_upcoming ? `⏳ ${item.status_badge || item.time}` : "✓ RELEASED"));
+            statusEl.className = item.is_live ? "news-status-pill news-status-live" : (item.is_most_recent || idx === 0 ? "news-status-pill news-status-recent" : (item.is_upcoming ? "news-status-pill news-status-upcoming" : "news-status-pill news-status-past"));
+        }
+
+        // Title & Category
+        const titleEl = document.getElementById("mn-modal-title");
+        const catEl = document.getElementById("mn-modal-category");
+        if (titleEl) titleEl.textContent = item.event;
+        if (catEl) catEl.textContent = item.category || "Institutional Macroeconomic Telemetry";
+
+        // Timing Ribbon (IST & UTC)
+        const timeIstEl = document.getElementById("mn-modal-time-ist");
+        const timeUtcEl = document.getElementById("mn-modal-time-utc");
+        const diffEl = document.getElementById("mn-modal-diff");
+        if (timeIstEl) timeIstEl.textContent = item.time_ist || item.time;
+        if (timeUtcEl) timeUtcEl.textContent = item.time_utc || "UTC Reference";
+        if (diffEl) diffEl.textContent = item.status_badge || (item.is_live ? "LIVE ACTIVE" : item.time);
+
+        // Metrics Grid
+        const actEl = document.getElementById("mn-modal-actual");
+        const fcstEl = document.getElementById("mn-modal-forecast");
+        const prevEl = document.getElementById("mn-modal-previous");
+        const devEl = document.getElementById("mn-modal-deviation");
+        if (actEl) {
+            actEl.textContent = item.actual || "—";
+            actEl.style.color = item.is_live ? "#ff3b5c" : (item.actual && item.actual !== "Upcoming" && item.actual !== "—" ? "var(--neon-bull)" : "var(--accent-cyan)");
+        }
+        if (fcstEl) fcstEl.textContent = item.forecast || "—";
+        if (prevEl) prevEl.textContent = item.previous || "—";
+        if (devEl) {
+            devEl.textContent = item.deviation_summary || "In Line";
+            devEl.style.color = (item.deviation_summary && item.deviation_summary.includes("+")) ? "var(--neon-bull)" : ((item.deviation_summary && item.deviation_summary.includes("-")) ? "#ff3b5c" : "var(--accent-cyan)");
+        }
+
+        // Bias & Shock Analysis
+        const biasEl = document.getElementById("mn-modal-bias");
+        const impactDescEl = document.getElementById("mn-modal-impact-desc");
+        if (biasEl) biasEl.textContent = item.direction_bias || `DIRECTIONAL MOMENTUM ON ${item.currency}`;
+        if (impactDescEl) impactDescEl.textContent = item.impact_analysis || item.shock_alert;
+
+        // Description
+        const descEl = document.getElementById("mn-modal-desc");
+        if (descEl) descEl.textContent = item.description || "Comprehensive macroeconomic release parsed by HM AI 4.0 Institutional Decision Engine.";
+
+        // Affected Pairs
+        const pairsEl = document.getElementById("mn-modal-pairs");
+        if (pairsEl) {
+            const pairs = item.affected_pairs || ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD"];
+            pairsEl.innerHTML = pairs.map(p => `<span class="news-affected-tag" style="font-size:11px; padding:3px 8px;">${p}</span>`).join("");
+        }
+
+        // Warning Box
+        const warnEl = document.getElementById("mn-modal-warning");
+        if (warnEl) warnEl.textContent = item.execution_warning || item.shock_alert;
+
+        modal.classList.add("active");
+    }
+
+    function closeNewsDetailModal() {
+        const modal = document.getElementById("macro-news-modal");
+        if (modal) modal.classList.remove("active");
+    }
+
+    window.openNewsDetailModal = openNewsDetailModal;
+    window.closeNewsDetailModal = closeNewsDetailModal;
+
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+            closeNewsDetailModal();
+        }
+    });
 
     function renderActiveTradesDOM(positions) {
         if (!el.positionsTbody) return;

@@ -497,6 +497,87 @@
         </div>
     </div>
 
+    <!-- ==========================================================================
+         MACRO NEWS INTELLIGENCE MODAL (CLICK TO VIEW DEEP EVENT SHOCK DETAILS)
+         ========================================================================== -->
+    <div id="macro-news-modal" class="macro-news-modal-overlay" onclick="if(event.target === this) closeNewsDetailModal()">
+        <div class="macro-news-modal-content">
+            <div class="macro-news-modal-header">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span id="mn-modal-curr" class="news-currency-tag" style="font-size:11px; padding:2px 8px;">USD</span>
+                    <span id="mn-modal-impact" class="news-impact-high" style="font-size:10px;">HIGH</span>
+                    <span id="mn-modal-status" class="news-status-pill news-status-live" style="font-size:10px;">🔴 LIVE NOW</span>
+                </div>
+                <button class="copilot-action-btn" title="Close" onclick="closeNewsDetailModal()">✕</button>
+            </div>
+            
+            <div id="mn-modal-title" class="macro-news-modal-title">Macroeconomic Event</div>
+            <div id="mn-modal-category" class="macro-news-modal-category">Economic Activity</div>
+
+            <!-- Indian Standard Time & UTC Timing Ribbon -->
+            <div class="macro-news-timing-ribbon">
+                <div class="macro-timing-col">
+                    <span class="macro-timing-label">🇮🇳 Indian Standard Time (IST)</span>
+                    <span id="mn-modal-time-ist" class="macro-timing-val">Sat Aug 22, 10:50 PM IST</span>
+                </div>
+                <div class="macro-timing-col">
+                    <span class="macro-timing-label">🌐 UTC Reference Time</span>
+                    <span id="mn-modal-time-utc" class="macro-timing-val">Aug 21, 17:20 UTC</span>
+                </div>
+                <div class="macro-timing-col">
+                    <span class="macro-timing-label">⏳ Countdown / Status</span>
+                    <span id="mn-modal-diff" class="macro-timing-val" style="color:var(--accent-cyan);">⚡ LATEST RELEASE</span>
+                </div>
+            </div>
+
+            <!-- Metrics Matrix Grid (Actual vs Forecast vs Previous vs Deviation) -->
+            <div class="macro-news-metrics-grid">
+                <div class="macro-metric-card">
+                    <div class="macro-metric-title">Actual Outcome</div>
+                    <div id="mn-modal-actual" class="macro-metric-val actual" style="color:var(--accent-cyan);">0.2%</div>
+                </div>
+                <div class="macro-metric-card">
+                    <div class="macro-metric-title">Consensus Forecast</div>
+                    <div id="mn-modal-forecast" class="macro-metric-val">0.2%</div>
+                </div>
+                <div class="macro-metric-card">
+                    <div class="macro-metric-title">Previous Release</div>
+                    <div id="mn-modal-previous" class="macro-metric-val">0.2%</div>
+                </div>
+                <div class="macro-metric-card">
+                    <div class="macro-metric-title">Surprise / Deviation</div>
+                    <div id="mn-modal-deviation" class="macro-metric-val" style="font-size:11px; color:var(--neon-bull);">In Line</div>
+                </div>
+            </div>
+
+            <!-- AI Directional & Shock Breakdown -->
+            <div class="macro-news-section-box">
+                <div class="macro-section-header">🤖 HM AI Directional Bias & Shock Forecast</div>
+                <div id="mn-modal-bias" class="macro-bias-banner">BULLISH USD / BEARISH XAUUSD</div>
+                <div id="mn-modal-impact-desc" class="macro-section-body" style="margin-top:6px;">Impact analysis...</div>
+            </div>
+
+            <!-- Indicator Educational / Institutional Overview -->
+            <div class="macro-news-section-box">
+                <div class="macro-section-header">📖 Institutional Indicator Overview</div>
+                <div id="mn-modal-desc" class="macro-section-body">Indicator overview description...</div>
+            </div>
+
+            <!-- Affected Trading Pairs -->
+            <div class="macro-news-section-box">
+                <div class="macro-section-header">🎯 Impacted Execution Instruments</div>
+                <div id="mn-modal-pairs" class="macro-pairs-row">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <!-- Risk & Slippage Advisory -->
+            <div id="mn-modal-warning" class="macro-warning-box">
+                ⚠️ Spread expansion active during high-impact news window.
+            </div>
+        </div>
+    </div>
+
     <!-- Terminal Controller Script -->
     <script src="/static/js/terminal.js?v=4.0"></script>
 </body>

@@ -1418,4 +1418,189 @@ header.terminal-hud {
     }
 }
 
+/* ==========================================================================
+   MACRO NEWS DEEP INTELLIGENCE MODAL STYLES
+   ========================================================================== */
+.macro-news-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(4, 8, 16, 0.78);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 10000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    animation: fadeInModal 0.2s ease-out;
+}
+
+.macro-news-modal-overlay.active {
+    display: flex;
+}
+
+.macro-news-modal-content {
+    background: linear-gradient(180deg, #111827 0%, #0b0f19 100%);
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 8px;
+    width: 100%;
+    max-width: 620px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 45px rgba(0, 0, 0, 0.8), 0 0 20px rgba(56, 189, 248, 0.15);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.macro-news-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.macro-news-modal-title {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--text-bright);
+    letter-spacing: 0.02em;
+    line-height: 1.3;
+}
+
+.macro-news-modal-category {
+    font-size: 10px;
+    color: var(--accent-cyan);
+    font-family: var(--font-mono);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: -8px;
+}
+
+.macro-news-timing-ribbon {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 8px;
+    background: rgba(18, 26, 43, 0.7);
+    border: 1px solid rgba(51, 65, 85, 0.5);
+    border-radius: 6px;
+    padding: 10px 12px;
+}
+
+.macro-timing-col {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.macro-timing-label {
+    font-size: 9px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+.macro-timing-val {
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--text-bright);
+    font-weight: 700;
+}
+
+.macro-news-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+}
+
+@media (max-width: 600px) {
+    .macro-news-metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.macro-metric-card {
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(51, 65, 85, 0.6);
+    border-radius: 6px;
+    padding: 10px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.macro-metric-title {
+    font-size: 9px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+.macro-metric-val {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--text-bright);
+}
+
+.macro-news-section-box {
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid rgba(51, 65, 85, 0.4);
+    border-radius: 6px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.macro-section-header {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--accent-cyan);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.macro-bias-banner {
+    background: rgba(56, 189, 248, 0.12);
+    border-left: 3px solid var(--accent-cyan);
+    padding: 6px 10px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--accent-cyan);
+    border-radius: 2px;
+}
+
+.macro-section-body {
+    font-size: 12px;
+    color: var(--text-primary);
+    line-height: 1.5;
+}
+
+.macro-pairs-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.macro-warning-box {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 11px;
+    color: var(--devil-amber);
+    line-height: 1.4;
+}
+
+.news-card {
+    cursor: pointer;
+}
+
 
