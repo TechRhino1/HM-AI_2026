@@ -31,34 +31,40 @@ def get_local_ip():
         return "127.0.0.1"
 
 def start_cloudflare_tunnel(port=8501):
-    bin_name = "cloudflared.exe" if sys.platform == "win32" else "cloudflared"
-    local_path = os.path.join(ROOT_DIR, "tools", bin_name)
-    cloudflared_path = local_path if os.path.exists(local_path) else shutil.which("cloudflared")
-    
-    if not cloudflared_path or not os.path.exists(cloudflared_path):
-        logging.info("Cloudflare tunnel binary not found in tools/ or PATH — remote access tunnel disabled.")
+    try:
+        tools_dir = os.path.join(ROOT_DIR, "tools")
+        os.makedirs(tools_dir, exist_ok=True)
+        bin_name = "cloudflared.exe" if sys.platform == "win32" else "cloudflared"
+        local_path = os.path.join(tools_dir, bin_name)
+        cloudflared_path = local_path if os.path.exists(local_path) else shutil.which("cloudflared")
+        
+        if not cloudflared_path or not os.path.exists(cloudflared_path):
+            logging.info("Cloudflare tunnel binary not found in tools/ or PATH — remote access tunnel disabled.")
+            return None, None
+
+        log_path = os.path.join(tools_dir, "tunnel.log")
+        with open(log_path, "w", encoding="utf-8") as f:
+            f.write("")
+
+        cmd = [cloudflared_path, "tunnel", "--url", f"http://localhost:{port}", "--no-autoupdate"]
+        out_f = open(log_path, "w", encoding="utf-8")
+        proc = subprocess.Popen(cmd, stdout=out_f, stderr=out_f, text=True)
+
+        tunnel_url = None
+        for _ in range(25):
+            time.sleep(1)
+            if os.path.exists(log_path):
+                with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+                    matches = re.findall(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', content)
+                    if matches:
+                        tunnel_url = matches[0]
+                        break
+
+        return proc, tunnel_url
+    except Exception as e:
+        logging.warning(f"Could not start Cloudflare tunnel: {e}")
         return None, None
-
-    log_path = os.path.join(ROOT_DIR, "tools", "tunnel.log")
-    with open(log_path, "w", encoding="utf-8") as f:
-        f.write("")
-
-    cmd = [cloudflared_path, "tunnel", "--url", f"http://localhost:{port}", "--no-autoupdate"]
-    out_f = open(log_path, "w", encoding="utf-8")
-    proc = subprocess.Popen(cmd, stdout=out_f, stderr=out_f, text=True)
-
-    tunnel_url = None
-    for _ in range(25):
-        time.sleep(1)
-        if os.path.exists(log_path):
-            with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-                matches = re.findall(r'https://[a-zA-Z0-9-]+\.trycloudflare\.com', content)
-                if matches:
-                    tunnel_url = matches[0]
-                    break
-
-    return proc, tunnel_url
 
 def main():
     mode = "view" if len(sys.argv) > 1 and sys.argv[1].lower() == "view" else "live"

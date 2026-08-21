@@ -14,7 +14,13 @@ logger = logging.getLogger("JARVIS_TimeoutGuard")
 
 class TimeoutGuard:
     """Thread pool and asyncio-based timeout manager for synchronous and asynchronous tasks."""
-    _executor = ThreadPoolExecutor(max_workers=16, thread_name_prefix="jarvis_guard")
+    _executor = None
+
+    @classmethod
+    def _get_executor(cls) -> ThreadPoolExecutor:
+        if cls._executor is None or getattr(cls._executor, "_shutdown", False):
+            cls._executor = ThreadPoolExecutor(max_workers=16, thread_name_prefix="jarvis_guard")
+        return cls._executor
 
     @classmethod
     def run_sync(
@@ -27,7 +33,13 @@ class TimeoutGuard:
         **kwargs: Any
     ) -> T:
         """Executes a synchronous blocking function with a hard wall-clock timeout."""
-        future = cls._executor.submit(func, *args, **kwargs)
+        try:
+            executor = cls._get_executor()
+            future = executor.submit(func, *args, **kwargs)
+        except Exception as e:
+            logger.error(f"TimeoutGuard: Failed to submit {task_name}: {e}")
+            return default() if callable(default) else default
+
         try:
             return future.result(timeout=timeout_sec)
         except FuturesTimeoutError:
