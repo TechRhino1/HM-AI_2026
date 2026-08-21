@@ -61,7 +61,7 @@ class DataFeedEngine:
         df_result = TimeoutGuard.run_sync(
             _fetch,
             timeout_sec=self.timeout_sec,
-            default=self._generate_realistic_rates(symbol, timeframe, num_bars),
+            default=lambda: self._generate_realistic_rates(symbol, timeframe, num_bars),
             task_name=f"DataFeed_fetch_{symbol}_{timeframe}"
         )
 

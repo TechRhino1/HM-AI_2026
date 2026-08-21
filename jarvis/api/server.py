@@ -298,7 +298,21 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
         payload = json.dumps(data, default=str)
         self.wfile.write(payload.encode("utf-8"))
 
+    _STATIC_CACHE = {}
+
     def _serve_static_file(self, req_path: str):
+        now = time.time()
+        if req_path in self._STATIC_CACHE:
+            content, mime_type, ts = self._STATIC_CACHE[req_path]
+            if now - ts < 5.0:
+                self.send_response(200)
+                self.send_header("Content-Type", mime_type)
+                self.send_header("Content-Length", str(len(content)))
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(content)
+                return
+
         rel = req_path.lstrip("/").replace("static/", "", 1)
         candidates = [
             os.path.join(self.base_dir, "ui", "static", rel),
@@ -323,18 +337,30 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
             with open(found_path, "rb") as f:
                 content = f.read()
 
+            self._STATIC_CACHE[req_path] = (content, mime_type, now)
+
             self.send_response(200)
             self.send_header("Content-Type", mime_type)
             self.send_header("Content-Length", str(len(content)))
-            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
-            self.send_header("Pragma", "no-cache")
-            self.send_header("Expires", "0")
+            self.send_header("Cache-Control", "no-cache")
             self.end_headers()
             self.wfile.write(content)
         else:
             self.send_error(404, f"Static file {req_path} not found")
 
     def _serve_terminal_ui(self):
+        now = time.time()
+        if "__index_html__" in self._STATIC_CACHE:
+            content_bytes, mime_type, ts = self._STATIC_CACHE["__index_html__"]
+            if now - ts < 5.0:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(content_bytes)))
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(content_bytes)
+                return
+
         candidates = [
             os.path.join(self.base_dir, "ui", "templates", "index.html"),
             os.path.join(self.root_dir, "ui", "templates", "index.html")
@@ -348,14 +374,15 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
         if ui_path:
             with open(ui_path, "r", encoding="utf-8") as f:
                 content = f.read()
+            content_bytes = content.encode("utf-8")
+            self._STATIC_CACHE["__index_html__"] = (content_bytes, "text/html", now)
+
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(content.encode("utf-8"))))
-            self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
-            self.send_header("Pragma", "no-cache")
-            self.send_header("Expires", "0")
+            self.send_header("Content-Length", str(len(content_bytes)))
+            self.send_header("Cache-Control", "no-cache")
             self.end_headers()
-            self.wfile.write(content.encode("utf-8"))
+            self.wfile.write(content_bytes)
         else:
             self.send_error(404, "Terminal UI index.html not found")
 

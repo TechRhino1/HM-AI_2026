@@ -22,7 +22,7 @@ class TimeoutGuard:
         func: Callable[..., T],
         *args: Any,
         timeout_sec: float = 3.0,
-        default: Optional[T] = None,
+        default: Optional[Any] = None,
         task_name: str = "Task",
         **kwargs: Any
     ) -> T:
@@ -32,17 +32,17 @@ class TimeoutGuard:
             return future.result(timeout=timeout_sec)
         except FuturesTimeoutError:
             logger.warning(f"TimeoutGuard: {task_name} exceeded timeout limit of {timeout_sec:.2f}s! Returning default fallback.")
-            return default
+            return default() if callable(default) else default
         except Exception as e:
             logger.error(f"TimeoutGuard: Error in {task_name}: {e}", exc_info=True)
-            return default
+            return default() if callable(default) else default
 
     @classmethod
     async def run_async(
         cls,
         coro: Any,
         timeout_sec: float = 3.0,
-        default: Optional[T] = None,
+        default: Optional[Any] = None,
         task_name: str = "AsyncTask"
     ) -> T:
         """Executes an asynchronous coroutine with an asyncio timeout."""
@@ -50,10 +50,10 @@ class TimeoutGuard:
             return await asyncio.wait_for(coro, timeout=timeout_sec)
         except asyncio.TimeoutError:
             logger.warning(f"TimeoutGuard: {task_name} exceeded async timeout of {timeout_sec:.2f}s! Returning default fallback.")
-            return default
+            return default() if callable(default) else default
         except Exception as e:
             logger.error(f"TimeoutGuard: Async error in {task_name}: {e}", exc_info=True)
-            return default
+            return default() if callable(default) else default
 
 def timeout_guarded(timeout_sec: float = 3.0, default: Any = None, task_name: Optional[str] = None):
     """Decorator to enforce strict timeout protection on functions."""

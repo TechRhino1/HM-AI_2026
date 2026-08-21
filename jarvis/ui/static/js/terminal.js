@@ -715,6 +715,7 @@
         }
     }
 
+    let _lastRadarSnapshot = "";
     function renderScannerRadarDOM(opps) {
         if (!el.radarList) return;
         if (state.activeLeftTab === "radar" && el.leftPanelCounter) {
@@ -723,8 +724,15 @@
 
         if (!opps || opps.length === 0) {
             el.radarList.innerHTML = `<div style="text-align:center; color:var(--text-dim); padding:16px;">Scanning monitored instruments...</div>`;
+            _lastRadarSnapshot = "";
             return;
         }
+
+        const snapshot = JSON.stringify({ activeSym: state.symbol, data: opps });
+        if (snapshot === _lastRadarSnapshot) {
+            return; // Zero DOM thrashing when data is unchanged
+        }
+        _lastRadarSnapshot = snapshot;
 
         el.radarList.innerHTML = opps.map(opp => {
             const badge = getStatusBadge(opp);
@@ -965,14 +973,22 @@
         }
     });
 
+    let _lastPositionsSnapshot = "";
     function renderActiveTradesDOM(positions) {
         if (!el.positionsTbody) return;
         if (el.positionsCount) el.positionsCount.textContent = `${positions.length} Open`;
 
         if (positions.length === 0) {
             el.positionsTbody.innerHTML = '<tr><td colspan="11" style="text-align:center; color:var(--text-dim); padding:16px;">No Active MT5 Positions Open</td></tr>';
+            _lastPositionsSnapshot = "";
             return;
         }
+
+        const snapshot = JSON.stringify(positions);
+        if (snapshot === _lastPositionsSnapshot) {
+            return; // Skip DOM update if positions are identical
+        }
+        _lastPositionsSnapshot = snapshot;
 
         el.positionsTbody.innerHTML = positions.map(p => {
             const isBuy = p.type === "BUY";

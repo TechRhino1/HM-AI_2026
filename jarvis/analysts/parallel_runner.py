@@ -70,12 +70,28 @@ class ParallelAnalystCluster:
             try:
                 reports[role_name] = fut.result(timeout=self.timeout_sec)
             except Exception:
-                # Safe fallback report if worker times out or errors
-                reports[role_name] = self.structure_analyst.analyze(context, regime)
+                # Instant zero-overhead fallback report if worker times out or errors
+                reports[role_name] = AnalystReport(
+                    role=role_name,
+                    symbol=context.symbol,
+                    bias="NEUTRAL",
+                    score=50.0,
+                    confidence=0.50,
+                    evidence=[f"{role_name} timeout / neutral fallback"],
+                    risk_factors=[]
+                )
 
         try:
             devil_report = devil_future.result(timeout=self.timeout_sec)
         except Exception:
-            devil_report = self.devil_advocate.critique_opportunity(context, regime, tentative_bias)
+            devil_report = DevilAdvocateReport(
+                symbol=context.symbol,
+                counter_bias="NEUTRAL",
+                penalty_score=0.0,
+                invalidation_risk_coefficient=0.0,
+                threats_detected=[],
+                invalidation_triggers=[],
+                liquidity_traps=[]
+            )
 
         return reports, devil_report

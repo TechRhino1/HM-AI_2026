@@ -15,8 +15,11 @@ class SQLiteTradeDB:
 
     def _get_conn(self):
         if not hasattr(self._local, "conn"):
-            self._local.conn = sqlite3.connect(self.db_path, check_same_thread=False)
-            self._local.conn.execute("PRAGMA journal_mode=WAL")
+            self._local.conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=10.0)
+            self._local.conn.execute("PRAGMA journal_mode=WAL;")
+            self._local.conn.execute("PRAGMA synchronous=NORMAL;")
+            self._local.conn.execute("PRAGMA cache_size=-64000;")
+            self._local.conn.execute("PRAGMA temp_store=MEMORY;")
         return self._local.conn
 
     def _init_db(self):
@@ -39,6 +42,12 @@ class SQLiteTradeDB:
                     executor TEXT DEFAULT 'BOT (AI)'
                 )
             ''')
+            # Create fast query lookup indices
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_executed_trades_ticket ON executed_trades(ticket);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_executed_trades_symbol ON executed_trades(symbol);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_executed_trades_timestamp ON executed_trades(timestamp);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_executed_trades_regime ON executed_trades(regime);")
+
             # Ensure executor column exists in existing tables
             cur = conn.cursor()
             cur.execute("PRAGMA table_info(executed_trades)")
@@ -56,7 +65,7 @@ class SQLiteTradeDB:
             conn.execute('''
                 INSERT INTO executed_trades (ticket, symbol, action, entry_price, sl, tp, volume, timestamp, ai_score, regime, expected_value, executor)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (ticket, symbol, action, entry, sl, tp, volume, datetime.utcnow().isoformat(), score, regime, ev, executor))
+            ''', (ticket, symbol, action, entry, sl, tp, volume, datetime.now(timezone.utc).isoformat(), score, regime, ev, executor))
             conn.commit()
         except Exception as e:
             logger.error(f"Failed to log trade to DB: {e}")
