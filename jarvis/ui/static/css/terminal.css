@@ -509,28 +509,64 @@ header.terminal-hud {
 /* ==========================================================================
    LIVE HIGH-IMPACT MACRO ECONOMIC NEWS FEED MODULE
    ========================================================================== */
-.news-feed-list { display: flex; flex-direction: column; gap: 6px; }
+.news-feed-list { 
+    display: flex; 
+    flex-direction: column; 
+    gap: 7px; 
+    padding-right: 2px;
+}
 
 .news-card {
     background: var(--bg-card);
     border: 1px solid var(--border-subtle);
-    border-radius: 5px;
-    padding: 8px;
+    border-radius: 6px;
+    padding: 8px 10px;
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 4px;
     transition: var(--transition-fast);
+    position: relative;
 }
 
 .news-card:hover {
     background: var(--bg-card-hover);
-    border-color: rgba(245, 158, 11, 0.4);
+    border-color: rgba(56, 189, 248, 0.4);
+}
+
+/* 1. Live Happening Now Cards (Highlighted with red pulsing glow) */
+.news-card.news-card-live {
+    background: linear-gradient(135deg, rgba(255, 59, 92, 0.15), rgba(15, 23, 42, 0.95));
+    border: 1px solid #ff3b5c;
+    box-shadow: 0 0 14px rgba(255, 59, 92, 0.35);
+    animation: liveNewsPulse 2s infinite ease-in-out;
+}
+
+@keyframes liveNewsPulse {
+    0% { box-shadow: 0 0 8px rgba(255, 59, 92, 0.25); border-color: #ff3b5c; }
+    50% { box-shadow: 0 0 18px rgba(255, 59, 92, 0.55); border-color: #ff758f; }
+    100% { box-shadow: 0 0 8px rgba(255, 59, 92, 0.25); border-color: #ff3b5c; }
+}
+
+/* 2. Upcoming Cards (Accented left border & amber/cyan highlights) */
+.news-card.news-card-upcoming {
+    border-left: 3px solid var(--devil-amber);
+    background: rgba(18, 26, 43, 0.75);
+}
+
+.news-card.news-card-past {
+    opacity: 0.72;
+    border-color: rgba(51, 65, 85, 0.4);
+}
+
+.news-card.news-card-past:hover {
+    opacity: 1.0;
 }
 
 .news-card-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 6px;
 }
 
 .news-currency-tag {
@@ -538,31 +574,71 @@ header.terminal-hud {
     font-size: 10px;
     font-weight: 800;
     color: #ffffff;
-    background: rgba(0, 0, 0, 0.4);
-    padding: 1px 5px;
+    background: rgba(0, 0, 0, 0.5);
+    padding: 1px 6px;
     border-radius: 3px;
+    border: 1px solid var(--border-subtle);
 }
 
 .news-impact-high {
-    background: rgba(255, 59, 92, 0.18);
+    background: rgba(255, 59, 92, 0.2);
     color: var(--neon-bear);
-    border: 1px solid rgba(255, 59, 92, 0.4);
+    border: 1px solid rgba(255, 59, 92, 0.5);
     font-size: 8.5px;
     font-weight: 800;
+    padding: 1px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.news-impact-med {
+    background: rgba(245, 158, 11, 0.2);
+    color: var(--devil-amber);
+    border: 1px solid rgba(245, 158, 11, 0.5);
+    font-size: 8.5px;
+    font-weight: 800;
+    padding: 1px 6px;
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.news-impact-low {
+    background: rgba(100, 116, 139, 0.2);
+    color: var(--text-dim);
+    border: 1px solid rgba(100, 116, 139, 0.4);
+    font-size: 8.5px;
+    font-weight: 700;
     padding: 1px 5px;
     border-radius: 3px;
     text-transform: uppercase;
 }
 
-.news-impact-med {
-    background: rgba(245, 158, 11, 0.18);
-    color: var(--devil-amber);
-    border: 1px solid rgba(245, 158, 11, 0.4);
+.news-status-pill {
+    font-family: var(--font-mono);
     font-size: 8.5px;
     font-weight: 800;
-    padding: 1px 5px;
+    padding: 1px 6px;
     border-radius: 3px;
     text-transform: uppercase;
+}
+
+.news-status-live {
+    background: #ff3b5c;
+    color: #ffffff;
+    animation: livePulseDot 1.2s infinite;
+}
+
+.news-status-upcoming {
+    background: rgba(245, 158, 11, 0.25);
+    color: var(--devil-amber);
+    border: 1px solid rgba(245, 158, 11, 0.5);
+}
+
+.news-status-past {
+    background: rgba(100, 116, 139, 0.2);
+    color: var(--text-dim);
 }
 
 .news-title {
@@ -570,6 +646,7 @@ header.terminal-hud {
     font-weight: 700;
     color: #ffffff;
     margin: 2px 0;
+    line-height: 1.35;
 }
 
 .news-metrics-row {
@@ -578,6 +655,50 @@ header.terminal-hud {
     font-family: var(--font-mono);
     font-size: 9.5px;
     color: var(--text-dim);
+    background: rgba(0, 0, 0, 0.3);
+    padding: 3px 6px;
+    border-radius: 4px;
+}
+
+.news-shock-banner {
+    font-size: 9px;
+    line-height: 1.3;
+    padding: 4px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.news-shock-banner.live {
+    background: rgba(255, 59, 92, 0.2);
+    color: #ff94a5;
+    border-left: 2px solid #ff3b5c;
+}
+
+.news-shock-banner.upcoming {
+    background: rgba(245, 158, 11, 0.12);
+    color: #fbbf24;
+    border-left: 2px solid var(--devil-amber);
+}
+
+.news-affected-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    align-items: center;
+    font-size: 8.5px;
+    color: var(--text-dim);
+    margin-top: 1px;
+}
+
+.news-affected-tag {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    font-weight: 700;
+    background: rgba(56, 189, 248, 0.15);
+    color: var(--accent-cyan);
+    padding: 0 4px;
+    border-radius: 2px;
 }
 
 /* ==========================================================================

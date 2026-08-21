@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JARVIS AI 3.0 — Institutional Financial Trading Terminal</title>
+    <title>HM AI 4.0 — Institutional Financial Trading Terminal</title>
     <!-- Google Fonts: Inter & JetBrains Mono -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,7 +12,7 @@
     <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
     <script src="https://s3.tradingview.com/tv.js"></script>
     <!-- Terminal Stylesheet -->
-    <link rel="stylesheet" href="/static/css/terminal.css?v=3.9">
+    <link rel="stylesheet" href="/static/css/terminal.css?v=4.0">
 </head>
 <body>
 
@@ -23,7 +23,7 @@
         <div class="brand-wrapper">
             <div class="brand-logo">
                 <div class="brand-icon">⚡</div>
-                <div class="brand-text">JARVIS <span>AI 3.0</span></div>
+                <div class="brand-text">HM <span>AI 4.0</span></div>
             </div>
             <div id="status-badge" class="badge badge-live">
                 <span class="pulse-dot"></span> OPERATIONAL
@@ -449,13 +449,13 @@
     </main>
 
     <!-- ==========================================================================
-         FLOATING & DRAGGABLE JARVIS AI COPILOT WINDOW
+         FLOATING & DRAGGABLE HM AI 4.0 COPILOT WINDOW
          ========================================================================== -->
     <div id="copilot-window" class="copilot-window floating" style="display:none;">
         <div id="copilot-header" class="copilot-header">
             <div class="copilot-header-title">
                 <span>🤖</span>
-                <span>JARVIS Copilot Intelligence</span>
+                <span>HM AI 4.0 Copilot Intelligence</span>
             </div>
             <div class="copilot-header-actions">
                 <button class="copilot-action-btn" title="Clear Context" onclick="clearCopilotChat()">🗑️</button>
@@ -467,18 +467,18 @@
         <div class="copilot-body">
             <div id="copilot-messages" class="copilot-messages">
                 <div class="copilot-bubble">
-                    🤖 <b>JARVIS AI 3.0:</b> Standing by. Ask me about real-time market regimes, economic news shocks, or click any opportunity in the Radar to trade manually.
+                    🤖 <b>HM AI 4.0:</b> Standing by. Ask me about real-time market regimes, economic news shocks, or click any opportunity in the Radar to trade manually.
                 </div>
             </div>
             <div class="copilot-input-bar">
-                <input id="copilot-input" class="copilot-input" placeholder="Ask JARVIS (e.g. Analyze Gold pullback setup)..." onkeydown="handleChatKey(event)">
+                <input id="copilot-input" class="copilot-input" placeholder="Ask HM AI (e.g. Analyze Gold pullback setup)..." onkeydown="handleChatKey(event)">
                 <button class="btn-terminal" style="padding:4px 10px;" onclick="sendChatMessage()">Send</button>
             </div>
         </div>
     </div>
 
     <!-- Floating Chat Head FAB -->
-    <div id="copilot-fab" class="copilot-fab" title="Open JARVIS AI Copilot" onclick="toggleCopilotMinimize(false)">
+    <div id="copilot-fab" class="copilot-fab" title="Open HM AI Copilot" onclick="toggleCopilotMinimize(false)">
         🤖
     </div>
 
@@ -498,6 +498,6 @@
     </div>
 
     <!-- Terminal Controller Script -->
-    <script src="/static/js/terminal.js?v=3.9"></script>
+    <script src="/static/js/terminal.js?v=4.0"></script>
 </body>
 </html>

@@ -167,7 +167,7 @@
         { id: "close_all", title: "Close All Active Positions", desc: "Emergency kill-switch closing all open tickets", shortcut: "X", action: () => closeAllPositions() },
         { id: "news", title: "View Macro News Calendar", desc: "Switch left sidebar to High-Impact News feed", shortcut: "N", action: () => switchLeftTab("news") },
         { id: "radar", title: "View High-Probability Radar", desc: "Switch left sidebar to Setup Radar", shortcut: "R", action: () => switchLeftTab("radar") },
-        { id: "copilot", title: "Toggle JARVIS AI Copilot", desc: "Open / Close intelligent assistant modal", shortcut: "C", action: () => toggleCopilotModal() },
+        { id: "copilot", title: "Toggle HM AI 4.0 Copilot", desc: "Open / Close intelligent assistant modal", shortcut: "C", action: () => toggleCopilotModal() },
         { id: "safe", title: "Toggle Emergency Safe Mode", desc: "Pause or unpause all autonomous executions", shortcut: "Esc", action: () => toggleSafeMode() },
         { id: "refresh", title: "Force Refresh Telemetry", desc: "Poll latest MT5 broker state immediately", shortcut: "F5", action: () => refreshData() }
     ];
@@ -773,26 +773,78 @@
 
     function renderNewsDOM(news) {
         if (!el.newsFeedList) return;
+        if (!news || news.length === 0) {
+            el.newsFeedList.innerHTML = '<div style="text-align:center; color:var(--text-dim); padding:20px; font-size:11px;">Scanning institutional macro feeds...</div>';
+            if (state.activeLeftTab === "news" && el.leftPanelCounter) {
+                el.leftPanelCounter.textContent = "0 Events";
+            }
+            return;
+        }
+
+        const liveCount = news.filter(n => n.is_live).length;
         if (state.activeLeftTab === "news" && el.leftPanelCounter) {
-            el.leftPanelCounter.textContent = `${news.length} Events`;
+            el.leftPanelCounter.textContent = liveCount > 0 ? `${liveCount} LIVE | ${news.length} Events` : `${news.length} Events`;
         }
 
         el.newsFeedList.innerHTML = news.map(n => {
+            const isLive = Boolean(n.is_live);
+            const isUpcoming = Boolean(n.is_upcoming);
             const isHigh = n.impact === "HIGH";
-            const badgeClass = isHigh ? "news-impact-high" : "news-impact-med";
+            const isMed = n.impact === "MEDIUM";
+            
+            let cardClass = "news-card";
+            if (isLive) cardClass += " news-card-live";
+            else if (isUpcoming) cardClass += " news-card-upcoming";
+            else cardClass += " news-card-past";
+
+            let impactBadgeClass = "news-impact-low";
+            if (isHigh) impactBadgeClass = "news-impact-high";
+            else if (isMed) impactBadgeClass = "news-impact-med";
+
+            let statusPillClass = "news-status-past";
+            if (isLive) statusPillClass = "news-status-live";
+            else if (isUpcoming) statusPillClass = "news-status-upcoming";
+
+            const statusText = n.status_badge || (isLive ? "🔴 LIVE NOW" : (isUpcoming ? `⏳ ${n.time}` : "✓ RELEASED"));
+
+            // Shock alert banner for live and high-impact upcoming
+            let shockBannerHtml = "";
+            if (isLive) {
+                shockBannerHtml = `<div class="news-shock-banner live">⚡ <b>VOLATILITY SHOCK ACTIVE:</b> High spread expansion & slippage risk</div>`;
+            } else if (isUpcoming && isHigh) {
+                shockBannerHtml = `<div class="news-shock-banner upcoming">⏳ <b>APPROACHING HIGH IMPACT:</b> Expect liquidity volatility on ${n.currency}</div>`;
+            }
+
+            // Affected pairs tags
+            let affectedHtml = "";
+            if (n.affected_pairs && n.affected_pairs.length > 0) {
+                affectedHtml = `
+                    <div class="news-affected-row">
+                        <span style="color:var(--text-dim);">Impacts:</span>
+                        ${n.affected_pairs.slice(0, 4).map(p => `<span class="news-affected-tag">${p}</span>`).join("")}
+                    </div>
+                `;
+            }
+
+            const actualStyle = isLive ? "color:#ff3b5c; font-weight:800;" : (n.actual && n.actual !== "Upcoming" && n.actual !== "—" ? "color:var(--neon-bull); font-weight:700;" : "color:var(--accent-cyan);");
+
             return `
-                <div class="news-card">
+                <div class="${cardClass}">
                     <div class="news-card-header">
-                        <span class="news-currency-tag">${n.currency}</span>
-                        <span class="${badgeClass}">${n.impact} IMPACT</span>
-                        <span class="mono-number" style="font-size:9.5px; color:var(--text-dim);">${n.time}</span>
+                        <div style="display:flex; align-items:center; gap:4px;">
+                            <span class="news-currency-tag">${n.currency}</span>
+                            <span class="${impactBadgeClass}">${n.impact}</span>
+                        </div>
+                        <span class="news-status-pill ${statusPillClass}">${statusText}</span>
                     </div>
                     <div class="news-title">${n.event}</div>
                     <div class="news-metrics-row">
                         <span>Fcst: <b>${n.forecast}</b></span>
                         <span>Prev: <b>${n.previous}</b></span>
-                        <span>Actual: <b style="color:var(--accent-cyan);">${n.actual}</b></span>
+                        <span>Actual: <b style="${actualStyle}">${n.actual || '—'}</b></span>
                     </div>
+                    ${shockBannerHtml}
+                    ${affectedHtml}
                 </div>
             `;
         }).join("");
@@ -1117,8 +1169,8 @@
         state.activeLeftTab = tab;
         if (el.tabBtnRadar) el.tabBtnRadar.classList.toggle("active", tab === "radar");
         if (el.tabBtnNews) el.tabBtnNews.classList.toggle("active", tab === "news");
-        if (el.tabContentRadar) el.tabContentRadar.style.display = tab === "radar" ? "block" : "none";
-        if (el.tabContentNews) el.tabContentNews.style.display = tab === "news" ? "block" : "none";
+        if (el.tabContentRadar) el.tabContentRadar.style.display = tab === "radar" ? "flex" : "none";
+        if (el.tabContentNews) el.tabContentNews.style.display = tab === "news" ? "flex" : "none";
 
         if (tab === "news") fetchNews();
         else fetchTelemetry();
@@ -1193,17 +1245,17 @@
 
     window.clearCopilotChat = function () {
         if (!el.copilotMessages) return;
-        el.copilotMessages.innerHTML = `<div class="copilot-bubble">ðŸ¤– <b>JARVIS AI:</b> Context cleared. Standing by.</div>`;
+        el.copilotMessages.innerHTML = `<div class="copilot-bubble">🤖 <b>HM AI 4.0:</b> Context cleared. Standing by.</div>`;
     };
 
     window.exportCopilotChat = function () {
         if (!el.copilotMessages) return;
         const bubbles = el.copilotMessages.querySelectorAll(".copilot-bubble");
-        let transcript = `# JARVIS AI 3.0 â€” Trading Intelligence Transcript\nGenerated: ${new Date().toISOString()}\n\n---\n\n`;
+        let transcript = `# HM AI 4.0 — Trading Intelligence Transcript\nGenerated: ${new Date().toISOString()}\n\n---\n\n`;
         bubbles.forEach(b => {
             const isUser = b.classList.contains("user");
-            const sender = isUser ? "TRADER" : "JARVIS AI";
-            const text = b.innerText.replace(/ðŸ¤– JARVIS AI:\n/, "");
+            const sender = isUser ? "TRADER" : "HM AI 4.0";
+            const text = b.innerText.replace(/🤖 HM AI 4.0:\n/, "").replace(/🤖 JARVIS AI:\n/, "");
             transcript += `### [${sender}]\n${text}\n\n`;
         });
 
@@ -1211,7 +1263,7 @@
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = `jarvis_copilot_session_${Date.now()}.md`;
+        a.download = `hm_ai_copilot_session_${Date.now()}.md`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -1237,10 +1289,10 @@
                 body: JSON.stringify({ query })
             });
             const data = await res.json();
-            const jarvisBubble = document.createElement("div");
-            jarvisBubble.className = "copilot-bubble";
-            jarvisBubble.innerHTML = `ðŸ¤– <b>JARVIS AI:</b><br>${data.response || 'No response.'}`;
-            el.copilotMessages.appendChild(jarvisBubble);
+            const aiBubble = document.createElement("div");
+            aiBubble.className = "copilot-bubble";
+            aiBubble.innerHTML = `🤖 <b>HM AI 4.0:</b><br>${data.response || 'No response.'}`;
+            el.copilotMessages.appendChild(aiBubble);
             el.copilotMessages.scrollTop = el.copilotMessages.scrollHeight;
         } catch (err) {
             console.error("Copilot error:", err);
@@ -1411,8 +1463,9 @@
         fetchNews();
 
         setInterval(fetchTelemetry, 1500);
-    setInterval(fetchHistory, 5000);
-    fetchHistory();
+        setInterval(fetchHistory, 5000);
+        setInterval(fetchNews, 10000);
+        fetchHistory();
         setInterval(fetchCandles, 5000);
         setInterval(simulateLiveMarketTick, 350);
     });
