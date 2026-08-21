@@ -46,7 +46,6 @@ class BacktestEngine:
 
         min_window = 60
         spec = resolve_symbol(symbol)
-        point_multiplier = spec.contract_size
         slippage_delta = self.slippage_pips * spec.pip_size
 
         for i in range(min_window, len(df_h1) - 1):

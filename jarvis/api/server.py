@@ -314,16 +314,9 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                 return
 
         rel = req_path.lstrip("/").replace("static/", "", 1)
-        candidates = [
-            os.path.join(self.base_dir, "ui", "static", rel),
-            os.path.join(self.root_dir, "ui", "static", rel)
-        ]
-
-        found_path = None
-        for p in candidates:
-            if os.path.exists(p) and os.path.isfile(p):
-                found_path = p
-                break
+        found_path = os.path.join(self.base_dir, "ui", "static", rel)
+        if not (os.path.exists(found_path) and os.path.isfile(found_path)):
+            found_path = None
 
         if found_path:
             mime_type, _ = mimetypes.guess_type(found_path)
@@ -361,17 +354,8 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                 self.wfile.write(content_bytes)
                 return
 
-        candidates = [
-            os.path.join(self.base_dir, "ui", "templates", "index.html"),
-            os.path.join(self.root_dir, "ui", "templates", "index.html")
-        ]
-        ui_path = None
-        for c in candidates:
-            if os.path.exists(c):
-                ui_path = c
-                break
-
-        if ui_path:
+        ui_path = os.path.join(self.base_dir, "ui", "templates", "index.html")
+        if os.path.exists(ui_path):
             with open(ui_path, "r", encoding="utf-8") as f:
                 content = f.read()
             content_bytes = content.encode("utf-8")

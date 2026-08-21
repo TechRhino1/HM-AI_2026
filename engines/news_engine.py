@@ -58,6 +58,8 @@ class NewsIntelligenceEngine:
                                 self.logger.info(f"Successfully fetched live calendar from {url} ({len(events)} events)")
                             return events, "FOREX_FACTORY_LIVE"
             except Exception as e:
+                if self.logger:
+                    self.logger.warning(f"Could not fetch live calendar from {url}: {e}")
                 continue
 
         # Fallback to Master Local Economic Calendar

@@ -1,16 +1,21 @@
 import numpy as np
 import pandas as pd
 from typing import Dict, Optional, Any
-import MetaTrader5 as mt5
+try:
+    import MetaTrader5 as mt5
+    MT5_AVAILABLE = True
+except Exception:
+    mt5 = None
+    MT5_AVAILABLE = False
 
 TF_MAP = {
-    "M1": mt5.TIMEFRAME_M1 if hasattr(mt5, "TIMEFRAME_M1") else 1,
-    "M5": mt5.TIMEFRAME_M5 if hasattr(mt5, "TIMEFRAME_M5") else 5,
-    "M15": mt5.TIMEFRAME_M15 if hasattr(mt5, "TIMEFRAME_M15") else 15,
-    "M30": mt5.TIMEFRAME_M30 if hasattr(mt5, "TIMEFRAME_M30") else 30,
-    "H1": mt5.TIMEFRAME_H1 if hasattr(mt5, "TIMEFRAME_H1") else 16385,
-    "H4": mt5.TIMEFRAME_H4 if hasattr(mt5, "TIMEFRAME_H4") else 16388,
-    "D1": mt5.TIMEFRAME_D1 if hasattr(mt5, "TIMEFRAME_D1") else 16408,
+    "M1": mt5.TIMEFRAME_M1 if (MT5_AVAILABLE and hasattr(mt5, "TIMEFRAME_M1")) else 1,
+    "M5": mt5.TIMEFRAME_M5 if (MT5_AVAILABLE and hasattr(mt5, "TIMEFRAME_M5")) else 5,
+    "M15": mt5.TIMEFRAME_M15 if (MT5_AVAILABLE and hasattr(mt5, "TIMEFRAME_M15")) else 15,
+    "M30": mt5.TIMEFRAME_M30 if (MT5_AVAILABLE and hasattr(mt5, "TIMEFRAME_M30")) else 30,
+    "H1": mt5.TIMEFRAME_H1 if (MT5_AVAILABLE and hasattr(mt5, "TIMEFRAME_H1")) else 16385,
+    "H4": mt5.TIMEFRAME_H4 if (MT5_AVAILABLE and hasattr(mt5, "TIMEFRAME_H4")) else 16388,
+    "D1": mt5.TIMEFRAME_D1 if (MT5_AVAILABLE and hasattr(mt5, "TIMEFRAME_D1")) else 16408,
 }
 
 class MultiTimeframeDataEngine:

@@ -72,7 +72,7 @@ class MarketContextEngine:
         # 5. Session Timing Context
         session = SessionEngine.get_current_session()
 
-        # 6. Multi-Timeframe Alignment Matrix
+        # 6. Multi-Timeframe Alignment Matrix & Top-Down Weighted Score
         mtf_alignment = {}
         if not df_macro.empty:
             mtf_alignment["D1"] = self.structure_engine.analyze_structure(df_macro).bias
@@ -83,6 +83,18 @@ class MarketContextEngine:
             mtf_alignment["M15"] = self.structure_engine.analyze_structure(df_setup).bias
         if not df_timing.empty:
             mtf_alignment["M5"] = self.structure_engine.analyze_structure(df_timing).bias
+
+        # Top-down narrative weighting: D1 (40%), H4 (30%), H1 (20%), M15 (10%)
+        def _score_bias(b: str) -> float:
+            return 1.0 if b == "BULLISH" else (-1.0 if b == "BEARISH" else 0.0)
+
+        weighted_score = (
+            _score_bias(mtf_alignment.get("D1", "NEUTRAL")) * 0.40 +
+            _score_bias(mtf_alignment.get("H4", "NEUTRAL")) * 0.30 +
+            _score_bias(mtf_alignment.get("H1", "NEUTRAL")) * 0.20 +
+            _score_bias(mtf_alignment.get("M15", "NEUTRAL")) * 0.10
+        )
+        mtf_confluence_pct = round(weighted_score * 100.0, 1)
 
         # 7. VWAP Calculation
         vwap = 0.0
@@ -116,5 +128,6 @@ class MarketContextEngine:
             volatility=volatility,
             momentum=momentum,
             session=session,
+            trend_score=mtf_confluence_pct,
             mtf_alignment=mtf_alignment
         )

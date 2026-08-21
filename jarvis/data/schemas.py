@@ -168,6 +168,8 @@ class DevilAdvocateReport:
     threats_detected: List[str] = field(default_factory=list)
     invalidation_triggers: List[str] = field(default_factory=list)
     liquidity_traps: List[str] = field(default_factory=list)
+    critique_confidence: float = 1.0
+    correlated_threats: List[str] = field(default_factory=list)
     execution_time_ms: float = 0.0
 
 @dataclass

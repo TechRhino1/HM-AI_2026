@@ -1,7 +1,7 @@
 import sqlite3
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 import threading
 import os
 
@@ -39,7 +39,16 @@ class SQLiteTradeDB:
                     ai_score REAL,
                     regime TEXT,
                     expected_value REAL,
-                    executor TEXT DEFAULT 'BOT (AI)'
+                    executor TEXT DEFAULT 'BOT (AI)',
+                    session_name TEXT DEFAULT 'UNKNOWN',
+                    is_prime_session INTEGER DEFAULT 1,
+                    adx REAL DEFAULT 0.0,
+                    plus_di REAL DEFAULT 0.0,
+                    minus_di REAL DEFAULT 0.0,
+                    spread_pips REAL DEFAULT 0.0,
+                    mtf_alignment TEXT DEFAULT '',
+                    threats_json TEXT DEFAULT '[]',
+                    features_json TEXT DEFAULT '{}'
                 )
             ''')
             # Create fast query lookup indices
@@ -48,24 +57,71 @@ class SQLiteTradeDB:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_executed_trades_timestamp ON executed_trades(timestamp);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_executed_trades_regime ON executed_trades(regime);")
 
-            # Ensure executor column exists in existing tables
+            # Ensure newly added columns exist in existing tables (safe schema migration)
             cur = conn.cursor()
             cur.execute("PRAGMA table_info(executed_trades)")
             cols = [row[1] for row in cur.fetchall()]
-            if "executor" not in cols:
-                conn.execute("ALTER TABLE executed_trades ADD COLUMN executor TEXT DEFAULT 'BOT (AI)'")
+            new_cols = {
+                "executor": "TEXT DEFAULT 'BOT (AI)'",
+                "session_name": "TEXT DEFAULT 'UNKNOWN'",
+                "is_prime_session": "INTEGER DEFAULT 1",
+                "adx": "REAL DEFAULT 0.0",
+                "plus_di": "REAL DEFAULT 0.0",
+                "minus_di": "REAL DEFAULT 0.0",
+                "spread_pips": "REAL DEFAULT 0.0",
+                "mtf_alignment": "TEXT DEFAULT ''",
+                "threats_json": "TEXT DEFAULT '[]'",
+                "features_json": "TEXT DEFAULT '{}'"
+            }
+            for col_name, col_def in new_cols.items():
+                if col_name not in cols:
+                    try:
+                        conn.execute(f"ALTER TABLE executed_trades ADD COLUMN {col_name} {col_def}")
+                    except Exception:
+                        pass
             conn.commit()
             logger.info("SQLite database initialized successfully.")
         except Exception as e:
             logger.error(f"Failed to initialize SQLite DB: {e}")
 
-    def log_trade(self, ticket: int, symbol: str, action: str, entry: float, sl: float, tp: float, volume: float, score: float, regime: str, ev: float, executor: str = "BOT (AI)"):
+    def log_trade(
+        self,
+        ticket: int,
+        symbol: str,
+        action: str,
+        entry: float,
+        sl: float,
+        tp: float,
+        volume: float,
+        score: float,
+        regime: str,
+        ev: float,
+        executor: str = "BOT (AI)",
+        session_name: str = "UNKNOWN",
+        is_prime_session: bool = True,
+        adx: float = 0.0,
+        plus_di: float = 0.0,
+        minus_di: float = 0.0,
+        spread_pips: float = 0.0,
+        mtf_alignment: str = "",
+        threats_json: str = "[]",
+        features_json: str = "{}"
+    ):
         conn = self._get_conn()
         try:
             conn.execute('''
-                INSERT INTO executed_trades (ticket, symbol, action, entry_price, sl, tp, volume, timestamp, ai_score, regime, expected_value, executor)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (ticket, symbol, action, entry, sl, tp, volume, datetime.now(timezone.utc).isoformat(), score, regime, ev, executor))
+                INSERT INTO executed_trades (
+                    ticket, symbol, action, entry_price, sl, tp, volume, timestamp,
+                    ai_score, regime, expected_value, executor, session_name,
+                    is_prime_session, adx, plus_di, minus_di, spread_pips,
+                    mtf_alignment, threats_json, features_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                ticket, symbol, action, entry, sl, tp, volume, datetime.now(timezone.utc).isoformat(),
+                score, regime, ev, executor, session_name, int(is_prime_session),
+                adx, plus_di, minus_di, spread_pips, mtf_alignment, threats_json, features_json
+            ))
             conn.commit()
         except Exception as e:
             logger.error(f"Failed to log trade to DB: {e}")

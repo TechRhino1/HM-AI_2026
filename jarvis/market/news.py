@@ -588,4 +588,48 @@ class LiveNewsEngine:
             })
         return res
 
+    def evaluate_post_news_sweep_reaction(
+        self,
+        symbol: str,
+        sweep_detected: bool,
+        sweep_type: str,
+        sweep_magnitude_pips: float,
+        lookback_minutes: int = 45
+    ) -> Dict[str, Any]:
+        """
+        Cross-references recent high-impact macroeconomic releases with active order-book liquidity sweeps
+        to detect the classic institutional 'Stop-Hunt & Reverse' trade pattern.
+        """
+        if not sweep_detected or sweep_magnitude_pips <= 0:
+            return {"news_reversal_setup": False, "conviction_boost": 0.0, "reason": "No active sweep"}
+
+        calendar = self.get_news_calendar()
+        recent_news = [
+            ev for ev in calendar 
+            if ev.get("is_past") and ev.get("diff_seconds", 0) >= (-lookback_minutes * 60)
+            and ev.get("impact") in ["HIGH", "MEDIUM"]
+            and any(p in symbol for p in ev.get("affected_pairs", []))
+        ]
+
+        if not recent_news:
+            return {"news_reversal_setup": False, "conviction_boost": 0.0, "reason": "No recent high-impact release"}
+
+        latest_news = recent_news[0]
+        # Check if the liquidity sweep swept the initial impulse extreme (stop hunt)
+        is_buy_side_sweep = (sweep_type == "BUY_SIDE")
+        reversal_direction = "SELL" if is_buy_side_sweep else "BUY"
+
+        return {
+            "news_reversal_setup": True,
+            "catalyst_event": latest_news.get("event"),
+            "event_currency": latest_news.get("currency"),
+            "reversal_bias": reversal_direction,
+            "sweep_magnitude_pips": round(sweep_magnitude_pips, 1),
+            "conviction_boost": 0.20,
+            "reason": (
+                f"Post-News Stop Hunt: {latest_news.get('event')} triggered a {sweep_type} sweep "
+                f"({sweep_magnitude_pips:.1f} pips). Institutional reversal favoring {reversal_direction}."
+            )
+        }
+
 GLOBAL_NEWS_ENGINE = LiveNewsEngine()

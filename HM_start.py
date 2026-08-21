@@ -1,5 +1,4 @@
-import os, sys, time, re, socket, subprocess, threading, logging
-import signal
+import os, sys, time, re, socket, subprocess, threading, logging, shutil
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -32,8 +31,12 @@ def get_local_ip():
         return "127.0.0.1"
 
 def start_cloudflare_tunnel(port=8501):
-    cloudflared_path = os.path.join(ROOT_DIR, "tools", "cloudflared.exe")
-    if not os.path.exists(cloudflared_path):
+    bin_name = "cloudflared.exe" if sys.platform == "win32" else "cloudflared"
+    local_path = os.path.join(ROOT_DIR, "tools", bin_name)
+    cloudflared_path = local_path if os.path.exists(local_path) else shutil.which("cloudflared")
+    
+    if not cloudflared_path or not os.path.exists(cloudflared_path):
+        logging.info("Cloudflare tunnel binary not found in tools/ or PATH — remote access tunnel disabled.")
         return None, None
 
     log_path = os.path.join(ROOT_DIR, "tools", "tunnel.log")
@@ -93,7 +96,7 @@ def main():
     print(f"BALANCE / EQ:    ${acc.get('balance', 0):,.2f} / ${acc.get('equity', 0):,.2f}")
     print("-"*70)
     print("ACCESS LINKS (PC & MOBILE PHONE):")
-    print(f"  [Desktop PC]:   http://localhost:8501")
+    print("  [Desktop PC]:   http://localhost:8501")
     print(f"  [Wi-Fi Phone]:  http://{local_ip}:8501")
     if tunnel_url:
         print(f"  [Remote 4G/5G]: {tunnel_url}")
@@ -107,7 +110,7 @@ def main():
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        print("\n[!] Gracefully shutting down HM_v3...")
+        print("\n[!] Gracefully shutting down HM_v4...")
         try:
             orchestrator.stop()
         except Exception as e:

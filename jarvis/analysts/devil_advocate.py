@@ -1,19 +1,20 @@
 """
-JARVIS AI 3.0 — Devil's Advocate Adversarial Intelligence Agent.
-Implements the Adversarial Risk Penalty Scoring System (replacing binary veto).
-Actively searches for invalidation, liquidity traps, exhaustion, conflicting timeframes, and counter-trend threats.
+JARVIS AI 3.0 — Deepened Adversarial Intelligence Agent (Devil's Advocate).
+Implements parameterized adversarial risk scoring, cross-asset correlation checks,
+liquidity sweep detection, spread vulnerability, session timing, and empirical invalidation.
 """
 import time
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 from jarvis.data.schemas import MarketContext, RegimeOutput, DevilAdvocateReport
+from jarvis.market.correlations import DynamicCorrelationEngine
 
 class DevilAdvocateAnalyst:
     """
     Mandatory Adversarial Counter-Analyst.
     Calculates adversarial penalty scores and invalidation risk coefficients to stress-test trade hypotheses.
     """
-    def __init__(self):
-        pass
+    def __init__(self, correlation_engine: Optional[DynamicCorrelationEngine] = None):
+        self.correlation_engine = correlation_engine or DynamicCorrelationEngine()
 
     def critique_opportunity(
         self,
@@ -22,9 +23,10 @@ class DevilAdvocateAnalyst:
         proposed_bias: str  # "BUY" or "SELL"
     ) -> DevilAdvocateReport:
         t0 = time.perf_counter()
-        threats = []
-        invalidation_triggers = []
-        traps = []
+        threats: List[str] = []
+        invalidation_triggers: List[str] = []
+        traps: List[str] = []
+        correlated_threats: List[str] = []
 
         penalty_score = 0.0
         st = context.structure
@@ -32,81 +34,114 @@ class DevilAdvocateAnalyst:
         vol = context.volatility
         liq = context.liquidity
         mtf = context.mtf_alignment
+        sess = context.session
 
-        counter_bias = "BEARISH" if proposed_bias == "BUY" else "BULLISH"
+        is_buy = (proposed_bias.upper() == "BUY")
+        counter_bias = "BEARISH" if is_buy else "BULLISH"
 
-        if proposed_bias == "BUY":
-            # 1. Counter-trend momentum check
-            if mom.trend_score < -20:
-                penalty_score += 15.0
-                threats.append(f"Counter-trend buying against negative momentum score ({mom.trend_score}).")
-            if mom.rsi > 70.0:
-                penalty_score += 12.0
-                threats.append(f"Overextended buy entry with RSI in overbought territory ({mom.rsi:.1f}).")
-            if mom.divergence == "BEARISH_DIVERGENCE":
-                penalty_score += 14.0
-                threats.append("Bearish RSI divergence warning against buying impulse.")
+        # ── 1. Parameterized Structural & Momentum Analysis ─────────────────────────
+        # Directional mapping
+        trend_score_against = (mom.trend_score < -20) if is_buy else (mom.trend_score > 20)
+        rsi_overextended = (mom.rsi > 70.0) if is_buy else (mom.rsi < 30.0)
+        adx_strong_counter = (mom.adx > 25.0) and ((mom.minus_di > mom.plus_di + 8) if is_buy else (mom.plus_di > mom.minus_di + 8))
+        adverse_divergence = (mom.divergence == "BEARISH_DIVERGENCE") if is_buy else (mom.divergence == "BULLISH_DIVERGENCE")
+        unfavorable_zone = (st.discount_premium_zone == "PREMIUM") if is_buy else (st.discount_premium_zone == "DISCOUNT")
+        trend_broken = (st.lower_highs and st.lower_lows) if is_buy else (st.higher_highs and st.higher_lows)
+        htf_conflict = (mtf.get("H4") == ("BEARISH" if is_buy else "BULLISH")) or (mtf.get("D1") == ("BEARISH" if is_buy else "BULLISH"))
+        unswept_equal_levels = liq.equal_lows if is_buy else liq.equal_highs
 
-            # 2. Structural resistance & Premium zone
-            if st.discount_premium_zone == "PREMIUM":
+        if trend_score_against:
+            penalty_score += 15.0
+            threats.append(f"Counter-trend {proposed_bias} against opposing momentum score ({mom.trend_score}).")
+
+        if rsi_overextended:
+            penalty_score += 12.0
+            threats.append(f"Overextended {proposed_bias} entry with RSI at {mom.rsi:.1f}.")
+
+        if adx_strong_counter:
+            penalty_score += 14.0
+            threats.append(f"Strong adverse directional trend present (ADX={mom.adx:.1f}, Counter-DI dominant).")
+
+        if adverse_divergence:
+            penalty_score += 14.0
+            threats.append(f"Adverse RSI divergence warning against {proposed_bias} impulse.")
+
+        if unfavorable_zone:
+            penalty_score += 10.0
+            threats.append(f"Attempting {proposed_bias} in unfavorable {st.discount_premium_zone} zone relative to equilibrium.")
+
+        if trend_broken:
+            penalty_score += 18.0
+            threats.append(f"Primary market structure actively prints counter-trend swing points.")
+
+        if htf_conflict:
+            macro_bias = mtf.get("H4") or mtf.get("D1")
+            penalty_score += 12.0
+            threats.append(f"Higher timeframe structural conflict: Macro timeframe is {macro_bias}.")
+
+        # ── 2. Deep Liquidity Sweep & Order Book Traps ──────────────────────────────
+        if unswept_equal_levels:
+            zone_target = st.demand_zone[0] if is_buy else st.supply_zone[1]
+            traps.append(f"Unswept Equal {'Lows' if is_buy else 'Highs'} near {zone_target} — smart money stop-hunt risk.")
+            penalty_score += 8.0
+
+        if liq.sweep_detected:
+            # If a sweep just happened opposing our trade, it's a stop-run against us
+            if (is_buy and liq.sweep_type == "BUY_SIDE") or (not is_buy and liq.sweep_type == "SELL_SIDE"):
                 penalty_score += 10.0
-                threats.append("Buying in PREMIUM zone above equilibrium (unfavorable entry price).")
-            if st.lower_highs and st.lower_lows:
-                penalty_score += 18.0
-                threats.append("Primary structure exhibits Lower Highs and Lower Lows (downtrend).")
+                threats.append(f"Fresh {liq.sweep_type} sweep detected — active stop-hunt in progress ({liq.sweep_magnitude:.1f} pips).")
 
-            # 3. Timeframe conflict
-            if mtf.get("H4") == "BEARISH" or mtf.get("D1") == "BEARISH":
-                penalty_score += 12.0
-                threats.append(f"Higher timeframe structural conflict: Macro timeframe is {mtf.get('H4') or mtf.get('D1')}.")
+        # Liquidity imbalance threat (trapped volume)
+        if liq.buy_side_liquidity > 0 and liq.sell_side_liquidity > 0:
+            ratio = liq.sell_side_liquidity / (liq.buy_side_liquidity + 1e-9) if is_buy else liq.buy_side_liquidity / (liq.sell_side_liquidity + 1e-9)
+            if ratio > 2.0:
+                penalty_score += 6.0
+                traps.append(f"Severe liquidity pool imbalance ({ratio:.1f}x opposing volume resting in order book).")
 
-            # 4. Liquidity traps
-            if liq.equal_lows:
-                traps.append(f"Unswept Equal Lows at {st.demand_zone[0]} — smart money may hunt sell-side stops first.")
-                penalty_score += 8.0
+        # ── 3. Volatility, Spread & Session Timing Risk ─────────────────────────────
+        if vol.is_excessive_spread:
+            penalty_score += 12.0
+            threats.append(f"Excessive spread ({vol.current_spread_pips:.1f} pips > {vol.typical_spread_pips*2:.1f} typical) creates severe slippage drag.")
 
-            # 5. Invalidation triggers
+        if vol.state == "EXTREME":
+            penalty_score += 18.0
+            threats.append("Extreme volatility shock in progress — stop loss vulnerability elevated.")
+
+        if not sess.is_prime_session:
+            penalty_score += 8.0
+            threats.append(f"Trading during low-liquidity off-hours ({sess.current_session}) increases false breakout risk.")
+
+        # ── 4. Market Regime Transition Threat ──────────────────────────────────────
+        if regime.regime_transition:
+            penalty_score += 10.0
+            threats.append("Market regime currently transitioning — statistical edges temporarily unstable.")
+        elif regime.confidence < 0.60:
+            penalty_score += 8.0
+            threats.append(f"Low regime classification confidence ({regime.confidence*100:.0f}%).")
+
+        # ── 5. Cross-Asset Structural Correlation Check ─────────────────────────────
+        # Example: If buying XAUUSD but USD is surging or EURUSD is collapsing
+        correlated_pairs = [("EURUSD", 0.70), ("GBPUSD", 0.60)] if "XAU" in context.symbol or "GOLD" in context.symbol else []
+        for pair_sym, min_corr in correlated_pairs:
+            corr_val = self.correlation_engine.get_correlation(context.symbol, pair_sym)
+            if corr_val >= min_corr and pair_sym in mtf:
+                pair_bias = mtf[pair_sym] if isinstance(mtf.get(pair_sym), str) else ""
+                if pair_bias and ((is_buy and pair_bias == "BEARISH") or (not is_buy and pair_bias == "BULLISH")):
+                    penalty_score += 8.0
+                    c_threat = f"Correlated instrument {pair_sym} (r={corr_val:.2f}) exhibits conflicting {pair_bias} structure."
+                    threats.append(c_threat)
+                    correlated_threats.append(c_threat)
+
+        # ── 6. Invalidation Triggers & Bounds ───────────────────────────────────────
+        if is_buy:
             invalidation_triggers.append(f"H1 candle close below demand zone {st.demand_zone[0]}.")
             invalidation_triggers.append("Bearish displacement breaking recent swing low.")
-
-        elif proposed_bias == "SELL":
-            # 1. Counter-trend momentum check
-            if mom.trend_score > 20:
-                penalty_score += 15.0
-                threats.append(f"Counter-trend selling against positive momentum score ({mom.trend_score}).")
-            if mom.rsi < 30.0:
-                penalty_score += 12.0
-                threats.append(f"Overextended sell entry with RSI in oversold territory ({mom.rsi:.1f}).")
-            if mom.divergence == "BULLISH_DIVERGENCE":
-                penalty_score += 14.0
-                threats.append("Bullish RSI divergence warning against selling impulse.")
-
-            # 2. Structural support & Discount zone
-            if st.discount_premium_zone == "DISCOUNT":
-                penalty_score += 10.0
-                threats.append("Selling in DISCOUNT zone below equilibrium (unfavorable entry price).")
-            if st.higher_highs and st.higher_lows:
-                penalty_score += 18.0
-                threats.append("Primary structure exhibits Higher Highs and Higher Lows (uptrend).")
-
-            # 3. Timeframe conflict
-            if mtf.get("H4") == "BULLISH" or mtf.get("D1") == "BULLISH":
-                penalty_score += 12.0
-                threats.append(f"Higher timeframe structural conflict: Macro timeframe is {mtf.get('H4') or mtf.get('D1')}.")
-
-            # 4. Liquidity traps
-            if liq.equal_highs:
-                traps.append(f"Unswept Equal Highs at {st.supply_zone[1]} — smart money may hunt buy-side stops first.")
-                penalty_score += 8.0
-
-            # 5. Invalidation triggers
+        else:
             invalidation_triggers.append(f"H1 candle close above supply zone {st.supply_zone[1]}.")
             invalidation_triggers.append("Bullish displacement breaking recent swing high.")
 
-        # Volatility shock penalty
-        if vol.state == "EXTREME":
-            penalty_score += 20.0
-            threats.append("Extreme volatility shock in progress — stop loss vulnerability elevated.")
+        # Critique Confidence based on context quality & data completeness
+        critique_conf = round(max(0.40, min(1.0, (context.context_quality / 100.0))), 2)
 
         # Cap penalty score between 0.0 and 50.0
         final_penalty = round(min(50.0, max(0.0, penalty_score)), 1)
@@ -124,5 +159,7 @@ class DevilAdvocateAnalyst:
             threats_detected=threats,
             invalidation_triggers=invalidation_triggers,
             liquidity_traps=traps,
+            critique_confidence=critique_conf,
+            correlated_threats=correlated_threats,
             execution_time_ms=round(elapsed, 2)
         )

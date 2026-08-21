@@ -57,22 +57,55 @@ class CircuitBreaker:
             ''', (self.consecutive_losses, int(self.is_tripped), self.tripped_timestamp, self.trip_reason))
             conn.commit()
 
+        self.symbol_losses: Dict[str, int] = {}
+        self.regime_losses: Dict[str, int] = {}
+        self.symbol_paused_until: Dict[str, float] = {}
+        self.regime_paused_until: Dict[str, float] = {}
+
     def enable(self):
         self.enabled = True
 
     def disable(self):
         self.enabled = False
 
-    def record_trade_result(self, is_win: bool):
+    def record_trade_result(self, is_win: bool, symbol: str = "", regime: str = ""):
+        now = time.time()
         if is_win:
             self.consecutive_losses = 0
+            if symbol and symbol in self.symbol_losses:
+                self.symbol_losses[symbol] = 0
+            if regime and regime in self.regime_losses:
+                self.regime_losses[regime] = 0
             self._save_state()
         else:
             self.consecutive_losses += 1
+            if symbol:
+                self.symbol_losses[symbol] = self.symbol_losses.get(symbol, 0) + 1
+                if self.symbol_losses[symbol] >= 2:
+                    # Pause this specific asset for 45 minutes rather than taking whole bot flat
+                    self.symbol_paused_until[symbol] = now + 2700.0
+
+            if regime:
+                self.regime_losses[regime] = self.regime_losses.get(regime, 0) + 1
+                if self.regime_losses[regime] >= 3:
+                    self.regime_paused_until[regime] = now + 3600.0
+
             if self.consecutive_losses >= 3:
-                self.trip(f"{self.consecutive_losses} consecutive loss limit reached.")
+                self.trip(f"{self.consecutive_losses} consecutive loss limit reached across portfolio.")
             else:
                 self._save_state()
+
+    def is_symbol_paused(self, symbol: str) -> bool:
+        if not self.enabled:
+            return False
+        pause_until = self.symbol_paused_until.get(symbol, 0.0)
+        return time.time() < pause_until
+
+    def is_regime_paused(self, regime: str) -> bool:
+        if not self.enabled:
+            return False
+        pause_until = self.regime_paused_until.get(regime, 0.0)
+        return time.time() < pause_until
 
     def trip(self, reason: str):
         self.is_tripped = True
@@ -83,6 +116,10 @@ class CircuitBreaker:
     def reset(self):
         self.is_tripped = False
         self.consecutive_losses = 0
+        self.symbol_losses.clear()
+        self.regime_losses.clear()
+        self.symbol_paused_until.clear()
+        self.regime_paused_until.clear()
         self.trip_reason = ""
         self._save_state()
         

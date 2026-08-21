@@ -332,9 +332,9 @@ class MT5Client:
                 if ticket in self._paper_positions:
                     pos = self._paper_positions.pop(ticket)
                     logger.info(f"[PAPER] Closed simulated position #{ticket} ({pos.symbol})")
-                    return {"status": "SUCCESS", "ticket": ticket, "pnl": pos.profit}
+                    return {"status": "CLOSED", "ticket": ticket, "pnl": pos.profit, "price": pos.current_price}
                 logger.info(f"[PAPER] Position #{ticket} not found or already closed")
-                return {"status": "SUCCESS", "ticket": ticket, "pnl": 0.0}
+                return {"status": "CLOSED", "ticket": ticket, "pnl": 0.0, "price": 0.0}
 
         def _close():
             with self._lock:
@@ -387,7 +387,7 @@ class MT5Client:
                     self._paper_positions[ticket].sl = float(sl)
                     self._paper_positions[ticket].tp = float(tp)
                     logger.info(f"[PAPER] Modified position #{ticket} -> SL: {sl}, TP: {tp}")
-                    return {"status": "SUCCESS", "ticket": ticket, "sl": sl, "tp": tp}
+                    return {"status": "MODIFIED", "ticket": ticket, "sl": sl, "tp": tp}
                 return {"status": "FAILED", "reason": f"Position #{ticket} not found in paper positions"}
 
         def _modify():

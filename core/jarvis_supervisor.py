@@ -145,14 +145,16 @@ class JARVISProcessSupervisor:
                 self.services_health["ADAPTIVE AI"] = "ACTIVE"
             else:
                 self.services_health["ADAPTIVE AI"] = "DEGRADED"
-        except Exception:
+        except Exception as e:
+            self.logger.warning(f"Health check failed for ADAPTIVE AI: {e}")
             self.services_health["ADAPTIVE AI"] = "OFFLINE"
 
         # 5. News Engine
         try:
             ne = NewsIntelligenceEngine()
             self.services_health["NEWS ENGINE"] = "ACTIVE"
-        except Exception:
+        except Exception as e:
+            self.logger.warning(f"Health check failed for NEWS ENGINE: {e}")
             self.services_health["NEWS ENGINE"] = "OFFLINE"
 
         # 6. Risk Engine
@@ -161,7 +163,8 @@ class JARVISProcessSupervisor:
                 settings = json.load(f)
             rm = RiskManagerEngine(settings)
             self.services_health["RISK ENGINE"] = "PROTECTED"
-        except Exception:
+        except Exception as e:
+            self.logger.warning(f"Health check failed for RISK ENGINE: {e}")
             self.services_health["RISK ENGINE"] = "UNPROTECTED"
             all_healthy = False
 

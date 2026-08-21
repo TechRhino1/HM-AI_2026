@@ -15,7 +15,8 @@ class PositionSizer:
         symbol_info: Dict[str, Any],
         invalidation_risk_coefficient: float = 1.0,
         atr_ratio: float = 1.0,
-        current_drawdown_pct: float = 0.0
+        current_drawdown_pct: float = 0.0,
+        model_confidence: float = 0.60
     ) -> float:
         risk_distance = abs(entry_price - sl_price)
         if risk_distance <= 0 or account_balance <= 0:
@@ -33,8 +34,11 @@ class PositionSizer:
         if current_drawdown_pct > 5.0:
             risk_pct *= 0.50  # Halve risk
 
-        # Adjusted risk percent incorporating Devil's Advocate coefficient
-        effective_risk_pct = max(0.1, min(2.0, risk_pct * invalidation_risk_coefficient))
+        # Conviction scaling: high conviction (>=75%) scales up to 1.35x; marginal confidence (<55%) scales down to 0.70x
+        conviction_factor = max(0.70, min(1.35, (model_confidence / 0.60)))
+
+        # Adjusted risk percent incorporating Devil's Advocate coefficient and conviction scaling
+        effective_risk_pct = max(0.1, min(2.0, risk_pct * invalidation_risk_coefficient * conviction_factor))
         risk_amount_dollars = account_balance * (effective_risk_pct / 100.0)
 
         contract_size = symbol_info.get("trade_contract_size", 100000.0) if symbol_info else 100000.0
