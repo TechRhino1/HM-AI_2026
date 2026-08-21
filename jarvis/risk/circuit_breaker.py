@@ -13,6 +13,10 @@ class CircuitBreaker:
         self.is_tripped = False
         self.tripped_timestamp = 0.0
         self.trip_reason = ""
+        self.symbol_losses: Dict[str, int] = {}
+        self.regime_losses: Dict[str, int] = {}
+        self.symbol_paused_until: Dict[str, float] = {}
+        self.regime_paused_until: Dict[str, float] = {}
         self.db_path = db_path
         if self.db_path:
             self._init_db()
@@ -56,11 +60,6 @@ class CircuitBreaker:
                 WHERE id = 1
             ''', (self.consecutive_losses, int(self.is_tripped), self.tripped_timestamp, self.trip_reason))
             conn.commit()
-
-        self.symbol_losses: Dict[str, int] = {}
-        self.regime_losses: Dict[str, int] = {}
-        self.symbol_paused_until: Dict[str, float] = {}
-        self.regime_paused_until: Dict[str, float] = {}
 
     def enable(self):
         self.enabled = True

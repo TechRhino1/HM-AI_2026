@@ -66,7 +66,30 @@ class ExecutionEngine:
                     res["real_fill_anchored"] = True
                     
             try:
+                import json
                 from jarvis.data.database import TRADE_DB
+                
+                # Extract rich feature vector from MarketContext and DecisionObject
+                ctx = getattr(decision, "context", None)
+                if not ctx and hasattr(self.state_manager, "get_market_context"):
+                    ctx = self.state_manager.get_market_context(decision.symbol)
+
+                session_name = ctx.session.current_session if ctx and ctx.session else "UNKNOWN"
+                is_prime = ctx.session.is_prime_session if ctx and ctx.session else True
+                adx_val = float(ctx.momentum.adx) if ctx and ctx.momentum else 0.0
+                plus_di = float(ctx.momentum.plus_di) if ctx and ctx.momentum else 0.0
+                minus_di = float(ctx.momentum.minus_di) if ctx and ctx.momentum else 0.0
+                spread_pips = float(ctx.volatility.current_spread_pips) if ctx and ctx.volatility else 0.0
+                mtf_str = json.dumps(ctx.mtf_alignment) if ctx and ctx.mtf_alignment else ""
+                threats_json = json.dumps(decision.risk_factors or [])
+                features_json = json.dumps({
+                    "strategy": decision.strategy,
+                    "adversarial_penalty": decision.adversarial_penalty,
+                    "expected_value": decision.expected_value,
+                    "rr_ratio": decision.risk_reward_ratio,
+                    "model_confidence": decision.model_confidence
+                })
+
                 TRADE_DB.log_trade(
                     ticket=ticket,
                     symbol=decision.symbol,
@@ -78,7 +101,16 @@ class ExecutionEngine:
                     score=decision.model_confidence * 100.0,
                     regime=decision.regime.primary_regime.value if decision.regime else "UNKNOWN",
                     ev=decision.expected_value,
-                    executor="BOT (AI)"
+                    executor="BOT (AI)",
+                    session_name=session_name,
+                    is_prime_session=is_prime,
+                    adx=adx_val,
+                    plus_di=plus_di,
+                    minus_di=minus_di,
+                    spread_pips=spread_pips,
+                    mtf_alignment=mtf_str,
+                    threats_json=threats_json,
+                    features_json=features_json
                 )
             except Exception as e:
                 logger.error(f"Failed to log trade to DB: {e}")

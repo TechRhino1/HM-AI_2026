@@ -7,6 +7,7 @@ import time
 from typing import Dict, List, Any, Optional
 from jarvis.data.schemas import MarketContext, RegimeOutput, DevilAdvocateReport
 from jarvis.market.correlations import DynamicCorrelationEngine
+from jarvis.data.symbol_registry import resolve as resolve_symbol
 
 class DevilAdvocateAnalyst:
     """
@@ -99,9 +100,10 @@ class DevilAdvocateAnalyst:
                 traps.append(f"Severe liquidity pool imbalance ({ratio:.1f}x opposing volume resting in order book).")
 
         # ── 3. Volatility, Spread & Session Timing Risk ─────────────────────────────
+        spec = resolve_symbol(context.symbol)
         if vol.is_excessive_spread:
             penalty_score += 12.0
-            threats.append(f"Excessive spread ({vol.current_spread_pips:.1f} pips > {vol.typical_spread_pips*2:.1f} typical) creates severe slippage drag.")
+            threats.append(f"Excessive spread ({vol.current_spread_pips:.1f} pips > {spec.typical_spread_pips*2:.1f} typical) creates severe slippage drag.")
 
         if vol.state == "EXTREME":
             penalty_score += 18.0

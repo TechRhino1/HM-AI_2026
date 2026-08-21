@@ -7,11 +7,23 @@ from datetime import datetime, timezone
 
 from jarvis.data.database import SQLiteTradeDB
 from jarvis.execution.mt5_client import MT5Client
-from jarvis.data.schemas import PositionSnapshot
+from jarvis.data.schemas import (
+    PositionSnapshot,
+    MarketContext,
+    StructureContext,
+    LiquidityContext,
+    VolatilityContext,
+    MomentumContext,
+    SessionContext,
+    RegimeOutput,
+    MarketRegime
+)
 from jarvis.execution.position_monitor import PositionMonitorEngine, JARVIS_MAGIC_NUMBER
 from engines.dynamic_sl_tp import DynamicSLTPEngine
 from jarvis.risk.position_sizing import PositionSizer
-from engines.risk_engine import RiskManagerEngine
+from jarvis.risk.circuit_breaker import CircuitBreaker
+from jarvis.analysts.devil_advocate import DevilAdvocateAnalyst
+from jarvis.intelligence.self_learning import SelfLearningEngine
 
 class TestRegressionFixes(unittest.TestCase):
     def test_a1_log_trade_timezone_iso(self):
@@ -32,12 +44,25 @@ class TestRegressionFixes(unittest.TestCase):
                 score=92.5,
                 regime='TRENDING_BULL',
                 ev=1.85,
-                executor='BOT (AI)'
+                executor='BOT (AI)',
+                session_name='LONDON',
+                is_prime_session=True,
+                adx=32.5,
+                plus_di=28.0,
+                minus_di=14.0,
+                spread_pips=1.5,
+                mtf_alignment='{"D1": "BULLISH", "H4": "BULLISH"}',
+                threats_json='[]',
+                features_json='{"strategy": "BREAKOUT"}'
             )
             
             conn = sqlite3.connect(db_path)
             cur = conn.cursor()
-            cur.execute('SELECT ticket, symbol, action, entry_price, sl, tp, volume, timestamp, ai_score, regime, expected_value, executor FROM executed_trades WHERE ticket=777888')
+            cur.execute('''
+                SELECT ticket, symbol, action, entry_price, sl, tp, volume, timestamp, 
+                       ai_score, regime, expected_value, executor, session_name, adx, spread_pips
+                FROM executed_trades WHERE ticket=777888
+            ''')
             row = cur.fetchone()
             conn.close()
             
@@ -47,6 +72,9 @@ class TestRegressionFixes(unittest.TestCase):
             self.assertEqual(row[2], 'BUY')
             self.assertEqual(row[3], 2450.50)
             self.assertEqual(row[11], 'BOT (AI)')
+            self.assertEqual(row[12], 'LONDON')
+            self.assertEqual(row[13], 32.5)
+            self.assertEqual(row[14], 1.5)
             
             # Assert timestamp parses as valid ISO format
             ts_str = row[7]
@@ -118,19 +146,98 @@ class TestRegressionFixes(unittest.TestCase):
         sl_dist = 2400.0 - res['sl_price']
         self.assertLessEqual(sl_dist, 10.0 + 1e-4)
 
-    def test_a5_is_high_vol_sizing(self):
-        """A5: Verify is_high_vol lot/risk reduction for volatile instruments."""
+    def test_a5_is_high_vol_sizing_strengthened(self):
+        """A5: Verify is_high_vol strictly reduces lot sizing by 0.85x multiplier."""
         sym_gold = {"name": "XAUUSD", "trade_contract_size": 100.0, "volume_min": 0.01, "volume_max": 100.0, "volume_step": 0.01}
-        sym_eur = {"name": "EURUSD", "trade_contract_size": 100000.0, "volume_min": 0.01, "volume_max": 100.0, "volume_step": 0.01}
+        sym_base = {"name": "CUSTOM_ASSET", "trade_contract_size": 100.0, "volume_min": 0.01, "volume_max": 100.0, "volume_step": 0.01}
         
+        # Account balance = $5,000, distance = $10, risk = 1.0% ($50)
         gold_size = PositionSizer.calculate_lot_size(
-            account_balance=500.0, entry_price=2400.0, sl_price=2390.0, risk_pct=1.0, symbol_info=sym_gold
+            account_balance=5000.0, entry_price=2400.0, sl_price=2390.0, risk_pct=1.0, symbol_info=sym_gold
         )
-        eur_size = PositionSizer.calculate_lot_size(
-            account_balance=500.0, entry_price=1.0850, sl_price=1.0800, risk_pct=1.0, symbol_info=sym_eur
+        base_size = PositionSizer.calculate_lot_size(
+            account_balance=5000.0, entry_price=2400.0, sl_price=2390.0, risk_pct=1.0, symbol_info=sym_base
         )
-        self.assertGreater(gold_size, 0)
-        self.assertGreater(eur_size, 0)
+        # Gold should receive 0.85x reduction: 0.04 lots vs 0.05 lots
+        self.assertLess(gold_size, base_size)
+        self.assertEqual(gold_size, 0.04)
+        self.assertEqual(base_size, 0.05)
+
+    def test_b1_devil_advocate_spread_typical_spec(self):
+        """B1-BUG: Verify devil_advocate handles is_excessive_spread without AttributeError."""
+        analyst = DevilAdvocateAnalyst()
+        ctx = MarketContext(
+            symbol="XAUUSD",
+            timestamp=datetime.now(timezone.utc),
+            current_price=2400.0,
+            bid=2399.8,
+            ask=2400.2,
+            structure=StructureContext(bias="BULLISH"),
+            liquidity=LiquidityContext(),
+            volatility=VolatilityContext(is_excessive_spread=True, current_spread_pips=12.0),
+            momentum=MomentumContext(),
+            session=SessionContext(is_prime_session=True)
+        )
+        regime = RegimeOutput(primary_regime=MarketRegime.TREND_BULL, probabilities={}, confidence=0.8)
+        report = analyst.critique_opportunity(ctx, regime, "BUY")
+        self.assertIsNotNone(report)
+        self.assertTrue(any("Excessive spread" in t for t in report.threats_detected))
+
+    def test_b2_circuit_breaker_isolation_and_persistence(self):
+        """B2-BUG: Verify circuit breaker attributes initialize properly and isolate per symbol."""
+        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tf:
+            db_path = tf.name
+        
+        try:
+            cb = CircuitBreaker(db_path=db_path)
+            self.assertFalse(cb.is_symbol_paused("XAUUSD"))
+            self.assertFalse(cb.is_symbol_paused("EURUSD"))
+            
+            # Record 2 consecutive losses on XAUUSD
+            cb.record_trade_result(is_win=False, symbol="XAUUSD", regime="TREND_BULL")
+            self.assertFalse(cb.is_symbol_paused("XAUUSD"))
+            cb.record_trade_result(is_win=False, symbol="XAUUSD", regime="TREND_BULL")
+            
+            # XAUUSD must be paused, but EURUSD must NOT be paused
+            self.assertTrue(cb.is_symbol_paused("XAUUSD"))
+            self.assertFalse(cb.is_symbol_paused("EURUSD"))
+            
+            # Win on EURUSD should not clear XAUUSD pause
+            cb.record_trade_result(is_win=True, symbol="EURUSD", regime="TREND_BULL")
+            self.assertTrue(cb.is_symbol_paused("XAUUSD"))
+            self.assertFalse(cb.is_symbol_paused("EURUSD"))
+        finally:
+            if os.path.exists(db_path):
+                try:
+                    os.remove(db_path)
+                except Exception:
+                    pass
+
+    def test_b1_empirical_pattern_memory_lookup(self):
+        """B1-WIRING: Verify get_pattern_win_rate_and_ev executes without error."""
+        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tf:
+            db_path = tf.name
+        
+        try:
+            db = SQLiteTradeDB(db_path=db_path)
+            for i in range(5):
+                db.log_trade(
+                    ticket=1000 + i, symbol="XAUUSD", action="BUY", entry=2400.0,
+                    sl=2390.0, tp=2420.0, volume=0.01, score=80.0,
+                    regime="TREND_BULL", ev=1.5 if i % 2 == 0 else -0.5,
+                    session_name="LONDON", is_prime_session=True
+                )
+            sle = SelfLearningEngine(db_path=db_path)
+            res = sle.get_pattern_win_rate_and_ev("XAUUSD", "TREND_BULL", "LONDON", True)
+            self.assertEqual(res["sample_size"], 5)
+            self.assertIn("win_rate", res)
+            self.assertIn("conviction_multiplier", res)
+        finally:
+            if os.path.exists(db_path):
+                try:
+                    os.remove(db_path)
+                except Exception:
+                    pass
 
     def test_a9_hm_start_smoke_error_handling(self):
         """A9/A12: Verify HM_start orchestrator error is safely logged without crash."""

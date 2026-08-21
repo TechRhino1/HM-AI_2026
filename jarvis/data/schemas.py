@@ -135,7 +135,7 @@ class MarketContext:
     vwap: float = 0.0
     context_quality: float = 100.0
     strategy: str = ""
-    trend_score: float = 0.0
+    mtf_confluence_score: float = 0.0
     mtf_alignment: Dict[str, str] = field(default_factory=dict)
 
 @dataclass

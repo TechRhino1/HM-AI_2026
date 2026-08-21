@@ -24,6 +24,7 @@ from jarvis.intelligence.strategy_selector import StrategySelector
 from jarvis.intelligence.hypothesis_engine import HypothesisEngine
 from jarvis.intelligence.confidence import ConfidenceCalibrationEngine
 from jarvis.learning.online_ml_predictor import OnlineMLPredictor
+from jarvis.market.news import GLOBAL_NEWS_ENGINE
 from jarvis.data.symbol_registry import resolve as resolve_symbol
 from jarvis.risk.account_tier import is_micro_account, get_effective_min_ev
 
@@ -310,11 +311,54 @@ class DecisionEngine:
             context, regime, analyst_reports, devil_report, tentative_bias, rr_ratio, risk_dist, account_balance, risk_per_trade_pct
         )
         
-        # Apply Self-Learning Feedback Loop
+        # 1. Apply Empirical Trade Pattern Memory Feedback (B1-WIRING)
+        regime_str = regime.primary_regime.value if regime and hasattr(regime, "primary_regime") else "GLOBAL"
+        session_str = context.session.current_session if context.session else "UNKNOWN"
+        is_prime = context.session.is_prime_session if context.session else True
+        pattern_memory = self.self_learning.get_pattern_win_rate_and_ev(
+            symbol=context.symbol,
+            regime=regime_str,
+            session_name=session_str,
+            is_prime=is_prime
+        )
+        if pattern_memory.get("sample_size", 0) >= 3:
+            p_mult = pattern_memory.get("conviction_multiplier", 1.0)
+            calibrated_win_p = min(0.99, max(0.10, calibrated_win_p * p_mult))
+            if pattern_memory.get("empirical_edge"):
+                ai_score = min(100.0, ai_score + 5.0)
+                logger.info(f"[{context.symbol}] Empirical pattern edge: WinRate={pattern_memory['win_rate']*100:.0f}%, EV={pattern_memory['avg_ev']:.2f}")
+
+        # 2. Apply Post-News Stop-Hunt Liquidity Sweep Reaction (B5-WIRING)
+        news_reaction = GLOBAL_NEWS_ENGINE.evaluate_post_news_sweep_reaction(
+            symbol=context.symbol,
+            sweep_detected=context.liquidity.sweep_detected,
+            sweep_type=context.liquidity.sweep_type,
+            sweep_magnitude_pips=context.liquidity.sweep_magnitude
+        )
+        if news_reaction.get("news_reversal_setup"):
+            c_boost = news_reaction.get("conviction_boost", 0.0)
+            calibrated_win_p = min(0.99, calibrated_win_p + c_boost)
+            ai_score = min(100.0, ai_score + 8.0)
+            logger.info(f"[{context.symbol}] {news_reaction.get('reason')}")
+
+        # 3. Apply Multi-Timeframe Top-Down Confluence Score (B7-WIRING)
+        mtf_score = getattr(context, "mtf_confluence_score", 0.0)
+        if tentative_bias == "BUY":
+            if mtf_score >= 30.0:
+                ai_score = min(100.0, ai_score + (mtf_score / 20.0))
+            elif mtf_score <= -30.0:
+                ai_score = max(0.0, ai_score - (abs(mtf_score) / 10.0))
+        elif tentative_bias == "SELL":
+            if mtf_score <= -30.0:
+                ai_score = min(100.0, ai_score + (abs(mtf_score) / 20.0))
+            elif mtf_score >= 30.0:
+                ai_score = max(0.0, ai_score - (mtf_score / 10.0))
+
+        # 4. Standard Regime Multiplier
         if regime:
-            sl_multiplier = self.self_learning.get_regime_multiplier(regime.primary_regime.value)
+            sl_multiplier = self.self_learning.get_regime_multiplier(regime_str)
             if sl_multiplier != 1.0:
-                logger.info(f"[{context.symbol}] Self-Learning Engine adjusting {regime.primary_regime.value} Win Prob by {sl_multiplier}x")
+                logger.info(f"[{context.symbol}] Self-Learning Engine adjusting {regime_str} Win Prob by {sl_multiplier}x")
                 calibrated_win_p = min(0.99, calibrated_win_p * sl_multiplier)
         
         st = context.structure

@@ -51,10 +51,14 @@ class RiskEngine:
         with self._lock:
             rejection_reasons = []
 
-            # 1. Circuit Breaker status
+            # 1. Circuit Breaker status (Global + Per-Symbol / Per-Regime)
             cb = self.circuit_breaker.check_status()
             if cb.get("active"):
                 rejection_reasons.append(f"Circuit Breaker active: {cb.get('reason')} (Cooldown: {cb.get('remaining_cooldown_sec', 0)}s)")
+            if self.circuit_breaker.is_symbol_paused(decision.symbol):
+                rejection_reasons.append(f"Symbol {decision.symbol} is temporarily paused due to recent consecutive losses.")
+            if decision.regime and hasattr(decision.regime, "primary_regime") and self.circuit_breaker.is_regime_paused(decision.regime.primary_regime.value):
+                rejection_reasons.append(f"Regime {decision.regime.primary_regime.value} is temporarily paused due to consecutive losses.")
 
             # 2. Drawdown & Daily Loss limits
             dd = self.drawdown_guard.check_limits(account.equity, account.balance)
@@ -86,14 +90,15 @@ class RiskEngine:
                     "reasons": rejection_reasons
                 }
 
-            # 6. Position Sizing
+            # 6. Position Sizing with Conviction Scaling (B4-WIRING)
             lots = self.position_sizer.calculate_lot_size(
                 account_balance=account.equity,
                 entry_price=decision.entry_price,
                 sl_price=decision.stop_loss,
                 risk_pct=self.max_risk_per_trade_pct,
                 symbol_info=symbol_info,
-                invalidation_risk_coefficient=1.0 - (decision.adversarial_penalty / 60.0)
+                invalidation_risk_coefficient=1.0 - (decision.adversarial_penalty / 60.0),
+                model_confidence=decision.model_confidence
             )
 
             # Before returning authorized=True, double check circuit breaker and drawdown

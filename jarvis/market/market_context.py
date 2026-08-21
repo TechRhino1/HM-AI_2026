@@ -128,6 +128,6 @@ class MarketContextEngine:
             volatility=volatility,
             momentum=momentum,
             session=session,
-            trend_score=mtf_confluence_pct,
+            mtf_confluence_score=mtf_confluence_pct,
             mtf_alignment=mtf_alignment
         )

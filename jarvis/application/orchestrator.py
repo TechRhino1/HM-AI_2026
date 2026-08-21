@@ -141,7 +141,8 @@ class JarvisOrchestrator:
         self.strategy_bandit.record_outcome(strategy, is_win, r_multiple, regime=regime_name)
 
         # 4. Update Circuit Breaker & Drawdown Guard
-        self.circuit_breaker.record_trade_result(is_win == 1)
+        trade_symbol = pending.get("symbol", data.get("symbol", "")) if pending else data.get("symbol", "")
+        self.circuit_breaker.record_trade_result(is_win == 1, symbol=trade_symbol, regime=regime_name)
         if new_equity > 0:
             self.drawdown_guard.update_equity_benchmarks(new_equity)
 
