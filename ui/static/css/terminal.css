@@ -533,7 +533,14 @@ header.terminal-hud {
     border-color: rgba(56, 189, 248, 0.4);
 }
 
-/* 1. Live Happening Now Cards (Highlighted with red pulsing glow) */
+/* 1. Most Recent Released Card (Gold / Neon Cyan Highlight) */
+.news-card.news-card-recent {
+    background: linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(15, 23, 42, 0.95));
+    border: 1px solid var(--accent-cyan);
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.25);
+}
+
+/* 2. Live Happening Now Cards (Highlighted with red pulsing glow) */
 .news-card.news-card-live {
     background: linear-gradient(135deg, rgba(255, 59, 92, 0.15), rgba(15, 23, 42, 0.95));
     border: 1px solid #ff3b5c;
@@ -547,7 +554,7 @@ header.terminal-hud {
     100% { box-shadow: 0 0 8px rgba(255, 59, 92, 0.25); border-color: #ff3b5c; }
 }
 
-/* 2. Upcoming Cards (Accented left border & amber/cyan highlights) */
+/* 3. Upcoming Cards (Accented left border & amber/cyan highlights) */
 .news-card.news-card-upcoming {
     border-left: 3px solid var(--devil-amber);
     background: rgba(18, 26, 43, 0.75);
@@ -622,6 +629,12 @@ header.terminal-hud {
     padding: 1px 6px;
     border-radius: 3px;
     text-transform: uppercase;
+}
+
+.news-status-recent {
+    background: rgba(56, 189, 248, 0.25);
+    color: var(--accent-cyan);
+    border: 1px solid var(--accent-cyan);
 }
 
 .news-status-live {

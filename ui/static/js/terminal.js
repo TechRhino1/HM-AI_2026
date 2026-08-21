@@ -774,7 +774,7 @@
     function renderNewsDOM(news) {
         if (!el.newsFeedList) return;
         if (!news || news.length === 0) {
-            el.newsFeedList.innerHTML = '<div style="text-align:center; color:var(--text-dim); padding:20px; font-size:11px;">Scanning institutional macro feeds...</div>';
+            el.newsFeedList.innerHTML = '<div style="text-align:center; color:var(--text-dim); padding:20px; font-size:11px;">Scanning live institutional macro calendar...</div>';
             if (state.activeLeftTab === "news" && el.leftPanelCounter) {
                 el.leftPanelCounter.textContent = "0 Events";
             }
@@ -786,31 +786,43 @@
             el.leftPanelCounter.textContent = liveCount > 0 ? `${liveCount} LIVE | ${news.length} Events` : `${news.length} Events`;
         }
 
-        el.newsFeedList.innerHTML = news.map(n => {
+        el.newsFeedList.innerHTML = news.map((n, idx) => {
+            const isMostRecent = Boolean(n.is_most_recent || idx === 0);
             const isLive = Boolean(n.is_live);
             const isUpcoming = Boolean(n.is_upcoming);
             const isHigh = n.impact === "HIGH";
             const isMed = n.impact === "MEDIUM";
             
             let cardClass = "news-card";
-            if (isLive) cardClass += " news-card-live";
-            else if (isUpcoming) cardClass += " news-card-upcoming";
-            else cardClass += " news-card-past";
+            let statusPillClass = "news-status-past";
+            let statusText = n.status_badge || "✓ RELEASED";
+
+            if (isMostRecent) {
+                cardClass += " news-card-recent";
+                statusPillClass = "news-status-recent";
+                statusText = isLive ? "🔴 LIVE NOW" : "⚡ LATEST RELEASE";
+            } else if (isLive) {
+                cardClass += " news-card-live";
+                statusPillClass = "news-status-live";
+                statusText = "🔴 LIVE NOW";
+            } else if (isUpcoming) {
+                cardClass += " news-card-upcoming";
+                statusPillClass = "news-status-upcoming";
+                statusText = n.status_badge || `⏳ ${n.time}`;
+            } else {
+                cardClass += " news-card-past";
+            }
 
             let impactBadgeClass = "news-impact-low";
             if (isHigh) impactBadgeClass = "news-impact-high";
             else if (isMed) impactBadgeClass = "news-impact-med";
 
-            let statusPillClass = "news-status-past";
-            if (isLive) statusPillClass = "news-status-live";
-            else if (isUpcoming) statusPillClass = "news-status-upcoming";
-
-            const statusText = n.status_badge || (isLive ? "🔴 LIVE NOW" : (isUpcoming ? `⏳ ${n.time}` : "✓ RELEASED"));
-
-            // Shock alert banner for live and high-impact upcoming
+            // Shock alert banner
             let shockBannerHtml = "";
             if (isLive) {
                 shockBannerHtml = `<div class="news-shock-banner live">⚡ <b>VOLATILITY SHOCK ACTIVE:</b> High spread expansion & slippage risk</div>`;
+            } else if (isMostRecent && !isLive && n.actual && n.actual !== "—" && n.actual !== "Upcoming") {
+                shockBannerHtml = `<div class="news-shock-banner upcoming" style="background:rgba(56,189,248,0.12); color:var(--accent-cyan); border-color:var(--accent-cyan);">⚡ <b>LATEST MACRO REPORT:</b> Actual: ${n.actual} vs Forecast: ${n.forecast} (Prev: ${n.previous})</div>`;
             } else if (isUpcoming && isHigh) {
                 shockBannerHtml = `<div class="news-shock-banner upcoming">⏳ <b>APPROACHING HIGH IMPACT:</b> Expect liquidity volatility on ${n.currency}</div>`;
             }
@@ -826,7 +838,11 @@
                 `;
             }
 
-            const actualStyle = isLive ? "color:#ff3b5c; font-weight:800;" : (n.actual && n.actual !== "Upcoming" && n.actual !== "—" ? "color:var(--neon-bull); font-weight:700;" : "color:var(--accent-cyan);");
+            const actualStyle = isLive 
+                ? "color:#ff3b5c; font-weight:800;" 
+                : (isMostRecent 
+                    ? "color:var(--accent-cyan); font-weight:800;" 
+                    : (n.actual && n.actual !== "Upcoming" && n.actual !== "—" ? "color:var(--neon-bull); font-weight:700;" : "color:var(--text-dim);"));
 
             return `
                 <div class="${cardClass}">
