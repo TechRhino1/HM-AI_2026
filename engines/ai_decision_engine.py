@@ -21,7 +21,8 @@ class AIDecisionEngine:
         strategy: Dict[str, Any],
         sl_tp: Dict[str, Any],
         regime: Dict[str, Any] = None,
-        orderflow: Dict[str, Any] = None
+        orderflow: Dict[str, Any] = None,
+        volume_profile: Dict[str, Any] = None
     ) -> Dict[str, Any]:
         reasons = []
         reasons_not_to_trade = []
@@ -121,6 +122,19 @@ class AIDecisionEngine:
             reasons.append(f"Fair Value Gap ({liquidity.get('fvg_type')}) imbalance mitigation confirmed.")
         else:
             score_liquidity += 5.0
+
+        # Volume Profile POC & Value Area Confluence
+        if volume_profile and volume_profile.get("poc", 0) > 0:
+            poc = volume_profile["poc"]
+            val = volume_profile.get("val", 0)
+            vah = volume_profile.get("vah", 0)
+            close_p = trend.get("close", 0.0)
+            if recommended == "BUY" and (close_p >= poc or (val > 0 and close_p >= val)):
+                score_liquidity = min(10.0, score_liquidity + 2.0)
+                reasons.append(f"Volume Profile Support (POC: {poc:.2f}, VAL: {val:.2f}).")
+            elif recommended == "SELL" and (close_p <= poc or (vah > 0 and close_p <= vah)):
+                score_liquidity = min(10.0, score_liquidity + 2.0)
+                reasons.append(f"Volume Profile Resistance (POC: {poc:.2f}, VAH: {vah:.2f}).")
 
         # 6. Macro News Intelligence (10 pts)
         news_status = news.get("news_status", "NEWS_RISK_LOW")

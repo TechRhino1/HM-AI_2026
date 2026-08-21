@@ -587,10 +587,10 @@ class PositionMonitorEngine:
         """Identifies trades NOT placed by JARVIS AI (manual dashboard or MT5 terminal)."""
         is_wrong_magic = (pos.magic != JARVIS_MAGIC_NUMBER)
         has_manual_comment = any(
-            tag in pos.comment.upper()
-            for tag in ("MANUAL", "DESK", "")
+            tag in (pos.comment or "").upper()
+            for tag in ("MANUAL", "DESK")
         )
-        return is_wrong_magic or (pos.magic == 0)
+        return is_wrong_magic or (pos.magic == 0) or has_manual_comment
 
     def _get_context(self, symbol: str) -> Optional[MarketContext]:
         """Returns cached context or fetches fresh context if TTL expired."""

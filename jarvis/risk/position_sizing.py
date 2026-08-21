@@ -22,6 +22,11 @@ class PositionSizer:
             return 0.01
 
         # Adjust risk_pct based on volatility and drawdown
+        sym_name = str(symbol_info.get("name", "") if symbol_info else "").upper()
+        is_high_vol = any(x in sym_name for x in ["XAU", "GOLD", "BTC", "OIL", "US30", "NAS100"])
+        if is_high_vol:
+            risk_pct *= 0.85
+
         if atr_ratio > 1.5:
             risk_pct *= 0.70  # Reduce risk by 30%
             

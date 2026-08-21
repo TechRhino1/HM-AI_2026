@@ -67,7 +67,11 @@ def main():
     print("[+] Initializing MT5 terminal, Risk Engine & 14-Point Quality Gates...")
 
     orchestrator = JarvisOrchestrator(mode=mode)
-    orchestrator.start()
+    try:
+        orchestrator.start()
+    except Exception as e:
+        logging.error(f"Failed to start Jarvis Orchestrator: {e}", exc_info=True)
+        print(f"[!] ERROR: Failed to start Jarvis Orchestrator: {e}")
 
     print("[+] Starting Web Terminal Server on Port 8501...")
     server_thread = threading.Thread(target=run_web_server, args=(8501,), daemon=True)
@@ -104,9 +108,15 @@ def main():
             time.sleep(1)
     except KeyboardInterrupt:
         print("\n[!] Gracefully shutting down HM_v3...")
-        orchestrator.stop()
+        try:
+            orchestrator.stop()
+        except Exception as e:
+            logging.error(f"Error stopping orchestrator: {e}")
         if tunnel_proc:
-            tunnel_proc.terminate()
+            try:
+                tunnel_proc.terminate()
+            except Exception:
+                pass
         print("[+] Jarvis and Cloudflare safely terminated.\n")
 
 if __name__ == "__main__":

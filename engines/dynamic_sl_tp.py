@@ -41,7 +41,7 @@ class DynamicSLTPEngine:
         tp1_price = current_price
         tp2_price = current_price
 
-        max_sl_dist = atr * 1.2  # Tight Scalp SL Cap (prevents wide 400-pip SLs)
+        max_sl_dist = atr * sl_atr_mult  # Dynamic ATR SL Cap from symbol profile
 
         if action == "BUY":
             struct_sl = swing_low - (atr * 0.25)

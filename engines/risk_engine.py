@@ -65,20 +65,31 @@ class RiskManagerEngine:
         step_lot = symbol_info.get("volume_step", 0.01)
 
         # Tiered Account-Balance Hard Lot Size Rules (Prevents over-leveraging on small/large accounts)
-        symbol = symbol_info.get("name", "")
+        symbol = str(symbol_info.get("name", "")).upper()
         is_high_vol = any(x in symbol for x in ["XAU", "GOLD", "BTC", "OIL", "US30", "NAS100"])
+
+        if is_high_vol:
+            raw_lots *= 0.80
 
         if equity <= 50.0:
             hard_max_lot = 0.01  # Hard cap 0.01 lots for ultra-micro $18 accounts
         elif equity <= 200.0:
             # User Directive: In $100 account use lot size 0.02 (Standard) or 0.03 (Strong Trend)
             hard_max_lot = 0.03 if "STRONG_TREND" in str(regime) else 0.02
+            if is_high_vol:
+                hard_max_lot = min(hard_max_lot, 0.02)
         elif equity <= 500.0:
             hard_max_lot = 0.03 if "STRONG_TREND" in str(regime) else 0.02
+            if is_high_vol:
+                hard_max_lot = min(hard_max_lot, 0.02)
         elif equity <= 1000.0:
             hard_max_lot = 0.04 if "STRONG_TREND" in str(regime) else 0.03
+            if is_high_vol:
+                hard_max_lot = min(hard_max_lot, 0.03)
         elif equity <= 5000.0:
             hard_max_lot = 0.06 if "STRONG_TREND" in str(regime) else 0.04
+            if is_high_vol:
+                hard_max_lot = min(hard_max_lot, 0.05)
         else:
             hard_max_lot = max_lot
 

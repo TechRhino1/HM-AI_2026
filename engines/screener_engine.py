@@ -84,7 +84,19 @@ class MultiSymbolScreenerEngine:
                 current_price = sym_info["ask"] if strategy.get("recommended_action") == "BUY" else sym_info["bid"]
                 sl_tp = self.sl_tp_engine.calculate_sl_tp(resolved_symbol, strategy.get("recommended_action"), current_price, structure, volatility, profile, regime=regime.get("regime", "STRONG_TREND_BULLISH"))
 
-                decision = self.ai_decision_engine.evaluate_trade_opportunity(resolved_symbol, structure, trend, volatility, liquidity, news, strategy, sl_tp, regime=regime, orderflow=order_flow)
+                decision = self.ai_decision_engine.evaluate_trade_opportunity(
+                    resolved_symbol,
+                    structure,
+                    trend,
+                    volatility,
+                    liquidity,
+                    news,
+                    strategy,
+                    sl_tp,
+                    regime=regime,
+                    orderflow=order_flow,
+                    volume_profile=vol_profile
+                )
 
                 opportunities.append({
                     "symbol": resolved_symbol,
