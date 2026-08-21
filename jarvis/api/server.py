@@ -150,7 +150,20 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                     pos = self.mt5_client.get_open_positions()
                     self.state_manager.sync_broker_state(acc, pos)
                     snap = self.state_manager.get_state_snapshot()
+                
+                from jarvis.market.sessions import SessionEngine
+                sym = query.get("symbol", ["XAUUSD"])[0]
+                snap["active_market_status"] = SessionEngine.get_market_trading_status(sym)
+                snap["market_statuses"] = {
+                    s: SessionEngine.get_market_trading_status(s)
+                    for s in ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD", "ETHUSD"]
+                }
                 self._send_json(snap)
+            elif path == "/api/market-status":
+                from jarvis.market.sessions import SessionEngine
+                sym = query.get("symbol", ["XAUUSD"])[0]
+                status = SessionEngine.get_market_trading_status(sym)
+                self._send_json(status)
             elif path == "/api/candles":
                 sym = query.get("symbol", ["XAUUSD"])[0]
                 tf = query.get("tf", ["H1"])[0]

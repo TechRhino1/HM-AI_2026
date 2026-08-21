@@ -57,6 +57,7 @@
         hudFreeMargin: document.getElementById("hud-free-margin"),
         hudMarginLevel: document.getElementById("hud-margin-level"),
         hudSync: document.getElementById("hud-sync"),
+        hudMarketStatus: document.getElementById("hud-market-status"),
         statusBadge: document.getElementById("status-badge"),
         execModeBadge: document.getElementById("exec-mode-badge"),
 
@@ -81,6 +82,9 @@
 
         // Manual Execution Desk & Summary Banner
         deskActiveSymbol: document.getElementById("desk-active-symbol"),
+        deskMarketStatusBanner: document.getElementById("desk-market-status-banner"),
+        deskMarketTitle: document.getElementById("desk-market-title"),
+        deskMarketTime: document.getElementById("desk-market-time"),
         deskBannerTitle: document.getElementById("desk-banner-title"),
         deskBannerStatus: document.getElementById("desk-banner-status"),
         deskBannerEntry: document.getElementById("desk-banner-entry"),
@@ -101,6 +105,7 @@
         chartSymbol: document.getElementById("chart-symbol"),
         chartRegime: document.getElementById("chart-regime"),
         chartLivePrice: document.getElementById("chart-live-price"),
+        chartMarketStatus: document.getElementById("chart-market-status"),
         tvLiveContainer: document.getElementById("tv-lightweight-chart-container"),
         tvProContainer: document.getElementById("tv-advanced-widget-container"),
         btnModeTvLive: document.getElementById("btn-mode-tv-live"),
@@ -513,6 +518,8 @@
                 state.radarOpportunities = data.radar_opportunities || [];
                 state.positions = data.positions || [];
                 state.latestDecisions = data.latest_decisions || {};
+                state.marketStatuses = data.market_statuses || {};
+                state.activeMarketStatus = data.active_market_status || null;
 
                 requestAnimationFrame(renderTelemetryDOM);
             }
@@ -713,6 +720,111 @@
                 el.deskTp.value = activeDec.take_profit ? formatPrice(activeDec.take_profit, state.symbol) : "";
             }
         }
+
+        // Synchronize Global & Asset Market Open/Closed Status
+        updateMarketStatusDisplay(state.symbol);
+    }
+
+    function computeClientMarketStatus(symbol) {
+        const sym = (symbol || "XAUUSD").toUpperCase();
+        if (sym.includes("BTC") || sym.includes("ETH") || sym.includes("SOL") || sym.includes("CRYPTO")) {
+            return {
+                is_open: true,
+                market_type: "CRYPTO_24_7",
+                status: "OPEN",
+                status_text: "Continuous 24/7 Crypto Trading",
+                next_open_ist: "Always Open",
+                countdown_formatted: "Live 24/7"
+            };
+        }
+        const now = new Date();
+        const utcDay = now.getUTCDay(); // 0=Sun, 5=Fri, 6=Sat
+        const utcHour = now.getUTCHours();
+        const utcMin = now.getUTCMinutes();
+        const utcSec = now.getUTCSeconds();
+
+        let isClosed = false;
+        if (utcDay === 5 && utcHour >= 21) isClosed = true;
+        else if (utcDay === 6) isClosed = true;
+        else if (utcDay === 0 && utcHour < 21) isClosed = true;
+
+        if (isClosed) {
+            let daysToAdd = (7 - utcDay) % 7;
+            if (utcDay === 0) daysToAdd = 0;
+            const nextOpenUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + daysToAdd, 21, 0, 0));
+            const diffMs = Math.max(0, nextOpenUtc.getTime() - now.getTime());
+            const totalSec = Math.floor(diffMs / 1000);
+            const days = Math.floor(totalSec / 86400);
+            const hours = Math.floor((totalSec % 86400) / 3600);
+            const mins = Math.floor((totalSec % 3600) / 60);
+            const secs = totalSec % 60;
+
+            const istOffset = 5.5 * 3600 * 1000;
+            const istDate = new Date(nextOpenUtc.getTime() + istOffset);
+            const daysShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+            const monthsShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const formattedIst = `${daysShort[istDate.getUTCDay()]} ${monthsShort[istDate.getUTCMonth()]} ${istDate.getUTCDate()}, 02:30 AM IST`;
+
+            const cdStr = days > 0 ? `${days}d ${hours}h ${mins}m ${secs}s` : `${hours}h ${mins}m ${secs}s`;
+
+            return {
+                is_open: false,
+                market_type: "FOREX_METALS_24_5",
+                status: "CLOSED_WEEKEND",
+                status_text: `Market is closed for the weekend. Re-opens ${formattedIst}`,
+                next_open_ist: formattedIst,
+                countdown_formatted: cdStr,
+                reason: "Global Forex & Spot Metals markets are closed on weekends."
+            };
+        } else {
+            return {
+                is_open: true,
+                market_type: "FOREX_METALS_24_5",
+                status: "OPEN",
+                status_text: "Market is Open (24/5)",
+                next_open_ist: "Currently Open",
+                countdown_formatted: "Open"
+            };
+        }
+    }
+
+    function updateMarketStatusDisplay(symbol) {
+        const sym = symbol || state.symbol || "XAUUSD";
+        const statusObj = (state.marketStatuses && state.marketStatuses[sym]) || computeClientMarketStatus(sym);
+
+        // 1. Top Global HUD Tile
+        if (el.hudMarketStatus) {
+            el.hudMarketStatus.textContent = statusObj.is_open ? "OPEN (24/5)" : "CLOSED (WEEKEND)";
+            el.hudMarketStatus.style.color = statusObj.is_open ? "var(--neon-bull)" : "var(--neon-bear)";
+        }
+
+        // 2. Chart Header Status Pill
+        if (el.chartMarketStatus) {
+            if (statusObj.is_open) {
+                el.chartMarketStatus.className = "market-status-pill market-open";
+                el.chartMarketStatus.innerHTML = `🟢 OPEN (24/5)`;
+                el.chartMarketStatus.title = statusObj.status_text;
+            } else {
+                el.chartMarketStatus.className = "market-status-pill market-closed";
+                el.chartMarketStatus.innerHTML = `🔴 CLOSED (WEEKEND) — Re-opens <b>${statusObj.next_open_ist || 'Mon 02:30 AM IST'}</b> (<span id="mkt-countdown-val">${statusObj.countdown_formatted}</span>)`;
+                el.chartMarketStatus.title = statusObj.reason || statusObj.status_text;
+            }
+        }
+
+        // 3. Trade Desk Execution Warning Banner
+        if (el.deskMarketStatusBanner) {
+            if (statusObj.is_open) {
+                el.deskMarketStatusBanner.style.display = "none";
+            } else {
+                el.deskMarketStatusBanner.style.display = "flex";
+                if (el.deskMarketTitle) el.deskMarketTitle.textContent = `🔒 ${sym} MARKET IS CLOSED`;
+                if (el.deskMarketTime) el.deskMarketTime.textContent = `Re-opens: ${statusObj.next_open_ist} (in ${statusObj.countdown_formatted})`;
+            }
+        }
+    }
+
+    function tickMarketCountdown() {
+        updateMarketStatusDisplay(state.symbol);
     }
 
     let _lastRadarSnapshot = "";
@@ -804,22 +916,23 @@
             
             let cardClass = "news-card";
             let statusPillClass = "news-status-past";
-            let statusText = n.status_badge || "✓ RELEASED";
-
-            if (isMostRecent) {
-                cardClass += " news-card-recent";
-                statusPillClass = "news-status-recent";
-                statusText = isLive ? "🔴 LIVE NOW" : "⚡ LATEST RELEASE";
-            } else if (isLive) {
+            let statusText;
+            if (isLive) {
                 cardClass += " news-card-live";
                 statusPillClass = "news-status-live";
-                statusText = "🔴 LIVE NOW";
+                statusText = n.status_badge || "🔴 LIVE NOW";
+            } else if (isMostRecent) {
+                cardClass += " news-card-recent";
+                statusPillClass = "news-status-recent";
+                statusText = n.status_badge || "⚡ LATEST RELEASE (ENDED)";
             } else if (isUpcoming) {
                 cardClass += " news-card-upcoming";
                 statusPillClass = "news-status-upcoming";
                 statusText = n.status_badge || `⏳ ${n.time}`;
             } else {
                 cardClass += " news-card-past";
+                statusPillClass = "news-status-past";
+                statusText = n.status_badge || "✓ ENDED";
             }
 
             let impactBadgeClass = "news-impact-low";
@@ -864,20 +977,32 @@
                         </div>
                         <span class="news-status-pill ${statusPillClass}">${statusText}</span>
                     </div>
-                    <div class="news-title">${n.event}</div>
-                    <div style="font-size:10px; color:var(--text-dim); font-family:var(--font-mono); margin-top:2px;">
-                        ${istDisplay}
+
+                    <div class="news-card-title">${n.event}</div>
+
+                    <div class="news-meta-row">
+                        <span class="news-time-ist">${istDisplay}</span>
+                        <span class="news-countdown-text">${n.status_badge || ''}</span>
                     </div>
-                    <div class="news-metrics-row">
-                        <span>Fcst: <b>${n.forecast}</b></span>
-                        <span>Prev: <b>${n.previous}</b></span>
-                        <span>Actual: <b style="${actualStyle}">${n.actual || '—'}</b></span>
-                    </div>
+
                     ${shockBannerHtml}
-                    ${affectedHtml}
-                    <div style="font-size:9px; color:var(--text-dim); text-align:right; margin-top:3px; opacity:0.8;">
-                        🔍 Click for full intelligence & details ➔
+
+                    <div class="news-metrics-grid">
+                        <div class="news-metric-col">
+                            <span class="news-metric-label">Actual</span>
+                            <span class="news-metric-value" style="${actualStyle}">${n.actual || "—"}</span>
+                        </div>
+                        <div class="news-metric-col">
+                            <span class="news-metric-label">Forecast</span>
+                            <span class="news-metric-value">${n.forecast || "—"}</span>
+                        </div>
+                        <div class="news-metric-col">
+                            <span class="news-metric-label">Previous</span>
+                            <span class="news-metric-value">${n.previous || "—"}</span>
+                        </div>
                     </div>
+
+                    ${affectedHtml}
                 </div>
             `;
         }).join("");
@@ -901,8 +1026,8 @@
             impactEl.className = item.impact === "HIGH" ? "news-impact-high" : (item.impact === "MEDIUM" ? "news-impact-med" : "news-impact-low");
         }
         if (statusEl) {
-            statusEl.textContent = item.is_live ? "🔴 LIVE NOW" : (item.is_most_recent || idx === 0 ? "⚡ LATEST RELEASE" : (item.is_upcoming ? `⏳ ${item.status_badge || item.time}` : "✓ RELEASED"));
-            statusEl.className = item.is_live ? "news-status-pill news-status-live" : (item.is_most_recent || idx === 0 ? "news-status-pill news-status-recent" : (item.is_upcoming ? "news-status-pill news-status-upcoming" : "news-status-pill news-status-past"));
+            statusEl.textContent = item.is_live ? "🔴 LIVE NOW" : (item.is_most_recent ? (item.status_badge || "⚡ LATEST RELEASE (ENDED)") : (item.is_upcoming ? `⏳ ${item.status_badge || item.time}` : (item.status_badge || "✓ ENDED")));
+            statusEl.className = item.is_live ? "news-status-pill news-status-live" : (item.is_most_recent ? "news-status-pill news-status-recent" : (item.is_upcoming ? "news-status-pill news-status-upcoming" : "news-status-pill news-status-past"));
         }
 
         // Title & Category
@@ -917,7 +1042,11 @@
         const diffEl = document.getElementById("mn-modal-diff");
         if (timeIstEl) timeIstEl.textContent = item.time_ist || item.time;
         if (timeUtcEl) timeUtcEl.textContent = item.time_utc || "UTC Reference";
-        if (diffEl) diffEl.textContent = item.status_badge || (item.is_live ? "LIVE ACTIVE" : item.time);
+        if (diffEl) {
+            diffEl.textContent = item.is_live 
+                ? `🔴 LIVE ACTIVE (Ends ${item.live_end_ist || ''})` 
+                : (item.is_past ? `✓ Ended at ${item.live_end_ist || item.time_ist}` : (item.status_badge || `⏳ Upcoming`));
+        }
 
         // Metrics Grid
         const actEl = document.getElementById("mn-modal-actual");
@@ -1537,6 +1666,7 @@
             if (el.deskTp) el.deskTp.value = "";
         }
 
+        updateMarketStatusDisplay(sym);
         renderScannerRadarDOM(state.radarOpportunities);
         fetchCandles();
         fetchTelemetry();
@@ -1573,6 +1703,7 @@
         fetchCandles();
         fetchTelemetry();
         fetchNews();
+        updateMarketStatusDisplay(state.symbol);
     };
 
     window.addEventListener("resize", () => {
@@ -1589,6 +1720,7 @@
         initCopilotInteractivity();
         initCommandPalette();
 
+        updateMarketStatusDisplay(state.symbol);
         fetchCandles();
         fetchTelemetry();
         fetchNews();
@@ -1599,6 +1731,7 @@
         fetchHistory();
         setInterval(fetchCandles, 5000);
         setInterval(simulateLiveMarketTick, 350);
+        setInterval(tickMarketCountdown, 1000);
     });
 
 })();

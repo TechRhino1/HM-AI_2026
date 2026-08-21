@@ -61,6 +61,10 @@
                 <span class="hud-tile-label">MT5 State Sync</span>
                 <span id="hud-sync" class="hud-tile-value" style="color:var(--neon-bull);">ONLINE</span>
             </div>
+            <div class="hud-tile">
+                <span class="hud-tile-label">Global Market</span>
+                <span id="hud-market-status" class="hud-tile-value" style="color:var(--neon-bear); font-weight:700; font-size:11px;">CLOSED (WEEKEND)</span>
+            </div>
         </div>
 
         <!-- Header Action Controls -->
@@ -164,6 +168,7 @@
                             <span id="chart-symbol" class="active-symbol-title">XAUUSD</span>
                             <span id="chart-regime" class="active-regime-pill">TREND_BULL</span>
                             <span id="chart-live-price" class="chart-live-price">4515.00</span>
+                            <span id="chart-market-status" class="market-status-pill market-closed">🔴 CLOSED (WEEKEND) — Re-opens Mon 02:30 AM IST</span>
                         </div>
 
                         <!-- Chart Engine Mode Switcher & Controls -->
@@ -288,6 +293,15 @@
                     <div class="desk-header">
                         <span class="desk-title">⚡ 1-Click Execution Desk</span>
                         <span id="desk-active-symbol" class="mono-number" style="font-weight:800; color:#fff;">XAUUSD</span>
+                    </div>
+
+                    <!-- Market Closed Notification Banner -->
+                    <div id="desk-market-status-banner" class="desk-market-closed-banner" style="display:none;">
+                        <span class="desk-market-icon">🔒</span>
+                        <div class="desk-market-info">
+                            <b id="desk-market-title">MARKET CLOSED FOR WEEKEND</b>
+                            <span id="desk-market-time">Re-opens Mon Aug 24, 02:30 AM IST</span>
+                        </div>
                     </div>
 
                     <!-- Live Trade Preview Summary Banner (Requirement 6) -->
