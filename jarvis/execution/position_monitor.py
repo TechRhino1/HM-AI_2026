@@ -38,15 +38,17 @@ DANGEROUS_SL_ATR_MULT     = 3.0    # SL wider than 3× ATR → tighten to 2× AT
 MICRO_VOLUME_THRESH        = 0.03   # Volume <= this is treated as micro-position
 
 # Profit lock thresholds (ATR multiples of profit_pips)
-STAGE1_ATR_TRIGGER         = 1.0
-STAGE1_BE_BUFFER           = 0.15
-STAGE2_ATR_TRIGGER         = 1.6
-STAGE2_PROFIT_LOCK         = 0.60
-STAGE3_ATR_TRIGGER         = 2.0
-STAGE3_PROFIT_LOCK_PCT     = 0.60
-STD_ATR_TRIGGER            = 1.5
-STD_BE_BUFFER              = 0.20
-SR_ATR_BUFFER              = 0.20
+STAGE1_ATR_TRIGGER         = 1.0    # Stage 1 micro-position BE trigger (1.0x ATR)
+STAGE1_BE_BUFFER           = 0.15   # Buffer above/below entry for Stage 1 BE
+STAGE2_ATR_TRIGGER         = 1.6    # Stage 2 Profit lock trigger (0.60x ATR)
+STAGE2_PROFIT_LOCK         = 0.60   # Lock 0.60x ATR profit
+STAGE3_ATR_TRIGGER         = 2.0    # Stage 3 Profit lock trigger (60% profit lock)
+STAGE3_PROFIT_LOCK_PCT     = 0.60   # Lock 60% of total unrealized profit
+STD_ATR_TRIGGER            = 1.5    # Standard-position BE trigger (1.5x ATR)
+STD_BE_BUFFER              = 0.20   # Buffer above/below entry for Standard BE
+SR_ATR_BUFFER              = 0.20   # S/R ratchet buffer
+PARTIAL_TP_TRIGGER_R       = 1.0    # Default partial TP trigger (1.0R)
+PARTIAL_CLOSE_PCT          = 0.50   # 50% scale out at partial target
 
 # Regime invalidation triggers
 REGIME_INVALIDATION_CONFIDENCE = 0.70   # Regime confidence required to act
@@ -88,6 +90,8 @@ class PositionMonitorEngine:
 
         # Per-ticket tracking: last action taken (to avoid log spam)
         self._last_action: Dict[int, str] = {}
+        # Per-ticket tracking for partial closes (§B-2 / §B-3)
+        self._partially_closed_tickets: Set[int] = set()
 
     # ─── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -196,6 +200,35 @@ class PositionMonitorEngine:
                 actions.append(f"EMERGENCY_BRAKE→BE@{new_sl:.4f}")
 
         else:
+            # ── 0. Partial Profit-Taking (§B-2 / §B-3) ──────────────────────────
+            if pos.ticket not in self._partially_closed_tickets and pos.volume >= 0.02:
+                decision_obj = self.state_manager.latest_decisions.get(symbol)
+                first_target = getattr(decision_obj, "first_target_price", None)
+                target_pct = getattr(decision_obj, "first_target_volume_pct", PARTIAL_CLOSE_PCT)
+
+                risk_dist = abs(pos.open_price - pos.sl) if pos.sl > 0 else (atr * 1.5)
+                if not first_target or first_target <= 0:
+                    first_target = (pos.open_price + (risk_dist * PARTIAL_TP_TRIGGER_R)) if pos.type == "BUY" else (pos.open_price - (risk_dist * PARTIAL_TP_TRIGGER_R))
+
+                is_target_hit = (c_price >= first_target) if pos.type == "BUY" else (c_price <= first_target)
+                if is_target_hit:
+                    close_volume = round(pos.volume * target_pct, 2)
+                    remaining_volume = round(pos.volume - close_volume, 2)
+                    if close_volume >= 0.01 and remaining_volume >= 0.01:
+                        p_res = self.mt5_client.close_position(pos.ticket, volume=close_volume)
+                        if p_res and p_res.get("status") in ("PARTIALLY_CLOSED", "CLOSED"):
+                            self._partially_closed_tickets.add(pos.ticket)
+                            logger.info(f"🎯 PARTIAL TP HIT: #{pos.ticket} {symbol} closed {close_volume} lots @ {c_price:.4f}. Remaining: {remaining_volume}")
+                            actions.append(f"PARTIAL_TP_{int(target_pct*100)}%@{c_price:.4f}")
+                            # Immediately ratchet SL to Breakeven + buffer on the remaining size
+                            be_candidate = (pos.open_price + (atr * STAGE1_BE_BUFFER)) if pos.type == "BUY" else (pos.open_price - (atr * STAGE1_BE_BUFFER))
+                            if pos.type == "BUY" and be_candidate > new_sl and be_candidate < c_price:
+                                new_sl = be_candidate
+                                actions.append(f"PARTIAL_BE@{new_sl:.4f}")
+                            elif pos.type == "SELL" and (new_sl == 0 or be_candidate < new_sl) and be_candidate > c_price:
+                                new_sl = be_candidate
+                                actions.append(f"PARTIAL_BE@{new_sl:.4f}")
+
             # ── 1. Manual trade: auto-set or tighten emergency SL ──────────
             if is_manual:
                 new_sl, act = self._handle_manual_sl(pos, c_price, atr, new_sl)
@@ -271,16 +304,25 @@ class PositionMonitorEngine:
         atr_mult = 1.3 if vol.state in ("EXPANSION", "EXTREME") else 1.0
         is_micro = (pos.volume <= MICRO_VOLUME_THRESH) or (equity < 100)
 
+        # Determine conviction-aware breathing factor (§B-4)
+        is_high_conviction = (
+            getattr(ctx.momentum, "adx", 0.0) > 25.0
+            and getattr(ctx.momentum, "trend_score", 0.0) != 0.0
+            and (
+                (pos.type == "BUY" and getattr(ctx.momentum, "trend_score", 0.0) > 20)
+                or (pos.type == "SELL" and getattr(ctx.momentum, "trend_score", 0.0) < -20)
+            )
+        )
+        conviction_mult = 1.25 if is_high_conviction else 1.0
+
+        stage1_trigger = STAGE1_ATR_TRIGGER * conviction_mult
+        std_trigger = STD_ATR_TRIGGER * conviction_mult
+        chandelier_trigger = 0.75 * conviction_mult
+
         if pos.type == "BUY":
             profit_pips = c_price - pos.open_price
 
-            # ── 1. Dynamic ATR Chandelier Trailing Stop (Continuous Ratchet) ──
-            if profit_pips >= (atr * 0.75 * atr_mult):
-                dynamic_trail = c_price - (atr * 0.85 * atr_mult)
-                if dynamic_trail > pos.open_price and dynamic_trail > new_sl and dynamic_trail < c_price:
-                    new_sl = dynamic_trail
-                    actions.append(f"DYNAMIC_ATR_TRAIL@{new_sl:.4f}")
-
+            # ── 1. Breakeven & Profit Lock Stages ──────────────────────────────
             if is_micro:
                 # Stage 3 — 60% profit lock
                 if profit_pips >= (atr * STAGE3_ATR_TRIGGER * atr_mult):
@@ -297,28 +339,35 @@ class PositionMonitorEngine:
                         actions.append(f"STAGE2_BE+@{new_sl:.4f}")
 
                 # Stage 1 — breakeven (+ small buffer)
-                elif profit_pips >= (atr * 0.60 * atr_mult) and new_sl < pos.open_price:
+                elif profit_pips >= (atr * stage1_trigger * atr_mult) and new_sl < pos.open_price:
                     candidate = pos.open_price + (atr * STAGE1_BE_BUFFER)
                     if candidate > new_sl and candidate < c_price:
                         new_sl = candidate
                         actions.append(f"STAGE1_BE@{new_sl:.4f}")
 
             else:
-                # Standard: move to breakeven at 1.0× ATR
-                if profit_pips >= (atr * 1.0 * atr_mult) and new_sl < pos.open_price:
+                # Standard: move to breakeven at STD_ATR_TRIGGER (or conviction adjusted)
+                if profit_pips >= (atr * std_trigger * atr_mult) and new_sl < pos.open_price:
                     candidate = pos.open_price + (atr * STD_BE_BUFFER)
                     if candidate > new_sl and candidate < c_price:
                         new_sl = candidate
                         actions.append(f"STD_BE@{new_sl:.4f}")
 
-            # Structural S/R ratchet — ratchet to higher-low support
+            # ── 2. Dynamic ATR Chandelier Trailing Stop (Continuous Ratchet) ──
+            if profit_pips >= (atr * chandelier_trigger * atr_mult):
+                dynamic_trail = c_price - (atr * 0.85 * atr_mult)
+                if dynamic_trail > pos.open_price and dynamic_trail > new_sl and dynamic_trail < c_price:
+                    new_sl = dynamic_trail
+                    actions.append(f"DYNAMIC_ATR_TRAIL@{new_sl:.4f}")
+
+            # ── 3. Structural S/R ratchet — ratchet to higher-low support ──
             if st.higher_lows and st.demand_zone[0] > 0:
                 struct_sl = st.demand_zone[0] - (atr * SR_ATR_BUFFER)
                 if struct_sl > new_sl and struct_sl < c_price:
                     new_sl = struct_sl
                     actions.append(f"SR_RATCHET@{new_sl:.4f}")
 
-            # Key level ratchet (from Phase 3 S/R clustering)
+            # ── 4. Key level ratchet (from Phase 3 S/R clustering) ──
             if hasattr(st, "key_levels") and st.key_levels:
                 support_levels = sorted(
                     [kl["price"] for kl in st.key_levels if kl.get("price", 0) < c_price],
@@ -333,13 +382,7 @@ class PositionMonitorEngine:
         elif pos.type == "SELL":
             profit_pips = pos.open_price - c_price
 
-            # ── 1. Dynamic ATR Chandelier Trailing Stop (Continuous Ratchet) ──
-            if profit_pips >= (atr * 0.75 * atr_mult):
-                dynamic_trail = c_price + (atr * 0.85 * atr_mult)
-                if dynamic_trail < pos.open_price and (new_sl == 0 or dynamic_trail < new_sl) and dynamic_trail > c_price:
-                    new_sl = dynamic_trail
-                    actions.append(f"DYNAMIC_ATR_TRAIL@{new_sl:.4f}")
-
+            # ── 1. Breakeven & Profit Lock Stages ──────────────────────────────
             if is_micro:
                 if profit_pips >= (atr * STAGE3_ATR_TRIGGER * atr_mult):
                     candidate = pos.open_price - (profit_pips * STAGE3_PROFIT_LOCK_PCT)
@@ -353,27 +396,34 @@ class PositionMonitorEngine:
                         new_sl = candidate
                         actions.append(f"STAGE2_BE+@{new_sl:.4f}")
 
-                elif profit_pips >= (atr * 0.60 * atr_mult) and (new_sl == 0 or new_sl > pos.open_price):
+                elif profit_pips >= (atr * stage1_trigger * atr_mult) and (new_sl == 0 or new_sl > pos.open_price):
                     candidate = pos.open_price - (atr * STAGE1_BE_BUFFER)
                     if (new_sl == 0 or candidate < new_sl) and candidate > c_price:
                         new_sl = candidate
                         actions.append(f"STAGE1_BE@{new_sl:.4f}")
 
             else:
-                if profit_pips >= (atr * 1.0 * atr_mult) and (new_sl == 0 or new_sl > pos.open_price):
+                if profit_pips >= (atr * std_trigger * atr_mult) and (new_sl == 0 or new_sl > pos.open_price):
                     candidate = pos.open_price - (atr * STD_BE_BUFFER)
                     if (new_sl == 0 or candidate < new_sl) and candidate > c_price:
                         new_sl = candidate
                         actions.append(f"STD_BE@{new_sl:.4f}")
 
-            # Structural S/R ratchet — ratchet to lower-high resistance
+            # ── 2. Dynamic ATR Chandelier Trailing Stop (Continuous Ratchet) ──
+            if profit_pips >= (atr * chandelier_trigger * atr_mult):
+                dynamic_trail = c_price + (atr * 0.85 * atr_mult)
+                if dynamic_trail < pos.open_price and (new_sl == 0 or dynamic_trail < new_sl) and dynamic_trail > c_price:
+                    new_sl = dynamic_trail
+                    actions.append(f"DYNAMIC_ATR_TRAIL@{new_sl:.4f}")
+
+            # ── 3. Structural S/R ratchet — ratchet to lower-high resistance ──
             if st.lower_highs and st.supply_zone[1] > 0:
                 struct_sl = st.supply_zone[1] + (atr * SR_ATR_BUFFER)
                 if (new_sl == 0 or struct_sl < new_sl) and struct_sl > c_price:
                     new_sl = struct_sl
                     actions.append(f"SR_RATCHET@{new_sl:.4f}")
 
-            # Key level ratchet
+            # ── 4. Key level ratchet ──
             if hasattr(st, "key_levels") and st.key_levels:
                 resistance_levels = sorted(
                     [kl["price"] for kl in st.key_levels if kl.get("price", 0) > c_price]

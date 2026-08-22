@@ -90,8 +90,22 @@ class DecisionEngine:
             sl_price = round(entry_price - sl_dist, digits)
             risk_dist = abs(entry_price - sl_price)
 
-            # §7: Dynamic TP targeting nearest opposing structural supply zone or key resistance
-            flat_tp_dist = risk_dist * 2.5
+            # §B-1: Regime & Conviction Adaptive TP Multiplier
+            is_strong_trend = (
+                regime.primary_regime in (MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR)
+                and getattr(regime, "confidence", 0.0) > 0.75
+                and getattr(context.momentum, "adx", 0.0) > 25.0
+            )
+            if is_strong_trend:
+                tp_multiplier = 3.5  # Strong, confirmed trend — let winners run
+            elif regime.primary_regime == MarketRegime.RANGE:
+                tp_multiplier = 1.8  # Ranging market — take profit closer inside range
+            elif regime.primary_regime in (MarketRegime.BREAKOUT, MarketRegime.HIGH_VOLATILITY):
+                tp_multiplier = 2.8  # Momentum expansion
+            else:
+                tp_multiplier = 2.5  # Default baseline institutional R:R
+
+            flat_tp_dist = risk_dist * tp_multiplier
             struct_target_dist = 0.0
             if st.supply_zone[0] > entry_price:
                 struct_target_dist = st.supply_zone[0] - entry_price
@@ -100,13 +114,27 @@ class DecisionEngine:
                 if res_levels:
                     struct_target_dist = min(res_levels) - entry_price
 
-            if struct_target_dist >= (risk_dist * 1.5) and struct_target_dist < flat_tp_dist:
-                tp_dist = struct_target_dist
+            if is_strong_trend:
+                # In strong trends, honor further structural targets up to 5.0R
+                if struct_target_dist >= (risk_dist * 1.5):
+                    tp_dist = min(struct_target_dist, risk_dist * 5.0)
+                else:
+                    tp_dist = flat_tp_dist
             else:
-                tp_dist = flat_tp_dist
+                if struct_target_dist >= (risk_dist * 1.5) and struct_target_dist <= flat_tp_dist:
+                    tp_dist = struct_target_dist
+                else:
+                    tp_dist = flat_tp_dist
 
             tp_price = round(entry_price + tp_dist, digits)
             rr_ratio = round(tp_dist / (risk_dist + 1e-9), 2)
+
+            # §B-2 / §B-3: First target for partial scaling (near structure or 1.0R)
+            if 0 < struct_target_dist < tp_dist and struct_target_dist >= (risk_dist * 0.8):
+                first_target_price = round(entry_price + struct_target_dist, digits)
+            else:
+                first_target_price = round(entry_price + (risk_dist * 1.0), digits)
+            first_target_volume_pct = 0.50
 
         elif tentative_bias == "SELL":
             entry_price = round(context.bid, digits)
@@ -123,8 +151,22 @@ class DecisionEngine:
             sl_price = round(entry_price + sl_dist, digits)
             risk_dist = abs(sl_price - entry_price)
 
-            # §7: Dynamic TP targeting nearest opposing structural demand zone or key support
-            flat_tp_dist = risk_dist * 2.5
+            # §B-1: Regime & Conviction Adaptive TP Multiplier
+            is_strong_trend = (
+                regime.primary_regime in (MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR)
+                and getattr(regime, "confidence", 0.0) > 0.75
+                and getattr(context.momentum, "adx", 0.0) > 25.0
+            )
+            if is_strong_trend:
+                tp_multiplier = 3.5  # Strong, confirmed trend — let winners run
+            elif regime.primary_regime == MarketRegime.RANGE:
+                tp_multiplier = 1.8  # Ranging market — take profit closer inside range
+            elif regime.primary_regime in (MarketRegime.BREAKOUT, MarketRegime.HIGH_VOLATILITY):
+                tp_multiplier = 2.8  # Momentum expansion
+            else:
+                tp_multiplier = 2.5  # Default baseline institutional R:R
+
+            flat_tp_dist = risk_dist * tp_multiplier
             struct_target_dist = 0.0
             if st.demand_zone[1] > 0 and st.demand_zone[1] < entry_price:
                 struct_target_dist = entry_price - st.demand_zone[1]
@@ -133,21 +175,37 @@ class DecisionEngine:
                 if sup_levels:
                     struct_target_dist = entry_price - max(sup_levels)
 
-            if struct_target_dist >= (risk_dist * 1.5) and struct_target_dist < flat_tp_dist:
-                tp_dist = struct_target_dist
+            if is_strong_trend:
+                # In strong trends, honor further structural targets up to 5.0R
+                if struct_target_dist >= (risk_dist * 1.5):
+                    tp_dist = min(struct_target_dist, risk_dist * 5.0)
+                else:
+                    tp_dist = flat_tp_dist
             else:
-                tp_dist = flat_tp_dist
+                if struct_target_dist >= (risk_dist * 1.5) and struct_target_dist <= flat_tp_dist:
+                    tp_dist = struct_target_dist
+                else:
+                    tp_dist = flat_tp_dist
 
             tp_price = round(entry_price - tp_dist, digits)
             rr_ratio = round(tp_dist / (risk_dist + 1e-9), 2)
+
+            # §B-2 / §B-3: First target for partial scaling (near structure or 1.0R)
+            if 0 < struct_target_dist < tp_dist and struct_target_dist >= (risk_dist * 0.8):
+                first_target_price = round(entry_price - struct_target_dist, digits)
+            else:
+                first_target_price = round(entry_price - (risk_dist * 1.0), digits)
+            first_target_volume_pct = 0.50
         else:
             entry_price = c_price
             sl_price = c_price
             tp_price = c_price
             risk_dist = 0.0
             rr_ratio = 1.0
+            first_target_price = None
+            first_target_volume_pct = 0.50
 
-        return tentative_bias, entry_price, sl_price, tp_price, risk_dist, rr_ratio
+        return tentative_bias, entry_price, sl_price, tp_price, risk_dist, rr_ratio, first_target_price, first_target_volume_pct
 
     def _compute_blended_probability(
         self,
@@ -293,9 +351,29 @@ class DecisionEngine:
         current_drawdown_pct: float = 0.0,
         mtf_data=None
     ) -> DecisionObject:
-        tentative_bias, entry_price, sl_price, tp_price, risk_dist, rr_ratio = self._compute_bias_and_levels(
+        tentative_bias, entry_price, sl_price, tp_price, risk_dist, rr_ratio, first_target_price, first_target_volume_pct = self._compute_bias_and_levels(
             context, regime, analyst_reports
         )
+
+        # §B-5: Devil's Advocate Threat Feedback Adjustment
+        if devil_report and getattr(devil_report, "threat_price_level", None):
+            threat_lvl = devil_report.threat_price_level
+            spec = resolve_symbol(context.symbol)
+            atr_val = context.volatility.atr if context.volatility.atr > 0 else (entry_price * 0.005)
+            if tentative_bias == "BUY" and entry_price < threat_lvl < tp_price:
+                adjusted_tp = round(threat_lvl - (atr_val * 0.1), spec.digits)
+                if adjusted_tp > entry_price + (risk_dist * 1.0):
+                    logger.info(f"[{context.symbol}] Devil's Advocate threat level {threat_lvl} detected ahead of TP! Tucking TP: {tp_price} -> {adjusted_tp}")
+                    tp_price = adjusted_tp
+                    tp_dist = tp_price - entry_price
+                    rr_ratio = round(tp_dist / (risk_dist + 1e-9), 2)
+            elif tentative_bias == "SELL" and entry_price > threat_lvl > tp_price:
+                adjusted_tp = round(threat_lvl + (atr_val * 0.1), spec.digits)
+                if adjusted_tp < entry_price - (risk_dist * 1.0):
+                    logger.info(f"[{context.symbol}] Devil's Advocate threat level {threat_lvl} detected ahead of TP! Tucking TP: {tp_price} -> {adjusted_tp}")
+                    tp_price = adjusted_tp
+                    tp_dist = entry_price - tp_price
+                    rr_ratio = round(tp_dist / (risk_dist + 1e-9), 2)
 
         strategy_probs = self.strategy_selector.select_strategy_probabilities(
             regime, context=context, account_equity=account_balance
@@ -482,6 +560,8 @@ class DecisionEngine:
             entry_price=entry_price,
             stop_loss=sl_price,
             take_profit=tp_price,
+            first_target_price=first_target_price,
+            first_target_volume_pct=first_target_volume_pct,
             sl_distance=risk_dist,
             tp_distance=tp_dist,
             risk_reward_ratio=rr_ratio,

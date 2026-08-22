@@ -325,14 +325,28 @@ class MT5Client:
 
         return TimeoutGuard.run_sync(_send, timeout_sec=5.0, default={"status": "FAILED", "reason": "Timeout"}, task_name=f"MT5_SendOrder_{symbol}")
 
-    def close_position(self, ticket: int) -> Dict[str, Any]:
-        """Closes a specific open MT5 position by ticket."""
+    def close_position(self, ticket: int, volume: Optional[float] = None) -> Dict[str, Any]:
+        """Closes a specific open MT5 position (full or partial) by ticket."""
         if self.mode == "paper" or not MT5_AVAILABLE or not self.is_connected:
             with self._lock:
                 if ticket in self._paper_positions:
-                    pos = self._paper_positions.pop(ticket)
-                    logger.info(f"[PAPER] Closed simulated position #{ticket} ({pos.symbol})")
-                    return {"status": "CLOSED", "ticket": ticket, "pnl": pos.profit, "price": pos.current_price}
+                    pos = self._paper_positions[ticket]
+                    if volume is not None and 0 < volume < pos.volume:
+                        pos.volume = round(pos.volume - volume, 2)
+                        pnl = round(pos.profit * (volume / (pos.volume + volume)), 2)
+                        logger.info(f"[PAPER] Partially closed position #{ticket} ({pos.symbol}) by {volume} lots. Remaining: {pos.volume}")
+                        return {
+                            "status": "PARTIALLY_CLOSED",
+                            "ticket": ticket,
+                            "closed_volume": volume,
+                            "remaining_volume": pos.volume,
+                            "pnl": pnl,
+                            "price": pos.current_price
+                        }
+                    else:
+                        pos = self._paper_positions.pop(ticket)
+                        logger.info(f"[PAPER] Closed simulated position #{ticket} ({pos.symbol})")
+                        return {"status": "CLOSED", "ticket": ticket, "pnl": pos.profit, "price": pos.current_price}
                 logger.info(f"[PAPER] Position #{ticket} not found or already closed")
                 return {"status": "CLOSED", "ticket": ticket, "pnl": 0.0, "price": 0.0}
 
@@ -349,6 +363,10 @@ class MT5Client:
                 if not tick or not sym_info:
                     return {"status": "FAILED", "reason": f"Tick info unavailable for {symbol}"}
 
+                # Calculate volume to close
+                close_volume = float(volume) if (volume is not None and 0 < volume < p.volume) else float(p.volume)
+                is_partial = close_volume < p.volume
+
                 # Opposite order type
                 is_buy = p.type == getattr(mt5, "POSITION_TYPE_BUY", 0)
                 order_type = getattr(mt5, "ORDER_TYPE_SELL", 1) if is_buy else getattr(mt5, "ORDER_TYPE_BUY", 0)
@@ -358,12 +376,12 @@ class MT5Client:
                     "action": getattr(mt5, "TRADE_ACTION_DEAL", 1),
                     "position": ticket,
                     "symbol": symbol,
-                    "volume": float(p.volume),
+                    "volume": close_volume,
                     "type": order_type,
                     "price": round(price, sym_info.digits),
                     "deviation": 50,
                     "magic": self.magic_number,
-                    "comment": f"Close #{ticket}",
+                    "comment": f"Partial #{ticket}" if is_partial else f"Close #{ticket}",
                     "type_time": getattr(mt5, "ORDER_TIME_GTC", 0),
                     "type_filling": getattr(mt5, "ORDER_FILLING_IOC", 1)
                 }
@@ -374,10 +392,21 @@ class MT5Client:
                     logger.error(f"MT5 Close Order Failed for #{ticket}: {err_msg}")
                     return {"status": "FAILED", "reason": err_msg}
 
-                logger.info(f"LIVE POSITION CLOSED: Ticket=#{ticket} {symbol} @ {result.price}")
-                return {"status": "CLOSED", "ticket": ticket, "price": result.price}
+                status_code = "PARTIALLY_CLOSED" if is_partial else "CLOSED"
+                logger.info(f"LIVE POSITION {status_code}: Ticket=#{ticket} {symbol} closed {close_volume} lots @ {result.price}")
+                return {
+                    "status": status_code,
+                    "ticket": ticket,
+                    "closed_volume": close_volume,
+                    "remaining_volume": round(p.volume - close_volume, 2) if is_partial else 0.0,
+                    "price": result.price
+                }
 
         return TimeoutGuard.run_sync(_close, timeout_sec=5.0, default={"status": "FAILED", "reason": "Timeout"}, task_name=f"MT5_Close_{ticket}")
+
+    def partial_close(self, ticket: int, volume: float) -> Dict[str, Any]:
+        """Convenience method to partially close an open position by ticket and volume."""
+        return self.close_position(ticket, volume=volume)
 
     def modify_position(self, ticket: int, sl: float, tp: float) -> Dict[str, Any]:
         """Modifies Stop Loss and Take Profit of an open MT5 position."""

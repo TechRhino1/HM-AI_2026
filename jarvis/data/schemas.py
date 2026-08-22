@@ -168,6 +168,7 @@ class DevilAdvocateReport:
     threats_detected: List[str] = field(default_factory=list)
     invalidation_triggers: List[str] = field(default_factory=list)
     liquidity_traps: List[str] = field(default_factory=list)
+    threat_price_level: Optional[float] = None
     critique_confidence: float = 1.0
     correlated_threats: List[str] = field(default_factory=list)
     execution_time_ms: float = 0.0
@@ -220,6 +221,8 @@ class DecisionObject:
     waiting_reasons: List[str] = field(default_factory=list)
     rejection_reasons: List[str] = field(default_factory=list)
     context: Optional[MarketContext] = None
+    first_target_price: Optional[float] = None
+    first_target_volume_pct: float = 0.50
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -236,6 +239,8 @@ class DecisionObject:
             "entry_price": self.entry_price,
             "stop_loss": self.stop_loss,
             "take_profit": self.take_profit,
+            "first_target_price": self.first_target_price,
+            "first_target_volume_pct": self.first_target_volume_pct,
             "sl_distance": self.sl_distance,
             "tp_distance": self.tp_distance,
             "risk_reward_ratio": self.risk_reward_ratio,

@@ -18,10 +18,19 @@ from jarvis.data.schemas import (
     RegimeOutput,
     MarketRegime,
     DecisionObject,
+    DevilAdvocateReport,
     TradeQualityGateResult,
     AccountSnapshot
 )
-from jarvis.execution.position_monitor import PositionMonitorEngine, JARVIS_MAGIC_NUMBER
+from jarvis.execution.position_monitor import (
+    PositionMonitorEngine,
+    JARVIS_MAGIC_NUMBER,
+    STAGE1_ATR_TRIGGER,
+    STD_ATR_TRIGGER,
+    STAGE1_BE_BUFFER,
+    STD_BE_BUFFER,
+    PARTIAL_TP_TRIGGER_R
+)
 from engines.dynamic_sl_tp import DynamicSLTPEngine
 from jarvis.risk.position_sizing import PositionSizer
 from jarvis.risk.circuit_breaker import CircuitBreaker
@@ -566,5 +575,236 @@ class TestRegressionFixes(unittest.TestCase):
         self.assertTrue(r3_xau.regime_transition, "XAUUSD must report regime transition when its own regime changes")
         self.assertEqual(r3_xau.regime_persistence, 0, "Persistence resets on transition")
 
+    def test_e1_position_monitor_breakeven_atr_triggers_and_conviction_awareness(self):
+        """E1-TRAILING: Verify named constants STAGE1_ATR_TRIGGER & STD_ATR_TRIGGER are utilized and conviction-aware."""
+        pm = PositionMonitorEngine(
+            mt5_client=MagicMock(),
+            data_feed=MagicMock(),
+            context_engine=MagicMock(),
+            state_manager=MagicMock(),
+            event_bus=MagicMock()
+        )
+
+        # Baseline context (Normal conviction)
+        ctx_normal = MarketContext(
+            symbol="XAUUSD",
+            timestamp=datetime.now(timezone.utc),
+            current_price=2400.0,
+            bid=2399.8,
+            ask=2400.2,
+            structure=StructureContext(bias="BULLISH"),
+            liquidity=LiquidityContext(),
+            volatility=VolatilityContext(state="NORMAL"),
+            momentum=MomentumContext(trend_score=0.0, adx=15.0),
+            session=SessionContext(is_prime_session=True)
+        )
+
+        # High conviction context (Strong trend)
+        ctx_high_conv = MarketContext(
+            symbol="XAUUSD",
+            timestamp=datetime.now(timezone.utc),
+            current_price=2400.0,
+            bid=2399.8,
+            ask=2400.2,
+            structure=StructureContext(bias="BULLISH"),
+            liquidity=LiquidityContext(),
+            volatility=VolatilityContext(state="NORMAL"),
+            momentum=MomentumContext(trend_score=75.0, adx=35.0),
+            session=SessionContext(is_prime_session=True)
+        )
+
+        atr = 10.0
+        # Standard position (0.10 lots)
+        std_pos = PositionSnapshot(
+            ticket=101, symbol="XAUUSD", type="BUY", volume=0.10,
+            open_price=2400.0, current_price=2412.0, sl=2385.0, tp=2430.0,
+            profit=120.0, swap=0.0, commission=0.0, open_time=datetime.now(timezone.utc).isoformat(), magic=JARVIS_MAGIC_NUMBER
+        )
+
+        # Normal conviction: standard BE trigger is STD_ATR_TRIGGER * 1.0 = 1.5 ATR (15.0 pts)
+        # At 12.0 pts profit (< 15.0 pts), normal position does NOT yet trigger STD_BE
+        new_sl, acts = pm._trail_sl(std_pos, ctx_normal, c_price=2412.0, atr=atr, current_sl=2385.0, equity=10000.0)
+        self.assertNotIn("STD_BE@2402.0000", acts, "Should not fire STD_BE below 1.5x ATR")
+
+        # At 15.5 pts profit (>= 15.0 pts), normal position fires STD_BE
+        new_sl, acts = pm._trail_sl(std_pos, ctx_normal, c_price=2415.5, atr=atr, current_sl=2385.0, equity=10000.0)
+        self.assertTrue(any("STD_BE" in a for a in acts), "STD_BE must fire at >= 1.5x ATR for standard position")
+
+        # High conviction: standard BE trigger delayed to STD_ATR_TRIGGER * 1.25 = 1.875 ATR (18.75 pts)
+        # At 15.5 pts profit, high conviction gives breathing room and does NOT fire STD_BE yet
+        new_sl_hc, acts_hc = pm._trail_sl(std_pos, ctx_high_conv, c_price=2415.5, atr=atr, current_sl=2385.0, equity=10000.0)
+        self.assertFalse(any("STD_BE" in a for a in acts_hc), "High conviction trend must delay BE tightening")
+
+        # At 19.0 pts profit (>= 18.75 pts), high conviction position fires STD_BE
+        new_sl_hc2, acts_hc2 = pm._trail_sl(std_pos, ctx_high_conv, c_price=2419.0, atr=atr, current_sl=2385.0, equity=10000.0)
+        self.assertTrue(any("STD_BE" in a for a in acts_hc2), "High conviction trend must fire STD_BE once threshold reached")
+
+    def test_e2_decision_engine_regime_adaptive_take_profit_multipliers(self):
+        """E2-TP: Verify DecisionEngine scales TP distance dynamically by regime and trend conviction."""
+        dec_engine = DecisionEngine()
+
+        trend_ctx = MarketContext(
+            symbol="XAUUSD",
+            timestamp=datetime.now(timezone.utc),
+            current_price=2400.0,
+            bid=2399.8,
+            ask=2400.2,
+            structure=StructureContext(bias="BULLISH", choch=True, choch_type="BULLISH", demand_zone=(2390.0, 2392.0)),
+            liquidity=LiquidityContext(),
+            volatility=VolatilityContext(atr=10.0, current_spread_pips=2.0),
+            momentum=MomentumContext(trend_score=75.0, adx=32.0),
+            session=SessionContext(is_prime_session=True)
+        )
+        trend_regime = RegimeOutput(
+            primary_regime=MarketRegime.TREND_BULL,
+            probabilities={"TREND_BULL": 0.85},
+            confidence=0.85
+        )
+
+        range_ctx = MarketContext(
+            symbol="XAUUSD",
+            timestamp=datetime.now(timezone.utc),
+            current_price=2400.0,
+            bid=2399.8,
+            ask=2400.2,
+            structure=StructureContext(bias="BULLISH", choch=True, choch_type="BULLISH", demand_zone=(2390.0, 2392.0)),
+            liquidity=LiquidityContext(),
+            volatility=VolatilityContext(atr=10.0, current_spread_pips=2.0),
+            momentum=MomentumContext(trend_score=10.0, adx=14.0),
+            session=SessionContext(is_prime_session=True)
+        )
+        range_regime = RegimeOutput(
+            primary_regime=MarketRegime.RANGE,
+            probabilities={"RANGE": 0.80},
+            confidence=0.80
+        )
+
+        # 1. Compute levels for strong trend
+        _, _, _, tp_trend, risk_trend, rr_trend, first_target_trend, _ = dec_engine._compute_bias_and_levels(
+            trend_ctx, trend_regime, {}
+        )
+        # 2. Compute levels for range regime
+        _, _, _, tp_range, risk_range, rr_range, first_target_range, _ = dec_engine._compute_bias_and_levels(
+            range_ctx, range_regime, {}
+        )
+
+        self.assertEqual(risk_trend, risk_range, "Baseline risk distance must be identical for fair comparison")
+        self.assertGreater(rr_trend, rr_range, "Strong trend R:R must exceed ranging regime R:R")
+        self.assertAlmostEqual(rr_trend, 3.5, delta=0.1, msg="Strong trend must achieve ~3.5R TP multiplier")
+        self.assertAlmostEqual(rr_range, 1.8, delta=0.1, msg="Ranging market must achieve ~1.8R TP multiplier")
+        self.assertIsNotNone(first_target_trend)
+
+    def test_e3_partial_take_profit_and_breakeven_ratchet(self):
+        """E3-PARTIAL: Verify PositionMonitor partially closes position and moves SL to breakeven."""
+        mock_mt5 = MagicMock()
+        mock_mt5.close_position = MagicMock(return_value={"status": "PARTIALLY_CLOSED", "ticket": 501, "closed_volume": 0.02, "remaining_volume": 0.02})
+        mock_mt5.modify_position = MagicMock(return_value={"status": "MODIFIED", "ticket": 501, "sl": 2401.5, "tp": 2435.0})
+
+        state_mgr = StateManager()
+        dec = DecisionObject(
+            symbol="XAUUSD",
+            timestamp=datetime.now(timezone.utc),
+            regime=RegimeOutput(primary_regime=MarketRegime.TREND_BULL, probabilities={}, confidence=0.8),
+            bias="BUY",
+            probabilities={"buy": 0.85},
+            strategy="MOMENTUM_BREAKOUT",
+            entry_price=2400.0,
+            stop_loss=2390.0,
+            take_profit=2435.0,
+            first_target_price=2410.0,
+            first_target_volume_pct=0.50,
+            risk_reward_ratio=3.5,
+            calculated_risk_percent=0.5,
+            expected_value=25.0,
+            model_confidence=0.85,
+            adversarial_penalty=2.0,
+            invalidation_levels=[],
+            bull_case=[],
+            bear_case=[],
+            risk_factors=[],
+            quality_gate=TradeQualityGateResult(passed=True, checks={}),
+            decision="EXECUTE",
+            execution_authorized=True
+        )
+        state_mgr.record_decision("XAUUSD", dec)
+
+        pm = PositionMonitorEngine(
+            mt5_client=mock_mt5,
+            data_feed=MagicMock(),
+            context_engine=MagicMock(),
+            state_manager=state_mgr,
+            event_bus=MagicMock()
+        )
+
+        pos = PositionSnapshot(
+            ticket=501, symbol="XAUUSD", type="BUY", volume=0.04,
+            open_price=2400.0, current_price=2411.0, sl=2390.0, tp=2435.0,
+            profit=44.0, swap=0.0, commission=0.0, open_time=datetime.now(timezone.utc).isoformat(), magic=JARVIS_MAGIC_NUMBER
+        )
+        ctx = MarketContext(
+            symbol="XAUUSD",
+            timestamp=datetime.now(timezone.utc),
+            current_price=2411.0,
+            bid=2410.8,
+            ask=2411.2,
+            structure=StructureContext(bias="BULLISH"),
+            liquidity=LiquidityContext(),
+            volatility=VolatilityContext(atr=10.0, current_spread_pips=2.0),
+            momentum=MomentumContext(trend_score=50.0, adx=25.0),
+            session=SessionContext(is_prime_session=True)
+        )
+
+        import time
+        pm._ctx_cache["XAUUSD"] = (ctx, time.monotonic())
+
+        # Run position evaluation
+        pm._manage_single_position(pos, equity=10000.0, balance=10000.0, emergency_brake=False)
+
+        # Assert mt5.close_position called with partial volume (0.02)
+        mock_mt5.close_position.assert_called_once_with(501, volume=0.02)
+        self.assertIn(501, pm._partially_closed_tickets, "Ticket 501 must be tracked as partially closed")
+        # Assert mt5.modify_position ratcheted SL to breakeven
+        mock_mt5.modify_position.assert_called()
+
+    def test_e4_devils_advocate_threat_level_tucking_tp(self):
+        """E4-DEVIL: Verify Devil's Advocate threat price level tucks TP inside identified obstacle."""
+        dec_engine = DecisionEngine()
+
+        ctx = MarketContext(
+            symbol="XAUUSD",
+            timestamp=datetime.now(timezone.utc),
+            current_price=2400.0,
+            bid=2399.8,
+            ask=2400.2,
+            structure=StructureContext(bias="BULLISH", choch=True, choch_type="BULLISH", demand_zone=(2390.0, 2392.0)),
+            liquidity=LiquidityContext(),
+            volatility=VolatilityContext(atr=10.0, current_spread_pips=2.0),
+            momentum=MomentumContext(trend_score=75.0, adx=30.0),
+            session=SessionContext(is_prime_session=True)
+        )
+        regime = RegimeOutput(primary_regime=MarketRegime.TREND_BULL, probabilities={}, confidence=0.85)
+
+        # Devil's advocate identifies major resistance / liquidity trap at 2420.0 (ahead of standard 2435.0 TP)
+        devil_rep = DevilAdvocateReport(
+            symbol="XAUUSD",
+            counter_bias="BEARISH",
+            penalty_score=15.0,
+            invalidation_risk_coefficient=0.80,
+            threats_detected=["Heavy resistance pool resting ahead"],
+            threat_price_level=2420.0
+        )
+
+        decision = dec_engine.evaluate(
+            context=ctx,
+            regime=regime,
+            analyst_reports={},
+            devil_report=devil_rep,
+            account_balance=10000.0
+        )
+
+        self.assertLess(decision.take_profit, 2420.0, "TP must be tucked below Devil's Advocate threat level 2420.0")
+        self.assertGreater(decision.take_profit, 2415.0, "TP must be tucked just inside threat level (e.g. 2419.0)")
+
 if __name__ == '__main__':
     unittest.main()
+

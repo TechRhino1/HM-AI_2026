@@ -142,6 +142,23 @@ class DevilAdvocateAnalyst:
             invalidation_triggers.append(f"H1 candle close above supply zone {st.supply_zone[1]}.")
             invalidation_triggers.append("Bullish displacement breaking recent swing high.")
 
+        # Concrete obstacle / threat price level detection (§B-5)
+        threat_price_level = None
+        if is_buy:
+            if st.supply_zone[0] > context.current_price:
+                threat_price_level = st.supply_zone[0]
+            elif hasattr(st, "key_levels") and st.key_levels:
+                res_levels = [kl["price"] for kl in st.key_levels if kl.get("price", 0) > context.current_price]
+                if res_levels:
+                    threat_price_level = min(res_levels)
+        else:
+            if st.demand_zone[1] > 0 and st.demand_zone[1] < context.current_price:
+                threat_price_level = st.demand_zone[1]
+            elif hasattr(st, "key_levels") and st.key_levels:
+                sup_levels = [kl["price"] for kl in st.key_levels if 0 < kl.get("price", 0) < context.current_price]
+                if sup_levels:
+                    threat_price_level = max(sup_levels)
+
         # Critique Confidence based on context quality & data completeness
         critique_conf = round(max(0.40, min(1.0, (context.context_quality / 100.0))), 2)
 
@@ -161,6 +178,7 @@ class DevilAdvocateAnalyst:
             threats_detected=threats,
             invalidation_triggers=invalidation_triggers,
             liquidity_traps=traps,
+            threat_price_level=threat_price_level,
             critique_confidence=critique_conf,
             correlated_threats=correlated_threats,
             execution_time_ms=round(elapsed, 2)
