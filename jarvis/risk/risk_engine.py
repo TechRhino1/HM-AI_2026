@@ -90,7 +90,8 @@ class RiskEngine:
                     "reasons": rejection_reasons
                 }
 
-            # 6. Position Sizing with Conviction Scaling (B4-WIRING)
+            # 6. Position Sizing with Conviction & Evidence Scaling (B4 / P3 WIRING)
+            sample_size = getattr(decision, "pattern_sample_size", 0)
             lots = self.position_sizer.calculate_lot_size(
                 account_balance=account.equity,
                 entry_price=decision.entry_price,
@@ -98,7 +99,8 @@ class RiskEngine:
                 risk_pct=self.max_risk_per_trade_pct,
                 symbol_info=symbol_info,
                 invalidation_risk_coefficient=1.0 - (decision.adversarial_penalty / 60.0),
-                model_confidence=decision.model_confidence
+                model_confidence=decision.model_confidence,
+                pattern_sample_size=sample_size
             )
 
             # Before returning authorized=True, double check circuit breaker and drawdown

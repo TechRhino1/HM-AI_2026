@@ -393,7 +393,6 @@ class JarvisOrchestrator:
                             # Calculate directional win probability
                             win_p = d.probabilities.get(d.bias.lower(), d.model_confidence) if d.bias in ["BUY", "SELL"] else d.model_confidence
                             
-                            from jarvis.market.sessions import SessionEngine
                             mkt_status = SessionEngine.get_market_trading_status(sym)
                             is_mkt_open = mkt_status.get("is_open", True)
 

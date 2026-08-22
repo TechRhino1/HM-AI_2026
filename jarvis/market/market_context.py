@@ -69,8 +69,18 @@ class MarketContextEngine:
         # 4. Multi-Factor Momentum Analysis
         momentum = self.momentum_engine.analyze_momentum(df_primary)
 
-        # 5. Session Timing Context
-        session = SessionEngine.get_current_session()
+        # 5. Session Timing Context (Use bar timestamp if available, else current wall time)
+        bar_timestamp = datetime.now(timezone.utc)
+        if not df_primary.empty and "timestamp" in df_primary.columns:
+            raw_ts = df_primary["timestamp"].iloc[-1]
+            if isinstance(raw_ts, datetime):
+                bar_timestamp = raw_ts if raw_ts.tzinfo else raw_ts.replace(tzinfo=timezone.utc)
+            elif isinstance(raw_ts, pd.Timestamp):
+                bar_timestamp = raw_ts.to_pydatetime()
+                if not bar_timestamp.tzinfo:
+                    bar_timestamp = bar_timestamp.replace(tzinfo=timezone.utc)
+
+        session = SessionEngine.get_current_session(bar_timestamp)
 
         # 6. Multi-Timeframe Alignment Matrix & Top-Down Weighted Score
         mtf_alignment = {}
@@ -117,7 +127,7 @@ class MarketContextEngine:
 
         return MarketContext(
             symbol=symbol,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=bar_timestamp,
             current_price=latest_close,
             bid=bid,
             ask=ask,

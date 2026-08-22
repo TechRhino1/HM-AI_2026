@@ -16,7 +16,8 @@ class PositionSizer:
         invalidation_risk_coefficient: float = 1.0,
         atr_ratio: float = 1.0,
         current_drawdown_pct: float = 0.0,
-        model_confidence: float = 0.60
+        model_confidence: float = 0.60,
+        pattern_sample_size: int = 0
     ) -> float:
         risk_distance = abs(entry_price - sl_price)
         if risk_distance <= 0 or account_balance <= 0:
@@ -37,8 +38,23 @@ class PositionSizer:
         # Conviction scaling: high conviction (>=75%) scales up to 1.35x; marginal confidence (<55%) scales down to 0.70x
         conviction_factor = max(0.70, min(1.35, (model_confidence / 0.60)))
 
-        # Adjusted risk percent incorporating Devil's Advocate coefficient and conviction scaling
-        effective_risk_pct = max(0.1, min(2.0, risk_pct * invalidation_risk_coefficient * conviction_factor))
+        # P3: Dedicated Evidence Strength / Sample Size Scaling
+        # Well-evidenced patterns (N>=30) get a modest boost; thinly evidenced (N=3-4) receive a slight caution buffer
+        if pattern_sample_size >= 30:
+            evidence_factor = 1.10
+        elif pattern_sample_size >= 15:
+            evidence_factor = 1.05
+        elif pattern_sample_size >= 5:
+            evidence_factor = 1.00
+        elif pattern_sample_size >= 3:
+            evidence_factor = 0.90
+        else:
+            evidence_factor = 1.00
+
+        combined_scaler = max(0.65, min(1.40, conviction_factor * evidence_factor))
+
+        # Adjusted risk percent incorporating Devil's Advocate coefficient and combined conviction/evidence scaling
+        effective_risk_pct = max(0.1, min(2.0, risk_pct * invalidation_risk_coefficient * combined_scaler))
         risk_amount_dollars = account_balance * (effective_risk_pct / 100.0)
 
         contract_size = symbol_info.get("trade_contract_size", 100000.0) if symbol_info else 100000.0

@@ -85,35 +85,58 @@ class DecisionEngine:
         digits = spec.digits
         atr = vol.atr if vol.atr > 0 else (c_price * 0.005)
 
+        # §P2, §P5 & §B-1: Regime & Conviction Adaptive SL, TP & Partial Profit Scaling
+        is_strong_trend = (
+            regime.primary_regime in (MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR)
+            and getattr(regime, "confidence", 0.0) > 0.75
+            and getattr(context.momentum, "adx", 0.0) > 25.0
+        )
+        is_ranging = regime.primary_regime in (MarketRegime.RANGE, MarketRegime.LOW_VOLATILITY)
+        is_breakout = regime.primary_regime in (MarketRegime.BREAKOUT, MarketRegime.HIGH_VOLATILITY)
+
+        if is_strong_trend:
+            sl_default_mult = 1.3       # Shallow pullbacks in strong trends: tighter structure-anchored SL
+            sl_min_bound_mult = 0.6     # Tighter lower bound
+            sl_max_bound_mult = 2.5     # Tighter upper bound
+            sl_buffer_mult = 0.15       # Tighter structural buffer
+            tp_multiplier = 3.5         # Strong confirmed trend — let winners run
+            first_target_volume_pct = 0.30  # 30% first scale-out, 70% rides to extended target
+        elif is_ranging:
+            sl_default_mult = 1.6       # Safe structural buffer outside chop
+            sl_min_bound_mult = 0.8
+            sl_max_bound_mult = 3.5
+            sl_buffer_mult = 0.25
+            tp_multiplier = 1.8         # Target internal range liquidity
+            first_target_volume_pct = 0.60  # 60% locked in quickly inside range
+        elif is_breakout:
+            sl_default_mult = 1.6
+            sl_min_bound_mult = 0.75
+            sl_max_bound_mult = 3.5
+            sl_buffer_mult = 0.20
+            tp_multiplier = 2.8         # Momentum expansion target
+            first_target_volume_pct = 0.50  # 50/50 balanced split
+        else:
+            sl_default_mult = 1.8
+            sl_min_bound_mult = 0.8
+            sl_max_bound_mult = 4.0
+            sl_buffer_mult = 0.20
+            tp_multiplier = 2.5         # Default baseline institutional R:R
+            first_target_volume_pct = 0.50
+
         if tentative_bias == "BUY":
             entry_price = round(context.ask, digits)
-            # §5 & §6: Structural SL with ±0.2 ATR buffer and [0.8*ATR, 4.0*ATR] sanity bounds
+            # Structural SL with regime-adaptive buffer and bounds
             if st.demand_zone[0] > 0 and entry_price > st.demand_zone[0]:
-                struct_sl_dist = entry_price - (st.demand_zone[0] - (atr * 0.2))
-                if (0.8 * atr) <= struct_sl_dist <= (4.0 * atr):
+                struct_sl_dist = entry_price - (st.demand_zone[0] - (atr * sl_buffer_mult))
+                if (sl_min_bound_mult * atr) <= struct_sl_dist <= (sl_max_bound_mult * atr):
                     sl_dist = struct_sl_dist
                 else:
-                    sl_dist = atr * 1.8
+                    sl_dist = atr * sl_default_mult
             else:
-                sl_dist = atr * 1.8
+                sl_dist = atr * sl_default_mult
 
             sl_price = round(entry_price - sl_dist, digits)
             risk_dist = abs(entry_price - sl_price)
-
-            # §B-1: Regime & Conviction Adaptive TP Multiplier
-            is_strong_trend = (
-                regime.primary_regime in (MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR)
-                and getattr(regime, "confidence", 0.0) > 0.75
-                and getattr(context.momentum, "adx", 0.0) > 25.0
-            )
-            if is_strong_trend:
-                tp_multiplier = 3.5  # Strong, confirmed trend — let winners run
-            elif regime.primary_regime == MarketRegime.RANGE:
-                tp_multiplier = 1.8  # Ranging market — take profit closer inside range
-            elif regime.primary_regime in (MarketRegime.BREAKOUT, MarketRegime.HIGH_VOLATILITY):
-                tp_multiplier = 2.8  # Momentum expansion
-            else:
-                tp_multiplier = 2.5  # Default baseline institutional R:R
 
             flat_tp_dist = risk_dist * tp_multiplier
             struct_target_dist = 0.0
@@ -144,37 +167,21 @@ class DecisionEngine:
                 first_target_price = round(entry_price + struct_target_dist, digits)
             else:
                 first_target_price = round(entry_price + (risk_dist * 1.0), digits)
-            first_target_volume_pct = 0.50
 
         elif tentative_bias == "SELL":
             entry_price = round(context.bid, digits)
-            # §5 & §6: Structural SL with ±0.2 ATR buffer and [0.8*ATR, 4.0*ATR] sanity bounds
+            # Structural SL with regime-adaptive buffer and bounds
             if st.supply_zone[1] > 0 and st.supply_zone[1] > entry_price:
-                struct_sl_dist = (st.supply_zone[1] + (atr * 0.2)) - entry_price
-                if (0.8 * atr) <= struct_sl_dist <= (4.0 * atr):
+                struct_sl_dist = (st.supply_zone[1] + (atr * sl_buffer_mult)) - entry_price
+                if (sl_min_bound_mult * atr) <= struct_sl_dist <= (sl_max_bound_mult * atr):
                     sl_dist = struct_sl_dist
                 else:
-                    sl_dist = atr * 1.8
+                    sl_dist = atr * sl_default_mult
             else:
-                sl_dist = atr * 1.8
+                sl_dist = atr * sl_default_mult
 
             sl_price = round(entry_price + sl_dist, digits)
             risk_dist = abs(sl_price - entry_price)
-
-            # §B-1: Regime & Conviction Adaptive TP Multiplier
-            is_strong_trend = (
-                regime.primary_regime in (MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR)
-                and getattr(regime, "confidence", 0.0) > 0.75
-                and getattr(context.momentum, "adx", 0.0) > 25.0
-            )
-            if is_strong_trend:
-                tp_multiplier = 3.5  # Strong, confirmed trend — let winners run
-            elif regime.primary_regime == MarketRegime.RANGE:
-                tp_multiplier = 1.8  # Ranging market — take profit closer inside range
-            elif regime.primary_regime in (MarketRegime.BREAKOUT, MarketRegime.HIGH_VOLATILITY):
-                tp_multiplier = 2.8  # Momentum expansion
-            else:
-                tp_multiplier = 2.5  # Default baseline institutional R:R
 
             flat_tp_dist = risk_dist * tp_multiplier
             struct_target_dist = 0.0
@@ -205,37 +212,35 @@ class DecisionEngine:
                 first_target_price = round(entry_price - struct_target_dist, digits)
             else:
                 first_target_price = round(entry_price - (risk_dist * 1.0), digits)
-            first_target_volume_pct = 0.50
         else:
             # When bias is HOLD / MONITOR, compute a valid structural reference bracket
             # based on prevailing structure/momentum rather than setting SL=TP=entry.
             is_bear_tilt = (st.bias == "BEARISH") or (getattr(context.momentum, "trend_score", 0.0) < 0)
             if is_bear_tilt:
                 entry_price = round(context.bid, digits)
-                sl_dist = atr * 1.8
+                sl_dist = atr * sl_default_mult
                 if st.supply_zone[1] > entry_price:
-                    candidate_dist = (st.supply_zone[1] + (atr * 0.2)) - entry_price
-                    if (0.8 * atr) <= candidate_dist <= (4.0 * atr):
+                    candidate_dist = (st.supply_zone[1] + (atr * sl_buffer_mult)) - entry_price
+                    if (sl_min_bound_mult * atr) <= candidate_dist <= (sl_max_bound_mult * atr):
                         sl_dist = candidate_dist
                 sl_price = round(entry_price + sl_dist, digits)
                 risk_dist = abs(sl_price - entry_price)
-                tp_dist = risk_dist * 2.0
+                tp_dist = risk_dist * tp_multiplier
                 tp_price = round(entry_price - tp_dist, digits)
             else:
                 entry_price = round(context.ask, digits)
-                sl_dist = atr * 1.8
+                sl_dist = atr * sl_default_mult
                 if st.demand_zone[0] > 0 and entry_price > st.demand_zone[0]:
-                    candidate_dist = entry_price - (st.demand_zone[0] - (atr * 0.2))
-                    if (0.8 * atr) <= candidate_dist <= (4.0 * atr):
+                    candidate_dist = entry_price - (st.demand_zone[0] - (atr * sl_buffer_mult))
+                    if (sl_min_bound_mult * atr) <= candidate_dist <= (sl_max_bound_mult * atr):
                         sl_dist = candidate_dist
                 sl_price = round(entry_price - sl_dist, digits)
                 risk_dist = abs(entry_price - sl_price)
-                tp_dist = risk_dist * 2.0
+                tp_dist = risk_dist * tp_multiplier
                 tp_price = round(entry_price + tp_dist, digits)
 
             rr_ratio = round(tp_dist / (risk_dist + 1e-9), 2)
             first_target_price = None
-            first_target_volume_pct = 0.50
 
         return tentative_bias, entry_price, sl_price, tp_price, risk_dist, rr_ratio, first_target_price, first_target_volume_pct
 
@@ -342,7 +347,7 @@ class DecisionEngine:
             effective_min_ev *= 0.7
 
         from jarvis.market.sessions import SessionEngine
-        mkt_status = SessionEngine.get_market_trading_status(context.symbol)
+        mkt_status = SessionEngine.get_market_trading_status(context.symbol, dt=getattr(context, "timestamp", None))
         is_mkt_open = mkt_status.get("is_open", True)
 
         # 15-Point Comprehensive Institutional Quality Gate Matrix
@@ -497,7 +502,7 @@ class DecisionEngine:
         )
         
         from jarvis.market.sessions import SessionEngine
-        mkt_status = SessionEngine.get_market_trading_status(context.symbol)
+        mkt_status = SessionEngine.get_market_trading_status(context.symbol, dt=getattr(context, "timestamp", None))
         is_mkt_open = mkt_status.get("is_open", True)
 
         gate_passed = quality_gate.passed
@@ -610,5 +615,6 @@ class DecisionEngine:
             rejection_reasons=rejection_reasons,
             decision=decision_action,
             execution_authorized=gate_passed,
-            context=context
+            context=context,
+            pattern_sample_size=pattern_memory.get("sample_size", 0) if "pattern_memory" in locals() and pattern_memory else 0
         )

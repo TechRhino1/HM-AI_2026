@@ -223,6 +223,7 @@ class DecisionObject:
     context: Optional[MarketContext] = None
     first_target_price: Optional[float] = None
     first_target_volume_pct: float = 0.50
+    pattern_sample_size: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -241,6 +242,7 @@ class DecisionObject:
             "take_profit": self.take_profit,
             "first_target_price": self.first_target_price,
             "first_target_volume_pct": self.first_target_volume_pct,
+            "pattern_sample_size": self.pattern_sample_size,
             "sl_distance": self.sl_distance,
             "tp_distance": self.tp_distance,
             "risk_reward_ratio": self.risk_reward_ratio,

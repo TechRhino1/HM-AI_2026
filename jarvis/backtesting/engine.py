@@ -126,8 +126,8 @@ class BacktestEngine:
                 context = self.context_engine.build_context(symbol, mtf_dict, current_spread_pips=spread_pips)
                 regime = self.regime_classifier.classify_regime(context)
 
-                # Parallel analysts with dynamic tentative bias
-                tentative_bias = "BUY" if context.structure.bias == "BULLISH" else ("SELL" if context.structure.bias == "BEARISH" else "HOLD")
+                # Parallel analysts with dynamic directional hypothesis
+                tentative_bias = "BUY" if context.structure.bias == "BULLISH" else ("SELL" if context.structure.bias == "BEARISH" else ("SELL" if getattr(context.momentum, "trend_score", 0.0) < 0 else "BUY"))
                 analyst_reports, devil_report = self.analyst_cluster.run_all_parallel(context, regime, tentative_bias)
                 decision = self.decision_engine.evaluate(
                     context, regime, analyst_reports, devil_report, account_balance=balance, risk_per_trade_pct=self.risk_per_trade_pct

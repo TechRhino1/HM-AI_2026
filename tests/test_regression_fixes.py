@@ -688,7 +688,7 @@ class TestRegressionFixes(unittest.TestCase):
             range_ctx, range_regime, {}
         )
 
-        self.assertEqual(risk_trend, risk_range, "Baseline risk distance must be identical for fair comparison")
+        self.assertLessEqual(risk_trend, risk_range, "Strong trend SL should be tighter or equal to ranging SL (P2 Adaptive SL)")
         self.assertGreater(rr_trend, rr_range, "Strong trend R:R must exceed ranging regime R:R")
         self.assertAlmostEqual(rr_trend, 3.5, delta=0.1, msg="Strong trend must achieve ~3.5R TP multiplier")
         self.assertAlmostEqual(rr_range, 1.8, delta=0.1, msg="Ranging market must achieve ~1.8R TP multiplier")
@@ -804,6 +804,52 @@ class TestRegressionFixes(unittest.TestCase):
 
         self.assertLess(decision.take_profit, 2420.0, "TP must be tucked below Devil's Advocate threat level 2420.0")
         self.assertGreater(decision.take_profit, 2415.0, "TP must be tucked just inside threat level (e.g. 2419.0)")
+
+    def test_p3_evidence_strength_position_sizing(self):
+        """P3-SIZING: Verify PositionSizer scales sizing based on pattern sample size / evidence strength."""
+        sym_info = {"name": "EURUSD", "trade_contract_size": 100000.0, "volume_min": 0.01, "volume_max": 100.0, "volume_step": 0.01}
+        
+        # Test sizing with equal 60% confidence across varying sample sizes
+        lots_thin = PositionSizer.calculate_lot_size(
+            account_balance=10000.0, entry_price=1.1000, sl_price=1.0950, risk_pct=1.0,
+            symbol_info=sym_info, model_confidence=0.60, pattern_sample_size=3
+        )
+        lots_baseline = PositionSizer.calculate_lot_size(
+            account_balance=10000.0, entry_price=1.1000, sl_price=1.0950, risk_pct=1.0,
+            symbol_info=sym_info, model_confidence=0.60, pattern_sample_size=10
+        )
+        lots_strong = PositionSizer.calculate_lot_size(
+            account_balance=10000.0, entry_price=1.1000, sl_price=1.0950, risk_pct=1.0,
+            symbol_info=sym_info, model_confidence=0.60, pattern_sample_size=50
+        )
+
+        self.assertLessEqual(lots_thin, lots_baseline, "Thin sample size (N=3) must size conservatively")
+        self.assertGreaterEqual(lots_strong, lots_baseline, "Strong sample size (N=50) must receive modest evidence boost")
+
+    def test_p5_regime_aware_partial_close_pct(self):
+        """P5-PARTIAL: Verify first_target_volume_pct is regime-adaptive (30% in strong trend vs 60% in range)."""
+        dec_engine = DecisionEngine()
+        trend_ctx = MarketContext(
+            symbol="XAUUSD", timestamp=datetime.now(timezone.utc), current_price=2400.0, bid=2399.8, ask=2400.2,
+            structure=StructureContext(bias="BULLISH", choch=True, choch_type="BULLISH"),
+            liquidity=LiquidityContext(), volatility=VolatilityContext(atr=10.0),
+            momentum=MomentumContext(trend_score=80.0, adx=35.0), session=SessionContext(is_prime_session=True)
+        )
+        trend_regime = RegimeOutput(primary_regime=MarketRegime.TREND_BULL, probabilities={}, confidence=0.90)
+
+        range_ctx = MarketContext(
+            symbol="XAUUSD", timestamp=datetime.now(timezone.utc), current_price=2400.0, bid=2399.8, ask=2400.2,
+            structure=StructureContext(bias="BULLISH"),
+            liquidity=LiquidityContext(), volatility=VolatilityContext(atr=10.0),
+            momentum=MomentumContext(trend_score=10.0, adx=14.0), session=SessionContext(is_prime_session=True)
+        )
+        range_regime = RegimeOutput(primary_regime=MarketRegime.RANGE, probabilities={}, confidence=0.80)
+
+        _, _, _, _, _, _, _, trend_vol_pct = dec_engine._compute_bias_and_levels(trend_ctx, trend_regime, {})
+        _, _, _, _, _, _, _, range_vol_pct = dec_engine._compute_bias_and_levels(range_ctx, range_regime, {})
+
+        self.assertEqual(trend_vol_pct, 0.30, "Strong trend should take 30% first partial, letting 70% ride runner")
+        self.assertEqual(range_vol_pct, 0.60, "Ranging market should take 60% first partial to lock profits quickly")
 
 if __name__ == '__main__':
     unittest.main()

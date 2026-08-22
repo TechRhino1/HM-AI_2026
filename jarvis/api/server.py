@@ -19,6 +19,7 @@ from jarvis.api.copilot import JarvisCopilot
 from jarvis.execution.mt5_client import MT5Client
 from jarvis.data.schemas import ExecutionMode
 from jarvis.data.symbol_registry import resolve as resolve_symbol
+from jarvis.market.sessions import SessionEngine
 
 logger = logging.getLogger("JARVIS_WebServer")
 
@@ -75,7 +76,6 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                             d = de.evaluate(ctx, regime, reports, devil, account_balance=account.equity, mtf_data=mtf)
                             cls.state_manager.record_decision(sym, d)
 
-                            from jarvis.market.sessions import SessionEngine
                             mkt_status = SessionEngine.get_market_trading_status(sym)
                             is_mkt_open = mkt_status.get("is_open", True)
 
