@@ -393,20 +393,26 @@ class JarvisOrchestrator:
                             # Calculate directional win probability
                             win_p = d.probabilities.get(d.bias.lower(), d.model_confidence) if d.bias in ["BUY", "SELL"] else d.model_confidence
                             
-                            # Standardized Status Classification (Requirement 8)
-                            if d.decision == "EXECUTE":
+                            from jarvis.market.sessions import SessionEngine
+                            mkt_status = SessionEngine.get_market_trading_status(sym)
+                            is_mkt_open = mkt_status.get("is_open", True)
+
+                            # Standardized Status Classification (Always showing Directional Bias)
+                            if not is_mkt_open:
+                                status_label = "MARKET CLOSED"
+                            elif d.decision == "EXECUTE":
                                 status_label = f"{d.bias} READY"
                             elif d.decision == "WAIT" and d.bias in ["BUY", "SELL"]:
                                 status_label = f"WAIT: {d.bias}"
                             elif d.decision == "NO_TRADE":
                                 if not d.quality_gate.passed and any("Invalid" in r or "Devil" in r or "Adversarial" in r for r in d.quality_gate.failing_reasons):
-                                    status_label = "TRADE INVALIDATED"
+                                    status_label = f"INVALID: {d.bias}" if d.bias in ["BUY", "SELL"] else "TRADE INVALIDATED"
                                 elif d.bias in ["BUY", "SELL"]:
-                                    status_label = "NO TRADE"
+                                    status_label = f"NO TRADE: {d.bias}"
                                 else:
                                     status_label = "NO SETUP"
-                            elif d.bias == "HOLD" or not d.strategy:
-                                status_label = "NO SETUP"
+                            elif d.bias in ["BUY", "SELL"]:
+                                status_label = f"WAIT: {d.bias}"
                             else:
                                 status_label = "NO SETUP"
 

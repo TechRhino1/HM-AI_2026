@@ -68,8 +68,18 @@ class DecisionEngine:
             tentative_bias = "SELL"
         elif bull_votes > bear_votes and bull_votes >= 2:
             tentative_bias = "BUY"
+        elif bear_votes > bull_votes:
+            tentative_bias = "SELL"
+        elif bull_votes > bear_votes:
+            tentative_bias = "BUY"
+        elif st.bias == "BEARISH":
+            tentative_bias = "SELL"
+        elif st.bias == "BULLISH":
+            tentative_bias = "BUY"
+        elif getattr(context.momentum, "trend_score", 0.0) < 0:
+            tentative_bias = "SELL"
         else:
-            tentative_bias = "HOLD"
+            tentative_bias = "BUY"
 
         spec = resolve_symbol(context.symbol)
         digits = spec.digits
@@ -378,8 +388,8 @@ class DecisionEngine:
         )
 
         # §B-5: Devil's Advocate Threat Feedback Adjustment
-        if devil_report and getattr(devil_report, "threat_price_level", None):
-            threat_lvl = devil_report.threat_price_level
+        threat_lvl = getattr(devil_report, "threat_price_level", None) if devil_report else None
+        if threat_lvl is not None and isinstance(threat_lvl, (int, float)) and threat_lvl > 0:
             spec = resolve_symbol(context.symbol)
             atr_val = context.volatility.atr if context.volatility.atr > 0 else (entry_price * 0.005)
             if tentative_bias == "BUY" and entry_price < threat_lvl < tp_price:

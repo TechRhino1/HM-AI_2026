@@ -88,11 +88,13 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                                 status_label = f"WAIT: {d.bias}"
                             elif d.decision == "NO_TRADE":
                                 if not d.quality_gate.passed and any("Invalid" in r or "Devil" in r or "Adversarial" in r for r in d.quality_gate.failing_reasons):
-                                    status_label = "TRADE INVALIDATED"
+                                    status_label = f"INVALID: {d.bias}" if d.bias in ["BUY", "SELL"] else "TRADE INVALIDATED"
                                 elif d.bias in ["BUY", "SELL"]:
-                                    status_label = "NO TRADE"
+                                    status_label = f"NO TRADE: {d.bias}"
                                 else:
                                     status_label = "NO SETUP"
+                            elif d.bias in ["BUY", "SELL"]:
+                                status_label = f"WAIT: {d.bias}"
                             else:
                                 status_label = "NO SETUP"
 
@@ -122,7 +124,7 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                                 "rejection_reasons": getattr(d, "rejection_reasons", [])
                             })
                         except Exception as e_sym:
-                            logger.debug(f"Radar sweep error for {sym}: {e_sym}")
+                            logger.error(f"Radar sweep error for {sym}: {e_sym}", exc_info=True)
 
                     if radar_results:
                         def _radar_sort_key(item):
@@ -144,7 +146,7 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                         cls.state_manager.update_radar(radar_results)
 
                 except Exception as e:
-                    logger.debug(f"Background telemetry sync error: {e}")
+                    logger.error(f"Background telemetry sync error: {e}", exc_info=True)
 
                 time.sleep(3.0)
 

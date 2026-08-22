@@ -585,28 +585,40 @@
             return { label: "🔒 CLOSED", cssClass: "badge-market-closed", dotColor: "#ff5277" };
         }
 
-        const action = item.action || item.status_label || item.decision || "WAIT";
-        const bias = item.bias || "NEUTRAL";
-        const gatePassed = item.gate_passed !== undefined ? item.gate_passed : (item.quality_gate ? item.quality_gate.passed : false);
+        const action = (item.action || item.status_label || item.decision || "WAIT").toUpperCase();
+        let bias = (item.bias || "").toUpperCase();
+        if (!bias || bias === "HOLD" || bias === "NEUTRAL") {
+            if (action.includes("BUY") || (item.entry_price && item.stop_loss && item.entry_price > item.stop_loss)) {
+                bias = "BUY";
+            } else if (action.includes("SELL") || (item.entry_price && item.stop_loss && item.entry_price < item.stop_loss)) {
+                bias = "SELL";
+            }
+        }
+        const dir = (bias === "BUY" || bias === "SELL") ? bias : "";
         const failing = item.failing_reasons || (item.quality_gate ? item.quality_gate.failing_reasons : []);
         
-        if (action.includes("READY") || action === "BUY READY" || (item.decision === "EXECUTE" && bias === "BUY")) {
+        if (action.includes("BUY READY") || (item.decision === "EXECUTE" && bias === "BUY")) {
             return { label: "BUY READY", cssClass: "badge-ready-buy", dotColor: "var(--neon-bull)" };
         }
-        if (action.includes("READY") || action === "SELL READY" || (item.decision === "EXECUTE" && bias === "SELL")) {
+        if (action.includes("SELL READY") || (item.decision === "EXECUTE" && bias === "SELL")) {
             return { label: "SELL READY", cssClass: "badge-ready-sell", dotColor: "var(--neon-bear)" };
         }
-        if (action === "WAIT: BUY" || (item.decision === "WAIT" && bias === "BUY")) {
+        if (action.includes("WAIT: BUY") || (item.decision === "WAIT" && bias === "BUY")) {
             return { label: "WAIT: BUY", cssClass: "badge-wait-buy", dotColor: "var(--devil-amber)" };
         }
-        if (action === "WAIT: SELL" || (item.decision === "WAIT" && bias === "SELL")) {
+        if (action.includes("WAIT: SELL") || (item.decision === "WAIT" && bias === "SELL")) {
             return { label: "WAIT: SELL", cssClass: "badge-wait-sell", dotColor: "var(--devil-amber)" };
         }
-        if (action === "TRADE INVALIDATED" || failing.some(r => r.includes("Invalid") || r.includes("Devil") || r.includes("Adversarial"))) {
-            return { label: "TRADE INVALIDATED", cssClass: "badge-invalidated", dotColor: "#c084fc" };
+        if (action.includes("INVALID") || failing.some(r => r.includes("Invalid") || r.includes("Devil") || r.includes("Adversarial"))) {
+            const label = dir ? `INVALID: ${dir}` : "TRADE INVALIDATED";
+            return { label: label, cssClass: "badge-invalidated", dotColor: "#c084fc" };
         }
-        if (action === "NO TRADE" || item.decision === "NO_TRADE") {
-            return { label: "NO TRADE", cssClass: "badge-no-trade", dotColor: "var(--text-dim)" };
+        if (action.includes("NO TRADE") || item.decision === "NO_TRADE") {
+            const label = dir ? `NO TRADE: ${dir}` : "NO TRADE";
+            return { label: label, cssClass: "badge-no-trade", dotColor: "var(--text-dim)" };
+        }
+        if (dir) {
+            return { label: `WAIT: ${dir}`, cssClass: "badge-no-setup", dotColor: "#475569" };
         }
         return { label: "NO SETUP", cssClass: "badge-no-setup", dotColor: "#475569" };
     }
@@ -1330,7 +1342,8 @@
         const stratName = d.strategy || "MARKET_STRUCTURE";
 
         // 1. Update 1-Click Execution Desk Summary Banner
-        if (el.deskBannerTitle) el.deskBannerTitle.textContent = `${sym} — ${d.bias || 'WAIT'} / ${d.bias === 'SELL' ? 'SHORT' : (d.bias === 'BUY' ? 'LONG' : 'MONITOR')}`;
+        const dirDesc = (d.bias === "SELL" || d.bias === "SHORT") ? "SELL / SHORT" : ((d.bias === "BUY" || d.bias === "LONG") ? "BUY / LONG" : "MONITOR");
+        if (el.deskBannerTitle) el.deskBannerTitle.textContent = `${sym} — ${dirDesc}`;
         if (el.deskBannerStatus) {
             el.deskBannerStatus.textContent = badge.label;
             el.deskBannerStatus.className = `radar-action-pill ${badge.cssClass}`;
@@ -1343,7 +1356,10 @@
         if (el.deskBannerProb) el.deskBannerProb.textContent = `${probPct}%`;
 
         // 2. Populate Trade Plan Card
-        if (el.planStrategyPill) el.planStrategyPill.textContent = stratName;
+        if (el.planStrategyPill) {
+            el.planStrategyPill.textContent = `${stratName} • ${d.bias || 'BUY'}`;
+            el.planStrategyPill.style.color = d.bias === 'SELL' ? 'var(--neon-bear)' : 'var(--neon-bull)';
+        }
         if (el.planEntry) el.planEntry.textContent = entryStr;
         if (el.planSl) el.planSl.textContent = slStr;
         if (el.planTp) el.planTp.textContent = tpStr;
