@@ -31,6 +31,8 @@ from jarvis.execution.execution_engine import ExecutionEngine
 from jarvis.application.state_manager import StateManager
 from jarvis.intelligence.decision_engine import DecisionEngine
 from jarvis.risk.risk_engine import RiskEngine
+from jarvis.application.orchestrator import JarvisOrchestrator
+from jarvis.intelligence.regime_engine import MarketRegimeClassifier
 
 class TestRegressionFixes(unittest.TestCase):
     def test_a1_log_trade_timezone_iso(self):
@@ -420,6 +422,149 @@ class TestRegressionFixes(unittest.TestCase):
             current_drawdown_pct=2.0
         )
         self.assertTrue(dec_normal_dd.quality_gate.checks["Drawdown Safety Guard"], "Drawdown Safety Guard must pass at 2% DD")
+
+    def test_d1_online_ml_and_trade_memory_learning_loop(self):
+        """D1-LEARNING: Verify orchestrator populates _pending_features, journals trade, and updates ML on trade close."""
+        orch = JarvisOrchestrator(mode="paper")
+
+        orch.mt5_client.get_account_snapshot = MagicMock(return_value=AccountSnapshot(
+            login=123, server="Test", balance=10000.0, equity=10000.0, margin=0.0,
+            free_margin=10000.0, margin_level=0.0, leverage=100, trade_allowed=True
+        ))
+
+        mock_decision = DecisionObject(
+            symbol="XAUUSD",
+            timestamp=datetime.now(timezone.utc),
+            regime=RegimeOutput(primary_regime=MarketRegime.TREND_BULL, probabilities={"TREND_BULL": 0.8}, confidence=0.8),
+            bias="BUY",
+            probabilities={"buy": 0.85},
+            strategy="MOMENTUM_BREAKOUT",
+            entry_price=2400.0,
+            stop_loss=2390.0,
+            take_profit=2425.0,
+            risk_reward_ratio=2.5,
+            calculated_risk_percent=0.5,
+            expected_value=25.0,
+            model_confidence=0.85,
+            adversarial_penalty=5.0,
+            invalidation_levels=[],
+            bull_case=[],
+            bear_case=[],
+            risk_factors=[],
+            quality_gate=TradeQualityGateResult(passed=True, checks={}),
+            decision="EXECUTE",
+            execution_authorized=True
+        )
+        orch.decision_engine.evaluate = MagicMock(return_value=mock_decision)
+
+        orch.execution_engine.execute_decision = MagicMock(return_value={
+            "status": "FILLED",
+            "ticket": 999333,
+            "price": 2400.0,
+            "sl": 2390.0,
+            "tp": 2425.0
+        })
+
+        # Run cycle for symbol
+        res = orch.run_cycle_for_symbol("XAUUSD")
+        self.assertEqual(res.get("execution", {}).get("status"), "FILLED")
+
+        # 1. Assert _pending_features populated
+        self.assertIn(999333, orch._pending_features, "Ticket 999333 must be cached in _pending_features")
+        self.assertIn("features", orch._pending_features[999333])
+        self.assertEqual(orch._pending_features[999333]["strategy"], "MOMENTUM_BREAKOUT")
+
+        # 2. Assert trade_memory recorded trade on entry
+        recent = orch.trade_memory.fetch_recent_trades(1)
+        self.assertTrue(len(recent) > 0, "Trade memory must have recorded the opened trade")
+        self.assertEqual(recent[0].get("ticket"), 999333)
+
+        # 3. Simulate trade close event
+        initial_training_steps = orch.ml_predictor.training_steps
+        orch._on_trade_closed({
+            "ticket": 999333,
+            "symbol": "XAUUSD",
+            "pnl": 50.0,
+            "exit_price": 2420.0,
+            "equity": 10050.0
+        })
+
+        # 4. Assert ML predictor received online update and pending features popped
+        self.assertNotIn(999333, orch._pending_features, "Ticket must be popped from _pending_features after close")
+        self.assertEqual(len(orch.ml_predictor._grad_buffer), 1, "ML grad buffer must record gradient step")
+
+        # After 2 more trade closes (batch_size=3), training_steps increments
+        dummy_feat = orch.ml_predictor.extract_feature_vector(
+            context=MarketContext(symbol="XAUUSD", timestamp=datetime.now(timezone.utc), current_price=2400.0, bid=2399.8, ask=2400.2, structure=StructureContext(bias="BULLISH"), liquidity=LiquidityContext(), volatility=VolatilityContext(), momentum=MomentumContext(), session=SessionContext()),
+            regime=RegimeOutput(primary_regime=MarketRegime.TREND_BULL, probabilities={}, confidence=0.8),
+            tentative_bias="BUY"
+        )
+        orch._pending_features[999334] = {"features": dummy_feat}
+        orch._pending_features[999335] = {"features": dummy_feat}
+        orch._on_trade_closed({"ticket": 999334, "pnl": 20.0, "exit_price": 2410.0, "equity": 10070.0})
+        orch._on_trade_closed({"ticket": 999335, "pnl": -10.0, "exit_price": 2395.0, "equity": 10060.0})
+        self.assertEqual(orch.ml_predictor.training_steps, initial_training_steps + 1, "ML training_steps must increment when mini-batch completes")
+
+        # 5. Assert trade_memory row was updated with exit metrics
+        closed_rows = [t for t in orch.trade_memory.fetch_recent_trades(1) if t.get("ticket") == 999333]
+        self.assertTrue(len(closed_rows) > 0)
+        self.assertEqual(closed_rows[0].get("exit_price"), 2420.0)
+        self.assertEqual(closed_rows[0].get("is_win"), 1)
+
+    def test_d2_per_symbol_regime_classification_isolation(self):
+        """D2-REGIME: Verify regime classification state is per-symbol and free of cross-contamination."""
+        classifier = MarketRegimeClassifier()
+
+        bull_ctx = MarketContext(
+            symbol="XAUUSD",
+            timestamp=datetime.now(timezone.utc),
+            current_price=2400.0,
+            bid=2399.8,
+            ask=2400.2,
+            structure=StructureContext(bias="BULLISH", higher_highs=True, higher_lows=True, bos=True, bos_type="BULLISH"),
+            liquidity=LiquidityContext(),
+            volatility=VolatilityContext(state="NORMAL"),
+            momentum=MomentumContext(trend_score=80.0, adx=35.0),
+            session=SessionContext(is_prime_session=True)
+        )
+
+        range_ctx = MarketContext(
+            symbol="EURUSD",
+            timestamp=datetime.now(timezone.utc),
+            current_price=1.0850,
+            bid=1.0849,
+            ask=1.0851,
+            structure=StructureContext(bias="RANGING"),
+            liquidity=LiquidityContext(),
+            volatility=VolatilityContext(state="COMPRESSION"),
+            momentum=MomentumContext(trend_score=0.0, adx=12.0),
+            session=SessionContext(is_prime_session=True)
+        )
+
+        # 1. Classify XAUUSD (Initial Bullish)
+        r1_xau = classifier.classify_regime(bull_ctx, previous_regime=None, previous_persistence=0)
+        self.assertEqual(r1_xau.primary_regime, MarketRegime.TREND_BULL)
+        self.assertFalse(r1_xau.regime_transition, "First scan has no transition")
+        self.assertEqual(r1_xau.regime_persistence, 0)
+
+        # 2. Classify EURUSD (Range) in parallel or interleaved
+        r1_eur = classifier.classify_regime(range_ctx, previous_regime=None, previous_persistence=0)
+        self.assertEqual(r1_eur.primary_regime, MarketRegime.RANGE)
+        self.assertFalse(r1_eur.regime_transition, "EURUSD first scan has no transition")
+        self.assertEqual(r1_eur.regime_persistence, 0)
+
+        # 3. Classify XAUUSD again (Still Bullish)
+        # Using XAUUSD's own previous state: (TREND_BULL, 0)
+        r2_xau = classifier.classify_regime(bull_ctx, previous_regime=r1_xau.primary_regime, previous_persistence=r1_xau.regime_persistence)
+        self.assertEqual(r2_xau.primary_regime, MarketRegime.TREND_BULL)
+        self.assertFalse(r2_xau.regime_transition, "XAUUSD must NOT report a transition caused by EURUSD's intervening scan")
+        self.assertEqual(r2_xau.regime_persistence, 1, "XAUUSD persistence must increment to 1")
+
+        # 4. Classify XAUUSD Transition to Range
+        r3_xau = classifier.classify_regime(range_ctx, previous_regime=r2_xau.primary_regime, previous_persistence=r2_xau.regime_persistence)
+        self.assertEqual(r3_xau.primary_regime, MarketRegime.RANGE)
+        self.assertTrue(r3_xau.regime_transition, "XAUUSD must report regime transition when its own regime changes")
+        self.assertEqual(r3_xau.regime_persistence, 0, "Persistence resets on transition")
 
 if __name__ == '__main__':
     unittest.main()

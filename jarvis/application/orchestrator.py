@@ -64,6 +64,10 @@ class JarvisOrchestrator:
         self._last_execution_time: Dict[str, float] = {}
         self._SAME_SYMBOL_COOLDOWN_SEC = 600  # 10 minutes
 
+        # Per-symbol regime tracking to eliminate cross-symbol contamination and race conditions
+        self._regime_state: Dict[str, Dict[str, Any]] = {}
+        self._regime_state_lock = threading.Lock()
+
         self.event_bus.subscribe('trade_closed', self._on_trade_closed)
 
         self.mt5_client = MT5Client(magic_number=magic_number, mode=self.mode)
@@ -144,7 +148,7 @@ class JarvisOrchestrator:
         trade_symbol = pending.get("symbol", data.get("symbol", "")) if pending else data.get("symbol", "")
         self.circuit_breaker.record_trade_result(is_win == 1, symbol=trade_symbol, regime=regime_name)
         if new_equity > 0:
-            self.drawdown_guard.update_equity_benchmarks(new_equity)
+            self.drawdown_guard.update_equity_benchmarks(new_equity, float(data.get("balance", new_equity)))
 
         # 5. Recalibrate confidence curve from recent closed trades (§17)
         all_closed = [t for t in self.trade_memory.fetch_recent_trades(50) if t.get("exit_price", 0) > 0]
@@ -171,8 +175,23 @@ class JarvisOrchestrator:
         )
         self.state_manager.update_market_context(symbol, context)
 
-        # 3. Classify Market Regime
-        regime = self.regime_classifier.classify_regime(context)
+        # 3. Classify Market Regime (thread-safe, isolated per symbol)
+        with self._regime_state_lock:
+            prev = self._regime_state.get(symbol, {})
+            prev_reg = prev.get("prev")
+            prev_persist = prev.get("persist", 0)
+
+        regime = self.regime_classifier.classify_regime(
+            context,
+            previous_regime=prev_reg,
+            previous_persistence=prev_persist
+        )
+
+        with self._regime_state_lock:
+            self._regime_state[symbol] = {
+                "prev": regime.primary_regime,
+                "persist": regime.regime_persistence
+            }
 
         # 4. Dispatch Parallel Analysts + Devil's Advocate
         tentative_bias = "BUY" if context.structure.bias == "BULLISH" else ("SELL" if context.structure.bias == "BEARISH" else "HOLD")
@@ -308,8 +327,7 @@ class JarvisOrchestrator:
                     if exec_res and exec_res.get("status") == "FILLED":
                         self._last_execution_time[canonical_sym] = time.time()
                         logger.info(f"Execution lock released for {canonical_sym}. Cooldown {self._SAME_SYMBOL_COOLDOWN_SEC}s started.")
-        else:
-
+            # Record pending features for online learning and journal entry (§17)
             if exec_res and exec_res.get("status") == "FILLED":
                 ticket = exec_res.get("ticket")
                 fill_price = float(exec_res.get("price", decision.entry_price))
@@ -331,7 +349,8 @@ class JarvisOrchestrator:
                         "regime": regime.primary_regime.value,
                         "entry": fill_price,
                         "sl": actual_sl,
-                        "risk_dist": abs(fill_price - actual_sl)
+                        "risk_dist": abs(fill_price - actual_sl),
+                        "symbol": symbol
                     }
 
                 self.trade_memory.record_trade({

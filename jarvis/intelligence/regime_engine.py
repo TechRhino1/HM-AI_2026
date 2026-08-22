@@ -15,7 +15,13 @@ class MarketRegimeClassifier:
         self._previous_regime: Optional[MarketRegime] = None
         self._regime_persistence: int = 0
     
-    def classify_regime(self, context: MarketContext, macro_news_risk: bool = False) -> RegimeOutput:
+    def classify_regime(
+        self,
+        context: MarketContext,
+        macro_news_risk: bool = False,
+        previous_regime: Any = "USE_INTERNAL_STATE",
+        previous_persistence: int = 0
+    ) -> RegimeOutput:
         structure = context.structure
         momentum = context.momentum
         volatility = context.volatility
@@ -109,14 +115,25 @@ class MarketRegimeClassifier:
         second_p = sorted_regimes[1][1] if len(sorted_regimes) > 1 else 0.0
         confidence = min(0.98, max(0.40, round(highest_p + (highest_p - second_p) * 0.5, 2)))
 
-        regime_transition = False
-        if self._previous_regime is not None and self._previous_regime != primary_regime:
-            regime_transition = True
-            self._regime_persistence = 0
-        elif self._previous_regime is not None and self._previous_regime == primary_regime:
-            self._regime_persistence += 1
+        # Determine transition & persistence (per-symbol stateless or fallback to instance state)
+        if previous_regime != "USE_INTERNAL_STATE":
+            if previous_regime is not None:
+                regime_transition = (previous_regime != primary_regime)
+                regime_persistence = 0 if regime_transition else (previous_persistence + 1)
+            else:
+                regime_transition = False
+                regime_persistence = 0
+        else:
+            # Fallback for single-symbol or legacy usage
+            regime_transition = False
+            if self._previous_regime is not None and self._previous_regime != primary_regime:
+                regime_transition = True
+                self._regime_persistence = 0
+            elif self._previous_regime is not None and self._previous_regime == primary_regime:
+                self._regime_persistence += 1
 
-        self._previous_regime = primary_regime
+            self._previous_regime = primary_regime
+            regime_persistence = self._regime_persistence
 
         return RegimeOutput(
             primary_regime=primary_regime,
@@ -124,5 +141,5 @@ class MarketRegimeClassifier:
             confidence=confidence,
             timestamp=datetime.now(timezone.utc),
             regime_transition=regime_transition,
-            regime_persistence=self._regime_persistence
+            regime_persistence=regime_persistence
         )
