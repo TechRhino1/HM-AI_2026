@@ -288,6 +288,32 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                 tp = float(data.get("tp", 0.0))
                 comment = data.get("comment", "JARVIS_ManualDesk")
 
+                # Sanitize and auto-validate protective SL & TP
+                try:
+                    from jarvis.data.symbol_registry import resolve as resolve_symbol
+                    spec = resolve_symbol(sym)
+                    digits = spec.digits
+                    df = self.data_feed.fetch_rates(sym, "H1", 20)
+                    if df is not None and len(df) > 0:
+                        c_price = float(df["close"].iloc[-1])
+                        highs = df["high"].values
+                        lows = df["low"].values
+                        atr_val = float((highs[-14:] - lows[-14:]).mean()) if len(df) >= 14 else (c_price * 0.005)
+                        min_dist = atr_val * 0.4
+
+                        if action == "BUY":
+                            if sl <= 0 or sl >= c_price or (c_price - sl) < min_dist:
+                                sl = round(c_price - (atr_val * 1.5), digits)
+                            if tp <= 0 or tp <= c_price:
+                                tp = round(c_price + (abs(c_price - sl) * 2.5), digits)
+                        else:  # SELL
+                            if sl <= 0 or sl <= c_price or (sl - c_price) < min_dist:
+                                sl = round(c_price + (atr_val * 1.5), digits)
+                            if tp <= 0 or tp >= c_price:
+                                tp = round(c_price - (abs(sl - c_price) * 2.5), digits)
+                except Exception as ex:
+                    logger.debug(f"Error checking manual SL/TP sanitization: {ex}")
+
                 res = self.mt5_client.send_market_order(
                     symbol=sym,
                     order_type=action,

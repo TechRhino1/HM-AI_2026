@@ -749,11 +749,12 @@
                 ? activeDec.probabilities[activeDec.bias ? activeDec.bias.toLowerCase() : "buy"]
                 : (activeDec.model_confidence || 0.50);
             if (el.deskWinProb) el.deskWinProb.value = `${Math.round(winProb * 100)}%`;
+            const hasValidBracket = activeDec.stop_loss && activeDec.entry_price && (Math.abs(activeDec.stop_loss - activeDec.entry_price) > 1e-5);
             if (el.deskSl && document.activeElement !== el.deskSl && !el.deskSl.value) {
-                el.deskSl.value = activeDec.stop_loss ? formatPrice(activeDec.stop_loss, state.symbol) : "";
+                el.deskSl.value = hasValidBracket ? formatPrice(activeDec.stop_loss, state.symbol) : "";
             }
             if (el.deskTp && document.activeElement !== el.deskTp && !el.deskTp.value) {
-                el.deskTp.value = activeDec.take_profit ? formatPrice(activeDec.take_profit, state.symbol) : "";
+                el.deskTp.value = (hasValidBracket && activeDec.take_profit) ? formatPrice(activeDec.take_profit, state.symbol) : "";
             }
         }
 
@@ -934,10 +935,11 @@
             const isMarketClosed = !symStatus.is_open;
             const badge = getStatusBadge(opp);
             const isActive = opp.symbol === state.symbol;
+            const hasValidBracket = opp.stop_loss && opp.entry_price && (Math.abs(opp.stop_loss - opp.entry_price) > 1e-5);
             const entryStr = formatPrice(opp.entry_price, opp.symbol);
-            const slStr = formatPrice(opp.stop_loss, opp.symbol);
-            const tpStr = formatPrice(opp.take_profit, opp.symbol);
-            const rrStr = opp.risk_reward_ratio ? `1:${Number(opp.risk_reward_ratio).toFixed(2)}` : "--";
+            const slStr = hasValidBracket ? formatPrice(opp.stop_loss, opp.symbol) : "—";
+            const tpStr = (hasValidBracket && opp.take_profit && Math.abs(opp.take_profit - opp.entry_price) > 1e-5) ? formatPrice(opp.take_profit, opp.symbol) : "—";
+            const rrStr = (hasValidBracket && opp.risk_reward_ratio) ? `1:${Number(opp.risk_reward_ratio).toFixed(2)}` : "--";
             const evVal = Number(opp.ev || 0);
             const evStr = `${evVal >= 0 ? '+' : ''}$${evVal.toFixed(2)}`;
             const probStr = opp.win_prob ? `${opp.win_prob}%` : (opp.score ? `${opp.score}%` : "--%");
@@ -1313,10 +1315,11 @@
         }
 
         const badge = getStatusBadge(d);
+        const hasValidBracket = d.stop_loss && d.entry_price && (Math.abs(d.stop_loss - d.entry_price) > 1e-5);
         const entryStr = formatPrice(d.entry_price, sym);
-        const slStr = formatPrice(d.stop_loss, sym);
-        const tpStr = formatPrice(d.take_profit, sym);
-        const rrStr = d.risk_reward_ratio ? `1:${Number(d.risk_reward_ratio).toFixed(2)}` : "--";
+        const slStr = hasValidBracket ? formatPrice(d.stop_loss, sym) : "--";
+        const tpStr = (hasValidBracket && d.take_profit && Math.abs(d.take_profit - d.entry_price) > 1e-5) ? formatPrice(d.take_profit, sym) : "--";
+        const rrStr = (hasValidBracket && d.risk_reward_ratio) ? `1:${Number(d.risk_reward_ratio).toFixed(2)}` : "--";
         const probVal = d.probabilities && d.probabilities[d.bias ? d.bias.toLowerCase() : "buy"] 
             ? d.probabilities[d.bias ? d.bias.toLowerCase() : "buy"] 
             : (d.model_confidence || 0.50);
@@ -1817,8 +1820,9 @@
         // Reset & immediate re-bind of 1-Click Execution Desk inputs to new symbol's decision
         const activeDec = state.latestDecisions[sym];
         if (activeDec) {
-            if (el.deskSl) el.deskSl.value = activeDec.stop_loss ? formatPrice(activeDec.stop_loss, sym) : "";
-            if (el.deskTp) el.deskTp.value = activeDec.take_profit ? formatPrice(activeDec.take_profit, sym) : "";
+            const hasValidBracket = activeDec.stop_loss && activeDec.entry_price && (Math.abs(activeDec.stop_loss - activeDec.entry_price) > 1e-5);
+            if (el.deskSl) el.deskSl.value = hasValidBracket ? formatPrice(activeDec.stop_loss, sym) : "";
+            if (el.deskTp) el.deskTp.value = (hasValidBracket && activeDec.take_profit) ? formatPrice(activeDec.take_profit, sym) : "";
             const winProb = activeDec.probabilities && activeDec.probabilities[activeDec.bias ? activeDec.bias.toLowerCase() : "buy"]
                 ? activeDec.probabilities[activeDec.bias ? activeDec.bias.toLowerCase() : "buy"]
                 : (activeDec.model_confidence || 0.73);

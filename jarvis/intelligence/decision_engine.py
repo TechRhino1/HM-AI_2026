@@ -197,11 +197,33 @@ class DecisionEngine:
                 first_target_price = round(entry_price - (risk_dist * 1.0), digits)
             first_target_volume_pct = 0.50
         else:
-            entry_price = c_price
-            sl_price = c_price
-            tp_price = c_price
-            risk_dist = 0.0
-            rr_ratio = 1.0
+            # When bias is HOLD / MONITOR, compute a valid structural reference bracket
+            # based on prevailing structure/momentum rather than setting SL=TP=entry.
+            is_bear_tilt = (st.bias == "BEARISH") or (getattr(context.momentum, "trend_score", 0.0) < 0)
+            if is_bear_tilt:
+                entry_price = round(context.bid, digits)
+                sl_dist = atr * 1.8
+                if st.supply_zone[1] > entry_price:
+                    candidate_dist = (st.supply_zone[1] + (atr * 0.2)) - entry_price
+                    if (0.8 * atr) <= candidate_dist <= (4.0 * atr):
+                        sl_dist = candidate_dist
+                sl_price = round(entry_price + sl_dist, digits)
+                risk_dist = abs(sl_price - entry_price)
+                tp_dist = risk_dist * 2.0
+                tp_price = round(entry_price - tp_dist, digits)
+            else:
+                entry_price = round(context.ask, digits)
+                sl_dist = atr * 1.8
+                if st.demand_zone[0] > 0 and entry_price > st.demand_zone[0]:
+                    candidate_dist = entry_price - (st.demand_zone[0] - (atr * 0.2))
+                    if (0.8 * atr) <= candidate_dist <= (4.0 * atr):
+                        sl_dist = candidate_dist
+                sl_price = round(entry_price - sl_dist, digits)
+                risk_dist = abs(entry_price - sl_price)
+                tp_dist = risk_dist * 2.0
+                tp_price = round(entry_price + tp_dist, digits)
+
+            rr_ratio = round(tp_dist / (risk_dist + 1e-9), 2)
             first_target_price = None
             first_target_volume_pct = 0.50
 
