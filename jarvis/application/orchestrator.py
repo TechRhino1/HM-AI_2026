@@ -180,8 +180,11 @@ class JarvisOrchestrator:
 
         # 5. Evaluate Decision with Expected Value & Quality Gate
         account = self.state_manager.account or self.mt5_client.get_account_snapshot()
+        dd_pct = 0.0
+        if account and account.balance > 0 and account.equity < account.balance:
+            dd_pct = ((account.balance - account.equity) / account.balance) * 100.0
         decision = self.decision_engine.evaluate(
-            context, regime, analyst_reports, devil_report, account_balance=account.equity, mtf_data=mtf_data
+            context, regime, analyst_reports, devil_report, account_balance=account.equity, current_drawdown_pct=dd_pct, mtf_data=mtf_data
         )
         self.state_manager.record_decision(symbol, decision)
 

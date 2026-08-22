@@ -16,7 +16,10 @@ from jarvis.data.schemas import (
     MomentumContext,
     SessionContext,
     RegimeOutput,
-    MarketRegime
+    MarketRegime,
+    DecisionObject,
+    TradeQualityGateResult,
+    AccountSnapshot
 )
 from jarvis.execution.position_monitor import PositionMonitorEngine, JARVIS_MAGIC_NUMBER
 from engines.dynamic_sl_tp import DynamicSLTPEngine
@@ -24,6 +27,10 @@ from jarvis.risk.position_sizing import PositionSizer
 from jarvis.risk.circuit_breaker import CircuitBreaker
 from jarvis.analysts.devil_advocate import DevilAdvocateAnalyst
 from jarvis.intelligence.self_learning import SelfLearningEngine
+from jarvis.execution.execution_engine import ExecutionEngine
+from jarvis.application.state_manager import StateManager
+from jarvis.intelligence.decision_engine import DecisionEngine
+from jarvis.risk.risk_engine import RiskEngine
 
 class TestRegressionFixes(unittest.TestCase):
     def test_a1_log_trade_timezone_iso(self):
@@ -259,6 +266,160 @@ class TestRegressionFixes(unittest.TestCase):
             
             self.assertTrue(mock_inst.start.called)
             self.assertTrue(mock_thread.called)
+
+    def test_c1_execution_engine_rich_market_context_logging(self):
+        """C1-WIRING: Verify execution_engine resolves real MarketContext and writes non-default metrics to DB."""
+        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tf:
+            db_path = tf.name
+
+        try:
+            custom_db = SQLiteTradeDB(db_path=db_path)
+            
+            # Setup StateManager with rich MarketContext
+            state_mgr = StateManager()
+            ctx = MarketContext(
+                symbol="XAUUSD",
+                timestamp=datetime.now(timezone.utc),
+                current_price=2400.0,
+                bid=2399.8,
+                ask=2400.2,
+                structure=StructureContext(bias="BULLISH"),
+                liquidity=LiquidityContext(),
+                volatility=VolatilityContext(current_spread_pips=1.8),
+                momentum=MomentumContext(adx=38.5, plus_di=30.0, minus_di=12.0),
+                session=SessionContext(current_session="LONDON", is_prime_session=True),
+                mtf_alignment={"H1": "BULLISH", "H4": "BULLISH"}
+            )
+            state_mgr.update_market_context("XAUUSD", ctx)
+            
+            # Verify StateManager get_market_context returns ctx
+            self.assertEqual(state_mgr.get_market_context("XAUUSD"), ctx)
+
+            mock_mt5 = MagicMock()
+            mock_mt5.send_market_order.return_value = {
+                "status": "FILLED",
+                "ticket": 888999,
+                "price": 2400.0,
+                "sl": 2390.0,
+                "tp": 2425.0
+            }
+            mock_bus = MagicMock()
+
+            regime = RegimeOutput(primary_regime=MarketRegime.TREND_BULL, probabilities={}, confidence=0.85)
+            decision = DecisionObject(
+                symbol="XAUUSD",
+                timestamp=datetime.now(timezone.utc),
+                regime=regime,
+                bias="BUY",
+                probabilities={"buy": 0.85},
+                strategy="MOMENTUM_BREAKOUT",
+                entry_price=2400.0,
+                stop_loss=2390.0,
+                take_profit=2425.0,
+                risk_reward_ratio=2.5,
+                calculated_risk_percent=0.5,
+                expected_value=25.0,
+                model_confidence=0.85,
+                adversarial_penalty=5.0,
+                invalidation_levels=[],
+                bull_case=[],
+                bear_case=[],
+                risk_factors=[],
+                quality_gate=TradeQualityGateResult(passed=True, checks={}),
+                decision="EXECUTE",
+                execution_authorized=True,
+                context=ctx
+            )
+
+            with patch('jarvis.data.database.TRADE_DB', custom_db):
+                exec_engine = ExecutionEngine(mt5_client=mock_mt5, state_manager=state_mgr)
+                res = exec_engine.execute_decision(decision, lots=0.01)
+
+            self.assertEqual(res.get("status"), "FILLED")
+            self.assertEqual(res.get("ticket"), 888999)
+
+            # Query the database row written by execution_engine
+            conn = sqlite3.connect(db_path)
+            cur = conn.cursor()
+            cur.execute('''
+                SELECT ticket, symbol, session_name, is_prime_session, adx, plus_di, minus_di, spread_pips, mtf_alignment
+                FROM executed_trades WHERE ticket=888999
+            ''')
+            row = cur.fetchone()
+            conn.close()
+
+            self.assertIsNotNone(row, "Trade row must be logged in DB")
+            self.assertEqual(row[0], 888999)
+            self.assertEqual(row[1], "XAUUSD")
+            self.assertEqual(row[2], "LONDON", "session_name must not fall back to UNKNOWN default")
+            self.assertEqual(row[3], 1, "is_prime_session must be True (1)")
+            self.assertAlmostEqual(row[4], 38.5, places=2, msg="ADX must not fall back to 0.0 default")
+            self.assertAlmostEqual(row[5], 30.0, places=2)
+            self.assertAlmostEqual(row[6], 12.0, places=2)
+            self.assertAlmostEqual(row[7], 1.8, places=2, msg="spread_pips must not fall back to 0.0 default")
+            self.assertIn("BULLISH", row[8])
+        finally:
+            if os.path.exists(db_path):
+                try:
+                    os.remove(db_path)
+                except Exception:
+                    pass
+
+    def test_c2_decision_engine_risk_engine_drawdown_consistency(self):
+        """C2-CONSISTENCY: Verify DecisionEngine and RiskEngine never report conflicting drawdown authorization."""
+        dec_engine = DecisionEngine()
+        risk_engine = RiskEngine(max_drawdown_pct=10.0, is_backtest=True)
+
+        ctx = MarketContext(
+            symbol="BTCUSD",
+            timestamp=datetime.now(timezone.utc),
+            current_price=60000.0,
+            bid=59995.0,
+            ask=60005.0,
+            structure=StructureContext(bias="BULLISH", bos=True),
+            liquidity=LiquidityContext(sweep_detected=True),
+            volatility=VolatilityContext(atr=500.0, current_spread_pips=2.0),
+            momentum=MomentumContext(trend_score=30.0, adx=30.0),
+            session=SessionContext(is_prime_session=True)
+        )
+        regime = RegimeOutput(primary_regime=MarketRegime.TREND_BULL, probabilities={"TREND_BULL": 0.9}, confidence=0.85)
+
+        # Scenario A: 12% drawdown (exceeds 10.0% max limit)
+        # DecisionEngine quality gate check MUST fail on Drawdown Safety Guard
+        dec_high_dd = dec_engine.evaluate(
+            context=ctx,
+            regime=regime,
+            analyst_reports={},
+            devil_report=MagicMock(penalty_score=2.0, threats_detected=[], invalidation_risk_coefficient=1.0),
+            account_balance=8800.0,
+            current_drawdown_pct=12.0
+        )
+        self.assertIn("Drawdown Safety Guard", dec_high_dd.quality_gate.checks)
+        self.assertFalse(dec_high_dd.quality_gate.checks["Drawdown Safety Guard"], "Drawdown Safety Guard must fail at 12% DD")
+        self.assertFalse(dec_high_dd.quality_gate.passed, "Quality gate must not pass at 12% DD")
+        self.assertNotEqual(dec_high_dd.decision, "EXECUTE")
+
+        # RiskEngine authorization under 12% drawdown ($8,800 equity vs $10,000 balance)
+        high_dd_account = AccountSnapshot(login=1, server="Test", balance=10000.0, equity=8800.0, margin=0.0, free_margin=8800.0, margin_level=0.0, leverage=100)
+        risk_high_dd = risk_engine.authorize_execution(
+            decision=dec_high_dd,
+            account=high_dd_account,
+            positions=[],
+            symbol_info={"trade_contract_size": 1.0, "volume_min": 0.01, "volume_max": 10.0, "volume_step": 0.01},
+            current_spread_pips=2.0
+        )
+        self.assertFalse(risk_high_dd["authorized"], "RiskEngine must block trade at 12% DD")
+
+        # Scenario B: 2% drawdown (well within 10.0% max limit)
+        dec_normal_dd = dec_engine.evaluate(
+            context=ctx,
+            regime=regime,
+            analyst_reports={},
+            devil_report=MagicMock(penalty_score=2.0, threats_detected=[], invalidation_risk_coefficient=1.0),
+            account_balance=9800.0,
+            current_drawdown_pct=2.0
+        )
+        self.assertTrue(dec_normal_dd.quality_gate.checks["Drawdown Safety Guard"], "Drawdown Safety Guard must pass at 2% DD")
 
 if __name__ == '__main__':
     unittest.main()

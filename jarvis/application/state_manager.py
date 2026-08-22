@@ -80,6 +80,11 @@ class StateManager:
             self.market_contexts[symbol] = context
             self.last_update = datetime.now(timezone.utc)
 
+    def get_market_context(self, symbol: str) -> Optional[MarketContext]:
+        """Thread-safe retrieval of cached multi-timeframe market context for a symbol."""
+        with self._rw_lock:
+            return self.market_contexts.get(symbol)
+
     def record_decision(self, symbol: str, decision: DecisionObject):
         with self._rw_lock:
             self.latest_decisions[symbol] = decision

@@ -73,6 +73,8 @@ class ExecutionEngine:
                 ctx = getattr(decision, "context", None)
                 if not ctx and hasattr(self.state_manager, "get_market_context"):
                     ctx = self.state_manager.get_market_context(decision.symbol)
+                if not ctx and hasattr(self.state_manager, "market_contexts") and isinstance(self.state_manager.market_contexts, dict):
+                    ctx = self.state_manager.market_contexts.get(decision.symbol)
 
                 session_name = ctx.session.current_session if ctx and ctx.session else "UNKNOWN"
                 is_prime = ctx.session.is_prime_session if ctx and ctx.session else True

@@ -219,6 +219,7 @@ class DecisionObject:
     tp_distance: float = 0.0
     waiting_reasons: List[str] = field(default_factory=list)
     rejection_reasons: List[str] = field(default_factory=list)
+    context: Optional[MarketContext] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {

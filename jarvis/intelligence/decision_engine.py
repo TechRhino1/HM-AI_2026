@@ -255,9 +255,13 @@ class DecisionEngine:
         mkt_status = SessionEngine.get_market_trading_status(context.symbol)
         is_mkt_open = mkt_status.get("is_open", True)
 
-        # 14-Point Comprehensive Institutional Quality Gate Matrix
+        # 15-Point Comprehensive Institutional Quality Gate Matrix
+        # NOTE (Round 3 Design Decision): "Drawdown Safety Guard" (threshold <= 10.0%) is explicitly
+        # maintained alongside "Market Session Open" so that DecisionEngine reporting remains 100%
+        # consistent with RiskEngine.authorize_execution() / DrawdownGuard limits.
         gate_checks = {
             "Market Session Open": is_mkt_open,
+            "Drawdown Safety Guard": current_drawdown_pct <= 10.0,
             "Regime Viability": regime.primary_regime != MarketRegime.EVENT_RISK,
             "Directional Bias": tentative_bias in ["BUY", "SELL"],
             "Risk/Reward >= 1.5": rr_ratio >= min_rr,
@@ -493,5 +497,6 @@ class DecisionEngine:
             waiting_reasons=waiting_reasons,
             rejection_reasons=rejection_reasons,
             decision=decision_action,
-            execution_authorized=gate_passed
+            execution_authorized=gate_passed,
+            context=context
         )
