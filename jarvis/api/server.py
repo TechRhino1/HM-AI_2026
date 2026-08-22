@@ -70,7 +70,7 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                             ctx = ce.build_context(sym, mtf, current_spread_pips=spec.typical_spread_pips, max_allowed_spread_pips=spec.max_spread_pips)
                             cls.state_manager.update_market_context(sym, ctx)
                             regime = rc.classify_regime(ctx)
-                            tentative_bias = "BUY" if ctx.structure.bias == "BULLISH" else ("SELL" if ctx.structure.bias == "BEARISH" else "HOLD")
+                            tentative_bias = "BUY" if ctx.structure.bias == "BULLISH" else ("SELL" if ctx.structure.bias == "BEARISH" else ("SELL" if getattr(ctx.momentum, "trend_score", 0.0) < 0 else "BUY"))
                             reports, devil = ac.run_all_parallel(ctx, regime, tentative_bias)
                             d = de.evaluate(ctx, regime, reports, devil, account_balance=account.equity, mtf_data=mtf)
                             cls.state_manager.record_decision(sym, d)

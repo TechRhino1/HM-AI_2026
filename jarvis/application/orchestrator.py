@@ -194,7 +194,7 @@ class JarvisOrchestrator:
             }
 
         # 4. Dispatch Parallel Analysts + Devil's Advocate
-        tentative_bias = "BUY" if context.structure.bias == "BULLISH" else ("SELL" if context.structure.bias == "BEARISH" else "HOLD")
+        tentative_bias = "BUY" if context.structure.bias == "BULLISH" else ("SELL" if context.structure.bias == "BEARISH" else ("SELL" if getattr(context.momentum, "trend_score", 0.0) < 0 else "BUY"))
         analyst_reports, devil_report = self.analyst_cluster.run_all_parallel(context, regime, tentative_bias)
 
         # 5. Evaluate Decision with Expected Value & Quality Gate
