@@ -30,6 +30,7 @@ class StateManager:
         self.execution_mode: ExecutionMode = ExecutionMode.PAPER
         self.is_safe_mode: bool = False
         self.is_running: bool = True
+        self.is_orchestrator_running: bool = False
         
         self.account: Optional[AccountSnapshot] = None
         self.positions: List[PositionSnapshot] = []
@@ -48,6 +49,14 @@ class StateManager:
         }
         self.logs: List[Dict[str, Any]] = []
         self.last_update = datetime.now(timezone.utc)
+
+    def set_orchestrator_running(self, running: bool):
+        with self._rw_lock:
+            self.is_orchestrator_running = running
+
+    def is_orchestrator_active(self) -> bool:
+        with self._rw_lock:
+            return self.is_orchestrator_running
 
     def set_execution_mode(self, mode: ExecutionMode):
         with self._rw_lock:

@@ -60,7 +60,12 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                     pos = cls.mt5_client.get_open_positions()
                     cls.state_manager.sync_broker_state(acc, pos)
 
-                    # 2. Sweep Multi-Asset Radar
+                    # If the main Orchestrator is actively running, let it drive the radar sweeps
+                    if cls.state_manager.is_orchestrator_active():
+                        time.sleep(2.0)
+                        continue
+
+                    # 2. Standalone Fallback: Sweep Multi-Asset Radar
                     radar_results = []
                     account = cls.state_manager.account or acc
 

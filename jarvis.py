@@ -17,6 +17,7 @@ from jarvis.api.server import run_web_server
 from jarvis.application.state_manager import GLOBAL_STATE
 
 import logging
+import logging.handlers
 import signal
 
 logging.basicConfig(
@@ -24,7 +25,7 @@ logging.basicConfig(
     format='%(asctime)s [%(name)s] %(levelname)s: %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler('jarvis_system.log', encoding='utf-8')
+        logging.handlers.RotatingFileHandler('jarvis_system.log', maxBytes=10*1024*1024, backupCount=3, encoding='utf-8')
     ]
 )
 

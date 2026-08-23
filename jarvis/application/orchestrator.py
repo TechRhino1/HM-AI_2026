@@ -90,22 +90,24 @@ class JarvisOrchestrator:
         self._main_thread: Optional[threading.Thread] = None
 
     def start(self):
-        """Starts the full JARVIS 3.0 engine and background workers."""
+        """Starts the full JARVIS 4.0 engine and background workers."""
         if not self._running:
             self._running = True
+            self.state_manager.set_orchestrator_running(True)
             self.state_synchronizer.start()
             self.position_monitor.start()
             self._main_thread = threading.Thread(target=self._orchestration_loop, daemon=True, name="jarvis_orchestrator")
             self._main_thread.start()
-            logger.info("JARVIS 3.0 Orchestrator started.")
+            logger.info("JARVIS 4.0 Orchestrator started.")
 
     def stop(self):
         """Clean shutdown of all engine workers."""
         self._running = False
+        self.state_manager.set_orchestrator_running(False)
         self.position_monitor.stop()
         self.state_synchronizer.stop()
         self.mt5_client.shutdown()
-        logger.info("JARVIS 3.0 Orchestrator stopped.")
+        logger.info("JARVIS 4.0 Orchestrator stopped.")
 
     def _on_trade_closed(self, data):
         ticket = data.get("ticket")

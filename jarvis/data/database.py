@@ -22,6 +22,14 @@ class SQLiteTradeDB:
             self._local.conn.execute("PRAGMA temp_store=MEMORY;")
         return self._local.conn
 
+    def close(self):
+        if hasattr(self._local, "conn"):
+            try:
+                self._local.conn.close()
+            except Exception:
+                pass
+            del self._local.conn
+
     def _init_db(self):
         conn = self._get_conn()
         try:

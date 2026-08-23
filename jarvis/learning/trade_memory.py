@@ -13,8 +13,19 @@ class TradeMemory:
     def __init__(self, db_path: str = "jarvis_trade_memory.db"):
         self.db_path = db_path
         self._lock = threading.Lock()
-        self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        self._conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=10.0)
+        self._conn.execute("PRAGMA journal_mode=WAL;")
+        self._conn.execute("PRAGMA synchronous=NORMAL;")
+        self._conn.execute("PRAGMA cache_size=-32000;")
         self._init_db()
+
+    def close(self):
+        with self._lock:
+            if self._conn:
+                try:
+                    self._conn.close()
+                except Exception:
+                    pass
 
     def _init_db(self):
         with self._lock:

@@ -43,11 +43,14 @@ class RiskEngine:
         positions: List[PositionSnapshot],
         symbol_info: Dict[str, Any],
         current_spread_pips: float = 2.0,
-        max_allowed_spread_pips: float = 35.0
+        max_allowed_spread_pips: float = 35.0,
+        **kwargs
     ) -> Dict[str, Any]:
         """
         Executes full authorization pipeline. Returns whether execution is approved and calculated lot size.
         """
+        if "spread_pips" in kwargs:
+            current_spread_pips = float(kwargs["spread_pips"])
         with self._lock:
             rejection_reasons = []
 

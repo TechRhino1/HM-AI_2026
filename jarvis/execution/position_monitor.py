@@ -146,6 +146,11 @@ class PositionMonitorEngine:
                 f"Tightening ALL positions to breakeven."
             )
 
+        # ── Prune memory for closed tickets ─────────────────────────────────
+        active_tickets = {p.ticket for p in positions}
+        self._partially_closed_tickets = {t for t in self._partially_closed_tickets if t in active_tickets}
+        self._last_action = {t: act for t, act in self._last_action.items() if t in active_tickets}
+
         # ── Per-position management ─────────────────────────────────────────
         for pos in positions:
             try:
