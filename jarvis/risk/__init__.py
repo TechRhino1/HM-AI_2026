@@ -4,6 +4,7 @@ from jarvis.risk.drawdown import DrawdownGuard
 from jarvis.risk.exposure import ExposureManager
 from jarvis.risk.circuit_breaker import CircuitBreaker
 from jarvis.risk.trade_guard import TradeGuard
+from jarvis.risk.portfolio_heat import PortfolioHeatEngine, PortfolioHeatResult
 from jarvis.risk.risk_engine import RiskEngine
 
 __all__ = [
@@ -12,5 +13,7 @@ __all__ = [
     "ExposureManager",
     "CircuitBreaker",
     "TradeGuard",
+    "PortfolioHeatEngine",
+    "PortfolioHeatResult",
     "RiskEngine"
 ]

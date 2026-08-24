@@ -17,7 +17,9 @@ class PositionSizer:
         atr_ratio: float = 1.0,
         current_drawdown_pct: float = 0.0,
         model_confidence: float = 0.60,
-        pattern_sample_size: int = 0
+        pattern_sample_size: int = 0,
+        portfolio_heat_multiplier: float = 1.0,
+        is_second_trade: bool = False
     ) -> float:
         risk_distance = abs(entry_price - sl_price)
         if risk_distance <= 0 or account_balance <= 0:
@@ -34,6 +36,13 @@ class PositionSizer:
             
         if current_drawdown_pct > 5.0:
             risk_pct *= 0.50  # Halve risk
+
+        # Adaptive Second-Trade position discount: scale to 75% to prevent overconcentration
+        if is_second_trade:
+            risk_pct *= 0.75
+
+        # Portfolio heat scaling (e.g. 1.0x Normal, 0.75x Moderate, 0.50x High)
+        risk_pct *= max(0.25, min(1.0, portfolio_heat_multiplier))
 
         # Conviction scaling: high conviction (>=75%) scales up to 1.35x; marginal confidence (<55%) scales down to 0.70x
         conviction_factor = max(0.70, min(1.35, (model_confidence / 0.60)))

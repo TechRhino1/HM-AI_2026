@@ -440,6 +440,8 @@ class TestRegressionFixes(unittest.TestCase):
             login=123, server="Test", balance=10000.0, equity=10000.0, margin=0.0,
             free_margin=10000.0, margin_level=0.0, leverage=100, trade_allowed=True
         ))
+        orch.circuit_breaker.reset()
+        orch.risk_engine.circuit_breaker.reset()
 
         mock_decision = DecisionObject(
             symbol="XAUUSD",

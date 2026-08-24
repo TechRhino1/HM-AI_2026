@@ -250,9 +250,9 @@ class JarvisOrchestrator:
                                       or canonical_sym in p.symbol.upper())
         ]
 
-        # Asian Pre-Market Blackout Rule (01:00 to 05:00 UTC)
+        # Asian Pre-Market Blackout Rule (01:00 to 05:00 UTC) for Live Execution
         now_utc_hour = datetime.now(timezone.utc).hour
-        is_asian_blackout = (1 <= now_utc_hour < 5) and not is_crypto(symbol)
+        is_asian_blackout = (1 <= now_utc_hour < 5) and not is_crypto(symbol) and self.mode == "live"
 
         # Active Open Position Trailing & Profit Lock Management
         for pos in active_sym_positions:
@@ -271,27 +271,28 @@ class JarvisOrchestrator:
             decision.decision = "WAIT"
             decision.execution_authorized = False
             auth_res = {"authorized": False, "reason": "IN_PROCESS_LOCK: Execution already in progress for this symbol."}
-        elif cooldown_active and decision.decision == "EXECUTE":
+        elif len(active_sym_positions) >= 2 and decision.decision == "EXECUTE":
+            decision.decision = "WAIT"
+            decision.execution_authorized = False
+            auth_res = {"authorized": False, "reason": f"HARD_SYMBOL_LIMIT: Symbol {symbol} already has 2 active positions (Max 2)."}
+        elif cooldown_active and len(active_sym_positions) == 0 and decision.decision == "EXECUTE":
             remaining = int(self._SAME_SYMBOL_COOLDOWN_SEC - (time.time() - last_exec_time))
             decision.decision = "WAIT"
             decision.execution_authorized = False
             auth_res = {"authorized": False, "reason": f"COOLDOWN_GUARD: {remaining}s remaining before next {canonical_sym} trade."}
-        elif active_sym_positions and decision.decision == "EXECUTE":
-            decision.decision = "WAIT"
-            decision.execution_authorized = False
-            auth_res = {"authorized": False, "reason": "ANTI_CLUSTERING_GUARD: Active trade already open on this asset."}
         elif is_asian_blackout and decision.decision == "EXECUTE":
             decision.decision = "WAIT"
             decision.execution_authorized = False
             auth_res = {"authorized": False, "reason": "ASIAN_SESSION_BLACKOUT: Low liquidity chop protection active."}
         elif auth_res.get("authorized"):
+            # Route through Master Adaptive Risk Engine (enforcing all 15 conditions if second trade)
             auth_res = self.risk_engine.authorize_execution(
                 decision, account, positions, sym_info,
                 current_spread_pips=context.volatility.current_spread_pips,
-                max_allowed_spread_pips=_spec.max_spread_pips
+                max_allowed_spread_pips=_spec.max_spread_pips,
+                context=context,
+                is_second_trade=(len(active_sym_positions) == 1)
             )
-
-
 
         # Circuit Breaker check (backstop — also checked inside risk_engine)
         cb_status = self.circuit_breaker.check_status()
@@ -308,7 +309,7 @@ class JarvisOrchestrator:
             reason = dd_status.get("breaches", ["Max drawdown reached"])[0] if dd_status.get("breaches") else "Max drawdown reached"
             auth_res = {'authorized': False, 'reason': f'DRAWDOWN_GUARD: {reason}'}
 
-        # 7. Execute if authorized
+        # 7. Execute if authorized (Atomic Reservation -> Execute -> Commit/Release)
         exec_res = None
         if auth_res.get("authorized") and decision.decision == "EXECUTE":
             decision.execution_authorized = True
@@ -316,14 +317,25 @@ class JarvisOrchestrator:
             # Unified lot cap based on account tier (§4)
             lots = min(lots, get_max_lot_cap(account.equity))
 
-            # Claim in-process lock BEFORE sending to MT5
+            # Claim in-process lock & reserve risk capacity BEFORE sending to MT5
+            risk_dist = abs(decision.entry_price - decision.stop_loss)
+            est_risk_usd = lots * (_spec.contract_size or 100000.0) * risk_dist
+            self.risk_engine.reserve_risk(canonical_sym, est_risk_usd)
+
             with self._execution_lock:
                 self._execution_in_progress.add(canonical_sym)
 
             try:
                 exec_res = self.execution_engine.execute_decision(decision, lots)
+                if exec_res and exec_res.get("status") == "FILLED":
+                    self.risk_engine.commit_risk(canonical_sym)
+                else:
+                    self.risk_engine.release_risk(canonical_sym)
+            except Exception as e:
+                self.risk_engine.release_risk(canonical_sym)
+                logger.error(f"Execution error for {canonical_sym}: {e}", exc_info=True)
             finally:
-                # Always release lock; update cooldown only on successful fill
+                # Always release in-progress lock; update cooldown only on successful fill
                 with self._execution_lock:
                     self._execution_in_progress.discard(canonical_sym)
                     if exec_res and exec_res.get("status") == "FILLED":
