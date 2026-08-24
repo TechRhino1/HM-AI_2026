@@ -144,11 +144,15 @@ class BacktestEngine:
                     if auth_res["authorized"]:
                         lots = auth_res["lots"]
                         entry_price = float(next_bar["open"])
+                        price_shift = entry_price - decision.entry_price
+                        sl_price = decision.stop_loss + price_shift
+                        tp_price = decision.take_profit + price_shift
+
                         open_trade = {
                             "type": decision.bias,
                             "entry": entry_price,
-                            "sl": decision.stop_loss,
-                            "tp": decision.take_profit,
+                            "sl": sl_price,
+                            "tp": tp_price,
                             "lots": lots,
                             "strategy": decision.strategy,
                             "regime": regime.primary_regime.value,
@@ -156,6 +160,7 @@ class BacktestEngine:
                             "mfe": 0.0,
                             "mae": 0.0
                         }
+
 
         metrics = PerformanceMetricsCalculator.calculate_metrics(trades, self.initial_balance)
         return {

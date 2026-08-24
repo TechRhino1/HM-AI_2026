@@ -44,11 +44,15 @@ class PositionSizer:
         # Portfolio heat scaling (e.g. 1.0x Normal, 0.75x Moderate, 0.50x High)
         risk_pct *= max(0.25, min(1.0, portfolio_heat_multiplier))
 
-        # Conviction scaling: high conviction (>=75%) scales up to 1.35x; marginal confidence (<55%) scales down to 0.70x
+        # Conviction scaling & Dynamic Fractional Kelly Criterion Edge Calculation
+        p = max(0.20, min(0.95, model_confidence))
+        R = 2.0  # Baseline institutional target R:R
+        full_kelly = (p * R - (1.0 - p)) / R
+        quarter_kelly_pct = max(0.15, min(1.50, (full_kelly / 4.0) * 100.0)) if full_kelly > 0 else 0.15
+
         conviction_factor = max(0.70, min(1.35, (model_confidence / 0.60)))
 
         # P3: Dedicated Evidence Strength / Sample Size Scaling
-        # Well-evidenced patterns (N>=30) get a modest boost; thinly evidenced (N=3-4) receive a slight caution buffer
         if pattern_sample_size >= 30:
             evidence_factor = 1.10
         elif pattern_sample_size >= 15:
@@ -62,9 +66,11 @@ class PositionSizer:
 
         combined_scaler = max(0.65, min(1.40, conviction_factor * evidence_factor))
 
-        # Adjusted risk percent incorporating Devil's Advocate coefficient and combined conviction/evidence scaling
-        effective_risk_pct = max(0.1, min(2.0, risk_pct * invalidation_risk_coefficient * combined_scaler))
+        # Blended risk percentage using baseline risk and Fractional Kelly mathematical edge
+        blended_risk_pct = (0.50 * risk_pct) + (0.50 * quarter_kelly_pct)
+        effective_risk_pct = max(0.10, min(1.50, blended_risk_pct * invalidation_risk_coefficient * combined_scaler))
         risk_amount_dollars = account_balance * (effective_risk_pct / 100.0)
+
 
         from jarvis.data.symbol_registry import get_dollar_risk_per_price_unit
         

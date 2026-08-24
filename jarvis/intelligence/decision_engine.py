@@ -345,17 +345,24 @@ class DecisionEngine:
             min_rr = 1.5
             max_spread = spec.max_spread_pips
 
-        if regime.primary_regime in [MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR] and regime.confidence > 0.7:
-            effective_min_ev *= 0.7
+        # Check Macro MTF Confluence (H4 and D1 alignment)
+        mtf_align = getattr(context, "mtf_alignment", {})
+        h4_bias = mtf_align.get("H4", "NEUTRAL") if isinstance(mtf_align, dict) else "NEUTRAL"
+        d1_bias = mtf_align.get("D1", "NEUTRAL") if isinstance(mtf_align, dict) else "NEUTRAL"
+        mtf_counter_trend = False
+        if tentative_bias == "BUY" and h4_bias == "BEARISH" and d1_bias == "BEARISH":
+            mtf_counter_trend = True
+        elif tentative_bias == "SELL" and h4_bias == "BULLISH" and d1_bias == "BULLISH":
+            mtf_counter_trend = True
+
+        if mtf_counter_trend:
+            min_score = max(min_score, 85.0)
 
         from jarvis.market.sessions import SessionEngine
         mkt_status = SessionEngine.get_market_trading_status(context.symbol, dt=getattr(context, "timestamp", None))
         is_mkt_open = mkt_status.get("is_open", True)
 
-        # 15-Point Comprehensive Institutional Quality Gate Matrix
-        # NOTE (Round 3 Design Decision): "Drawdown Safety Guard" (threshold <= 10.0%) is explicitly
-        # maintained alongside "Market Session Open" so that DecisionEngine reporting remains 100%
-        # consistent with RiskEngine.authorize_execution() / DrawdownGuard limits.
+        # 16-Point Comprehensive Institutional Quality Gate Matrix
         gate_checks = {
             "Market Session Open": is_mkt_open,
             "Drawdown Safety Guard": current_drawdown_pct <= 10.0,
@@ -366,13 +373,15 @@ class DecisionEngine:
             "Spread Protection": spread <= max_spread and not context.volatility.is_excessive_spread,
             "AI Multi-Score Gate": ai_score >= min_score,
             "Devil Adversarial Guard": devil_report.penalty_score <= self.max_devil_penalty,
-            "Calibrated Win Prob >= 55%": calibrated_win_p >= 0.55,
+            "Calibrated Win Prob >= 55%": calibrated_win_p >= (0.65 if mtf_counter_trend else 0.55),
             "Valid Stop Loss Distance": risk_dist >= (context.volatility.atr * (0.75 if is_micro_mode else 0.5)),
             "Premium/Discount Alignment": premium_discount_valid,
             "No Active Macro Shock": regime.primary_regime != MarketRegime.EVENT_RISK,
             "Order Flow Momentum": abs(context.momentum.trend_score) >= 15 or context.structure.bos or context.liquidity.sweep_detected,
+            "Macro MTF Alignment": not mtf_counter_trend or (ai_score >= 85.0 and calibrated_win_p >= 0.65),
             "Margin Capacity Limit": account_balance >= 10.0 and planned_risk_dollars > 0
         }
+
 
         failing_reasons = [name for name, passed in gate_checks.items() if not passed]
         gate_passed = len(failing_reasons) == 0
@@ -406,13 +415,14 @@ class DecisionEngine:
                     tp_price = adjusted_tp
                     tp_dist = tp_price - entry_price
                     rr_ratio = round(tp_dist / (risk_dist + 1e-9), 2)
-            elif tentative_bias == "SELL" and entry_price > threat_lvl > tp_price:
+            elif tentative_bias == "SELL" and tp_price < threat_lvl < entry_price:
                 adjusted_tp = round(threat_lvl + (atr_val * 0.1), spec.digits)
                 if adjusted_tp < entry_price - (risk_dist * 1.0):
                     logger.info(f"[{context.symbol}] Devil's Advocate threat level {threat_lvl} detected ahead of TP! Tucking TP: {tp_price} -> {adjusted_tp}")
                     tp_price = adjusted_tp
                     tp_dist = entry_price - tp_price
                     rr_ratio = round(tp_dist / (risk_dist + 1e-9), 2)
+
 
         strategy_probs = self.strategy_selector.select_strategy_probabilities(
             regime, context=context, account_equity=account_balance
