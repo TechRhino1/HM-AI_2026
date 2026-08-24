@@ -66,34 +66,37 @@ class PositionSizer:
         effective_risk_pct = max(0.1, min(2.0, risk_pct * invalidation_risk_coefficient * combined_scaler))
         risk_amount_dollars = account_balance * (effective_risk_pct / 100.0)
 
-        contract_size = symbol_info.get("trade_contract_size", 100000.0) if symbol_info else 100000.0
-        if contract_size <= 0:
-            contract_size = 1.0
+        from jarvis.data.symbol_registry import get_dollar_risk_per_price_unit
+        
+        sym_key = sym_name if sym_name else "XAUUSD"
+        dollar_risk_per_unit = get_dollar_risk_per_price_unit(sym_key, symbol_info)
+        dollar_risk_per_lot = risk_distance * dollar_risk_per_unit
 
         min_vol = symbol_info.get("volume_min", 0.01) if symbol_info else 0.01
         max_vol = symbol_info.get("volume_max", 100.0) if symbol_info else 100.0
         vol_step = symbol_info.get("volume_step", 0.01) if symbol_info else 0.01
 
-        # Smooth continuous formula
-        raw_lots = risk_amount_dollars / (risk_distance * contract_size + 1e-9)
+        if dollar_risk_per_lot <= 0:
+            return min_vol
 
-        # §8: Detect when raw_lots is below broker minimum volume floor
+        # Precise lot sizing formula across all asset classes & currency quote conventions
+        raw_lots = risk_amount_dollars / dollar_risk_per_lot
+
+        # Option B: Micro Account / Small Balance Handling
+        # If calculated raw_lots is below broker minimum (min_vol = 0.01), execute at min_vol with a warning log
         if raw_lots < min_vol:
-            actual_risk_dollars = min_vol * risk_distance * contract_size
+            actual_risk_dollars = min_vol * dollar_risk_per_lot
             actual_risk_pct = (actual_risk_dollars / (account_balance + 1e-9)) * 100.0
-            if actual_risk_pct > (effective_risk_pct * 1.5):
-                logger.info(
-                    f"Position sizing minimum lot floor active: raw_lots={raw_lots:.4f} < min={min_vol}. "
-                    f"Effective risk adjusted to {actual_risk_pct:.2f}% (${actual_risk_dollars:.2f}) on ${account_balance:.2f} equity."
-                )
+            logger.warning(
+                f"MICRO ACCOUNT RISK WARNING [{sym_key}]: Raw lot size ({raw_lots:.5f}) is below broker minimum ({min_vol}). "
+                f"Executing at minimum volume floor {min_vol} lots (Actual risk: {actual_risk_pct:.2f}% / ${actual_risk_dollars:.2f} "
+                f"on ${account_balance:.2f} equity; target planned risk was {effective_risk_pct:.2f}% / ${risk_amount_dollars:.2f})."
+            )
+            final_lots = min_vol
+        else:
+            final_lots = min(raw_lots, max_vol)
 
-        # Clamp between min_vol and max_vol
-        final_lots = max(min_vol, min(raw_lots, max_vol))
-
-        # Keep hard floor of 0.01 for micro accounts < $40
-        if account_balance < 40.0:
-            final_lots = min(final_lots, 0.01)
-
-        # Volume step rounding
+        # Volume step rounding (e.g. step = 0.01)
         final_lots = max(min_vol, round(final_lots / vol_step) * vol_step)
         return round(final_lots, 2)
+

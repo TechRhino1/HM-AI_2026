@@ -144,6 +144,23 @@ class OnlineMLPredictor:
         prob = self._sigmoid(z)
         return round(float(np.clip(prob, 0.20, 0.88)), 3)
 
+    def update_from_trade_record(self, trade_record: Dict[str, Any]):
+        """
+        Extracts features and outcome from a closed trade record and triggers online SGD parameter update.
+        """
+        try:
+            is_win = 1 if trade_record.get("is_win", 0) > 0 or trade_record.get("pnl", 0.0) > 0 else 0
+            raw_feats = trade_record.get("ml_features")
+            if isinstance(raw_feats, str):
+                raw_feats = json.loads(raw_feats)
+            
+            if isinstance(raw_feats, list) and len(raw_feats) == self.n_features:
+                features = np.array(raw_feats, dtype=float)
+                self.update_online(features, is_win)
+                logging.info(f"Online ML predictor updated from closed trade #{trade_record.get('ticket')}: Win={is_win}, BrierScore={self.get_brier_score():.3f}")
+        except Exception as e:
+            logging.warning(f"Failed to update OnlineMLPredictor from trade record: {e}")
+
     def update_online(self, features: np.ndarray, target_win: int):
         """
         Executes online stochastic gradient step after trade completion.
@@ -182,6 +199,7 @@ class OnlineMLPredictor:
                 
                 self._grad_buffer.clear()
                 self._save_model_internal()
+
 
     def get_feature_importance(self) -> Dict[str, float]:
         """Returns the current absolute weights as feature importance."""

@@ -123,6 +123,8 @@ class DecisionEngine:
             tp_multiplier = 2.5         # Default baseline institutional R:R
             first_target_volume_pct = 0.50
 
+        spread_dist = max(0.0, context.ask - context.bid) if (context.ask > 0 and context.bid > 0) else (context.volatility.current_spread_pips * spec.pip_size)
+
         if tentative_bias == "BUY":
             entry_price = round(context.ask, digits)
             # Structural SL with regime-adaptive buffer and bounds
@@ -170,15 +172,15 @@ class DecisionEngine:
 
         elif tentative_bias == "SELL":
             entry_price = round(context.bid, digits)
-            # Structural SL with regime-adaptive buffer and bounds
+            # Structural SL with regime-adaptive buffer, spread offset and bounds
             if st.supply_zone[1] > 0 and st.supply_zone[1] > entry_price:
-                struct_sl_dist = (st.supply_zone[1] + (atr * sl_buffer_mult)) - entry_price
-                if (sl_min_bound_mult * atr) <= struct_sl_dist <= (sl_max_bound_mult * atr):
+                struct_sl_dist = (st.supply_zone[1] + (atr * sl_buffer_mult) + spread_dist) - entry_price
+                if (sl_min_bound_mult * atr) <= struct_sl_dist <= (sl_max_bound_mult * atr + spread_dist):
                     sl_dist = struct_sl_dist
                 else:
-                    sl_dist = atr * sl_default_mult
+                    sl_dist = atr * sl_default_mult + spread_dist
             else:
-                sl_dist = atr * sl_default_mult
+                sl_dist = atr * sl_default_mult + spread_dist
 
             sl_price = round(entry_price + sl_dist, digits)
             risk_dist = abs(sl_price - entry_price)

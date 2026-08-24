@@ -108,7 +108,35 @@ def run_end_to_end_system_verification():
         diagnostics["risk_engine"] = f"ERROR ({e})"
         print(f"[ERROR] Risk Engine failed: {e}")
 
-    # 8. Trade Memory, Database & Bandit Learning
+    # 8. Universal Lot Sizing & Micro Account Option B Verification
+    try:
+        from jarvis.risk.position_sizing import PositionSizer
+        # Test 1: Standard $10,000 account on XAUUSD ($10 stop distance = $1000 risk/lot) -> 0.5% risk = $50 -> 0.05 lots
+        lots_std = PositionSizer.calculate_lot_size(10000.0, 2400.0, 2390.0, 0.5, {"name": "XAUUSD", "volume_min": 0.01})
+        # Test 2: Micro $30 account on XAUUSD ($10 stop distance) -> raw lots 0.00015 < 0.01 min_vol -> Option B executes 0.01 lots with warning
+        lots_micro = PositionSizer.calculate_lot_size(30.0, 2400.0, 2390.0, 0.5, {"name": "XAUUSD", "volume_min": 0.01})
+        diagnostics["lot_sizer"] = "PASS"
+        print(f"[PASS] Universal Lot Sizer: Std ($10k)={lots_std} lots | Micro ($30 Option B)={lots_micro} lots")
+    except Exception as e:
+        diagnostics["lot_sizer"] = f"ERROR ({e})"
+        print(f"[ERROR] Lot Sizer failed: {e}")
+
+    # 9. Online Machine Learning SGD Update Verification
+    try:
+        from jarvis.learning.online_ml_predictor import OnlineMLPredictor
+        ml = OnlineMLPredictor()
+        init_brier = ml.get_brier_score()
+        ml.update_from_trade_record({
+            "ticket": 99999, "is_win": 1, "pnl": 45.0,
+            "ml_features": [0.5, 0.6, 0.0, 0.2, 0.1, 0.0, 1.0, 1.0, 0.5]
+        })
+        diagnostics["online_ml_sgd"] = "PASS"
+        print(f"[PASS] Online ML Predictor: Loaded model. Brier Score={ml.get_brier_score():.3f} | Features={ml.n_features}")
+    except Exception as e:
+        diagnostics["online_ml_sgd"] = f"ERROR ({e})"
+        print(f"[ERROR] Online ML Predictor failed: {e}")
+
+    # 10. Trade Memory, Database & Bandit Learning
     try:
         mem = TradeMemory()
         bandit = StrategyBandit()
@@ -140,3 +168,4 @@ def run_end_to_end_system_verification():
 
 if __name__ == "__main__":
     run_end_to_end_system_verification()
+

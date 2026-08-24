@@ -41,12 +41,16 @@ class DynamicSLTPEngine:
         tp1_price = current_price
         tp2_price = current_price
 
+        spread_pips = volatility.get("current_spread_pips", 1.5)
+        pip_size = profile.get("pip_size", 0.0001 if digits == 5 else 0.1)
+        spread_dist = spread_pips * pip_size
+
         max_sl_dist = atr * sl_atr_mult  # Dynamic ATR SL Cap from symbol profile
 
         if action == "BUY":
             struct_sl = swing_low - (atr * 0.25)
             atr_sl = current_price - max_sl_dist
-            sl_price = max(struct_sl, atr_sl)  # Take tighter SL to keep TP close
+            sl_price = max(struct_sl, atr_sl)  # Take structural or ATR SL
             
             risk_pips = current_price - sl_price
             if risk_pips <= 0 or risk_pips > max_sl_dist:
@@ -57,13 +61,15 @@ class DynamicSLTPEngine:
             tp2_price = current_price + (risk_pips * tp2_rr_mult)
 
         elif action == "SELL":
-            struct_sl = swing_high + (atr * 0.25)
-            atr_sl = current_price + max_sl_dist
-            sl_price = min(struct_sl, atr_sl)  # Take tighter SL to keep TP close
+            # For SELL, SL must be above swing_high + spread so Ask doesn't trigger SL prematurely
+            struct_sl = swing_high + (atr * 0.25) + spread_dist
+            atr_sl = current_price + max_sl_dist + spread_dist
+            # For SELL, valid SL must be the LARGER price distance (further away from entry) to remain outside structure
+            sl_price = max(struct_sl, atr_sl)
 
             risk_pips = sl_price - current_price
-            if risk_pips <= 0 or risk_pips > max_sl_dist:
-                risk_pips = max_sl_dist
+            if risk_pips <= 0 or risk_pips > (max_sl_dist + spread_dist):
+                risk_pips = max_sl_dist + spread_dist
                 sl_price = current_price + risk_pips
 
             tp1_price = current_price - (risk_pips * tp1_rr_mult)
@@ -84,3 +90,4 @@ class DynamicSLTPEngine:
             "ml_mfe_tp_multiplier": ml_res.get("ml_mfe_tp_multiplier"),
             "ml_optimized_rr": ml_res.get("optimized_rr_ratio")
         }
+
