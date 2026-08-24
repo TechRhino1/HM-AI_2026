@@ -298,10 +298,14 @@ class MT5Client:
                     "type_filling": getattr(mt5, "ORDER_FILLING_IOC", 1)
                 }
 
-                # Direct fast execution with instant filling fallback
-                result = mt5.order_send(request)
-                if result is None or result.retcode not in [getattr(mt5, "TRADE_RETCODE_DONE", 10009), getattr(mt5, "TRADE_RETCODE_PLACED", 10008)]:
-                    # If filling type rejected, immediately retry with FOK / RETURN
+                # Direct fast execution with instant filling fallback & requote retry loop
+                max_retries = 3
+                for attempt in range(max_retries):
+                    result = mt5.order_send(request)
+                    if result is not None and result.retcode in [getattr(mt5, "TRADE_RETCODE_DONE", 10009), getattr(mt5, "TRADE_RETCODE_PLACED", 10008)]:
+                        break
+
+                    # If filling type rejected (10030 / 10031), retry filling modes
                     if result and result.retcode in [10030, 10031]:
                         request["type_filling"] = getattr(mt5, "ORDER_FILLING_FOK", 0)
                         result = mt5.order_send(request)
@@ -309,10 +313,20 @@ class MT5Client:
                             request["type_filling"] = getattr(mt5, "ORDER_FILLING_RETURN", 2)
                             result = mt5.order_send(request)
 
+                    # Requote error (10004) -> refresh tick price and retry after small backoff
+                    if result and result.retcode == 10004 and attempt < (max_retries - 1):
+                        time.sleep(0.1 * (2 ** attempt))
+                        fresh_tick = mt5.symbol_info_tick(resolved)
+                        if fresh_tick:
+                            request["price"] = round(fresh_tick.ask if order_type == "BUY" else fresh_tick.bid, digits)
+                            logger.info(f"Requote retry #{attempt+1} for {resolved}: updated price -> {request['price']}")
+                        continue
+
                 if result is None or result.retcode not in [getattr(mt5, "TRADE_RETCODE_DONE", 10009), getattr(mt5, "TRADE_RETCODE_PLACED", 10008)]:
                     err_msg = result.comment if result else str(mt5.last_error())
                     logger.error(f"MT5 Order Send Failed for {resolved}: {err_msg}")
                     return {"status": "FAILED", "reason": err_msg}
+
 
                 logger.info(f"⚡ ULTRA-FAST ORDER FILLED: Ticket={result.order} {order_type} {volume} {resolved} @ {result.price}")
                 return {

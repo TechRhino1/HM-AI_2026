@@ -95,8 +95,12 @@ class OnlineMLPredictor:
         rsi_diff = (mom.rsi - 50.0) / 50.0
         rsi_aligned = rsi_diff if tentative_bias == "BUY" else (-rsi_diff if tentative_bias == "SELL" else 0.0)
 
-        # 5. Spread Friction Ratio (0.0 to 1.0)
-        friction = min(1.0, max(0.0, vol.current_spread_pips / 10.0))
+        # 5. Stationary Spread-to-ATR Friction Ratio (Scale-invariant across asset classes)
+        from jarvis.data.symbol_registry import resolve as resolve_symbol
+        spec = resolve_symbol(context.symbol)
+        spread_price = vol.current_spread_pips * spec.pip_size
+        friction = min(1.0, max(0.0, (spread_price / (vol.atr + 1e-9)) * 5.0))
+
 
         # 6. Devil Penalty (0.0 to 1.0)
         penalty_norm = min(1.0, max(0.0, devil_penalty / 50.0))

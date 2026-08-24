@@ -410,18 +410,19 @@ class DecisionEngine:
             atr_val = context.volatility.atr if context.volatility.atr > 0 else (entry_price * 0.005)
             if tentative_bias == "BUY" and entry_price < threat_lvl < tp_price:
                 adjusted_tp = round(threat_lvl - (atr_val * 0.1), spec.digits)
-                if adjusted_tp > entry_price + (risk_dist * 1.0):
+                if adjusted_tp >= entry_price + (risk_dist * 1.5):
                     logger.info(f"[{context.symbol}] Devil's Advocate threat level {threat_lvl} detected ahead of TP! Tucking TP: {tp_price} -> {adjusted_tp}")
                     tp_price = adjusted_tp
                     tp_dist = tp_price - entry_price
                     rr_ratio = round(tp_dist / (risk_dist + 1e-9), 2)
             elif tentative_bias == "SELL" and tp_price < threat_lvl < entry_price:
                 adjusted_tp = round(threat_lvl + (atr_val * 0.1), spec.digits)
-                if adjusted_tp < entry_price - (risk_dist * 1.0):
+                if adjusted_tp <= entry_price - (risk_dist * 1.5):
                     logger.info(f"[{context.symbol}] Devil's Advocate threat level {threat_lvl} detected ahead of TP! Tucking TP: {tp_price} -> {adjusted_tp}")
                     tp_price = adjusted_tp
                     tp_dist = entry_price - tp_price
                     rr_ratio = round(tp_dist / (risk_dist + 1e-9), 2)
+
 
 
         strategy_probs = self.strategy_selector.select_strategy_probabilities(

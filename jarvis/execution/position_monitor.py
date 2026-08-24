@@ -259,6 +259,21 @@ class PositionMonitorEngine:
             if act:
                 actions.append(act)
 
+            # ── 6. Time-Decay Stale Trade Exit (Close 48h idle consolidation trades) ──
+            if hasattr(pos, "open_time") and pos.open_time:
+                try:
+                    open_dt = datetime.strptime(pos.open_time, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+                    open_dur_sec = (datetime.now(timezone.utc) - open_dt).total_seconds()
+                    if open_dur_sec >= 172800.0:  # 48 hours
+                        trend_score = getattr(ctx.momentum, "trend_score", 0.0)
+                        if abs(trend_score) < 15.0 and abs(pos.profit / (balance + 1e-9)) < 0.005:
+                            logger.info(f"⏳ TIME-DECAY STALE EXIT: Closing position #{pos.ticket} ({symbol}) after 48h idle consolidation (PnL: ${pos.profit:.2f}).")
+                            self.mt5_client.close_position(pos.ticket)
+                            return
+                except Exception:
+                    pass
+
+
         # ── Apply modifications if anything changed ─────────────────────────
         sl_changed = abs(new_sl - pos.sl) > 0.0001
         tp_changed = abs(new_tp - pos.tp) > 0.0001

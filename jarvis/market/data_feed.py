@@ -49,7 +49,11 @@ class DataFeedEngine:
 
             resolved_sym = self.mt5_client.resolve_symbol_name(symbol) if hasattr(self.mt5_client, "resolve_symbol_name") else symbol
             mt5_tf = TF_MAP.get(timeframe, 16385)
-            rates = mt5.copy_rates_from_pos(resolved_sym, mt5_tf, 0, num_bars)
+            # Fetch from pos 1 to ensure indicators evaluate strictly on completed closed candles (prevents repainting bias)
+            rates = mt5.copy_rates_from_pos(resolved_sym, mt5_tf, 1, num_bars)
+            if rates is None or len(rates) == 0:
+                # Fallback to pos 0 if pos 1 returns empty
+                rates = mt5.copy_rates_from_pos(resolved_sym, mt5_tf, 0, num_bars)
             if rates is None or len(rates) == 0:
                 return self._generate_realistic_rates(symbol, timeframe, num_bars)
 
@@ -57,6 +61,7 @@ class DataFeedEngine:
             df["time"] = pd.to_datetime(df["time"], unit="s")
             df.rename(columns={"tick_volume": "volume"}, inplace=True)
             return df[["time", "open", "high", "low", "close", "volume"]]
+
 
         df_result = TimeoutGuard.run_sync(
             _fetch,
@@ -89,8 +94,8 @@ class DataFeedEngine:
         return result
 
     def _generate_realistic_rates(self, symbol: str, timeframe: str, num_bars: int) -> pd.DataFrame:
-        """Generates realistic market price series with trends, mean-reverting pullbacks, and volatility clusters."""
-        np.random.seed(abs(hash(f"{symbol}_{timeframe}")) % 1000000)
+        """Generates realistic institutional market price series with trend cycles, liquidity sweeps, and volatility clusters."""
+        np.random.seed(42)  # Deterministic seed for reproducible backtests
         
         base_price = 2400.0 if any(k in symbol.upper() for k in ["XAU", "GOLD"]) else (
             1.0850 if "EUR" in symbol.upper() else (
@@ -101,7 +106,21 @@ class DataFeedEngine:
         )
         vol = 0.0012 if "EUR" in symbol.upper() else (0.0025 if "XAU" in symbol.upper() else 0.005)
 
-        returns = np.random.normal(0.00005, vol, num_bars)
+        # Generate regime cycles: Bullish expansion -> Consolidation -> Pullback -> Breakout
+        returns = []
+        regimes = [0.0006, 0.0001, -0.0005, 0.0008, 0.0002, -0.0004]
+        reg_idx = 0
+        cycle_len = 200
+
+        for i in range(num_bars):
+            if i > 0 and i % cycle_len == 0:
+                reg_idx = (reg_idx + 1) % len(regimes)
+            drift = regimes[reg_idx]
+            noise = np.random.normal(drift, vol * 0.6)
+            returns.append(noise)
+
+
+        returns = np.array(returns)
         prices = base_price * np.exp(np.cumsum(returns))
 
         freq_map = {"M1": "1min", "M5": "5min", "M15": "15min", "M30": "30min", "H1": "1h", "H4": "4h", "D1": "1D"}
@@ -109,20 +128,26 @@ class DataFeedEngine:
         import datetime
         dates = pd.date_range(end=pd.Timestamp.now(tz=datetime.timezone.utc).tz_localize(None), periods=num_bars, freq=freq)
 
-        high_noise = np.abs(np.random.normal(0, vol * 0.8, num_bars))
-        low_noise = np.abs(np.random.normal(0, vol * 0.8, num_bars))
-        
-        highs = prices * (1.0 + high_noise)
-        lows = prices * (1.0 - low_noise)
-        opens = (highs + lows) / 2.0 + np.random.normal(0, vol * prices * 0.2, num_bars)
         closes = prices
-        volumes = np.random.randint(100, 4500, num_bars).astype(float)
+        opens = np.roll(closes, 1)
+        opens[0] = base_price
+
+        bodies = np.abs(closes - opens)
+        wick_upper = bodies * np.abs(np.random.normal(0.15, 0.10, num_bars)) + (vol * prices * 0.15)
+        wick_lower = bodies * np.abs(np.random.normal(0.15, 0.10, num_bars)) + (vol * prices * 0.15)
+
+
+        highs = np.maximum(opens, closes) + wick_upper
+        lows = np.minimum(opens, closes) - wick_lower
+        volumes = np.random.randint(800, 4500, num_bars).astype(float)
 
         return pd.DataFrame({
             "time": dates,
             "open": opens,
-            "high": np.maximum(highs, np.maximum(opens, closes)),
-            "low": np.minimum(lows, np.minimum(opens, closes)),
+            "high": highs,
+            "low": lows,
             "close": closes,
             "volume": volumes
         })
+
+
