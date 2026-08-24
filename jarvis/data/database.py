@@ -70,6 +70,7 @@ class SQLiteTradeDB:
             cur.execute("PRAGMA table_info(executed_trades)")
             cols = [row[1] for row in cur.fetchall()]
             new_cols = {
+                "realized_pnl": "REAL DEFAULT 0.0",
                 "executor": "TEXT DEFAULT 'BOT (AI)'",
                 "session_name": "TEXT DEFAULT 'UNKNOWN'",
                 "is_prime_session": "INTEGER DEFAULT 1",
@@ -88,6 +89,7 @@ class SQLiteTradeDB:
                     except Exception:
                         pass
             conn.commit()
+
             logger.info("SQLite database initialized successfully.")
         except Exception as e:
             logger.error(f"Failed to initialize SQLite DB: {e}")
@@ -221,19 +223,20 @@ class SQLiteTradeDB:
                 if not row:
                     regime_str = "TREND_BULL" if side == "BUY" else "TREND_BEAR"
                     conn.execute('''
-                        INSERT INTO executed_trades (ticket, symbol, action, entry_price, sl, tp, volume, timestamp, ai_score, regime, expected_value, executor)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (pid, clean_sym, side, entry_p, sl_val, tp_val, vol, dt_str, 85.0, regime_str, pnl, exec_label))
+                        INSERT INTO executed_trades (ticket, symbol, action, entry_price, sl, tp, volume, timestamp, ai_score, regime, expected_value, realized_pnl, executor)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (pid, clean_sym, side, entry_p, sl_val, tp_val, vol, dt_str, 85.0, regime_str, pnl, pnl, exec_label))
                 else:
                     # Update realized PnL, executor, and close timestamp for completed positions
                     conn.execute('''
                         UPDATE executed_trades 
-                        SET expected_value = ?, executor = ?, timestamp = ?, 
+                        SET realized_pnl = ?, expected_value = ?, executor = ?, timestamp = ?, 
                             sl = CASE WHEN ? > 0 THEN ? ELSE sl END, 
                             tp = CASE WHEN ? > 0 THEN ? ELSE tp END
                         WHERE ticket = ?
-                    ''', (pnl, exec_label, dt_str, sl_val, sl_val, tp_val, tp_val, pid))
+                    ''', (pnl, pnl, exec_label, dt_str, sl_val, sl_val, tp_val, tp_val, pid))
             conn.commit()
+
         except Exception as e:
             logger.error(f"Failed to sync MT5 history: {e}")
 

@@ -27,8 +27,9 @@ class StateManager:
 
     def _init_state(self):
         self._rw_lock = threading.RLock()
-        self.execution_mode: ExecutionMode = ExecutionMode.PAPER
+        self.execution_mode: ExecutionMode = ExecutionMode.LIVE
         self.is_safe_mode: bool = False
+
         self.is_running: bool = True
         self.is_orchestrator_running: bool = False
         

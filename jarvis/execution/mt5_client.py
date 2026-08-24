@@ -21,15 +21,20 @@ except ImportError:
     MT5_AVAILABLE = False
 
 class MT5Client:
-    def __init__(self, magic_number: int = 888999, mode: str = "paper", timeout_sec: float = 4.0):
+    _shared_paper_positions: Dict[int, PositionSnapshot] = {}
+    _shared_lock = threading.RLock()
+
+    def __init__(self, magic_number: int = 888999, mode: str = "live", timeout_sec: float = 4.0):
+
         self.magic_number = magic_number
         self.mode = mode.lower()  # "live", "paper", "demo"
         self.timeout_sec = timeout_sec
         self.is_connected = False
         self.symbol_alias_cache: Dict[str, str] = {}
-        self._paper_positions: Dict[int, PositionSnapshot] = {}
-        self._lock = threading.RLock()
+        self._paper_positions = MT5Client._shared_paper_positions
+        self._lock = MT5Client._shared_lock
         self.init_connection()
+
 
     def init_connection(self) -> bool:
         if self.mode == "paper":
@@ -119,62 +124,49 @@ class MT5Client:
 
     def get_account_snapshot(self) -> AccountSnapshot:
         self._reconnect_if_needed()
-        if self.mode == "paper" or not self.is_connected or not MT5_AVAILABLE:
-            return AccountSnapshot(
-                login=345841337,
-                server="JARVIS-Paper-Terminal",
-                balance=10000.0,
-                equity=10000.0,
-                margin=0.0,
-                free_margin=10000.0,
-                margin_level=0.0,
-                leverage=100,
-                profit=0.0,
-                name="Paper Account",
-                company="Simulation",
-                currency="USD",
-                trade_allowed=True
-            )
+        if MT5_AVAILABLE and mt5 is not None:
+            try:
+                with self._lock:
+                    acc = mt5.account_info()
+                    if acc is not None:
+                        return AccountSnapshot(
+                            login=int(acc.login),
+                            server=str(acc.server),
+                            balance=float(acc.balance),
+                            equity=float(acc.equity),
+                            margin=float(acc.margin),
+                            free_margin=float(acc.margin_free),
+                            margin_level=float(getattr(acc, "margin_level", 0.0)),
+                            leverage=int(acc.leverage),
+                            profit=float(getattr(acc, "profit", 0.0)),
+                            name=str(getattr(acc, "name", "Trader")),
+                            company=str(getattr(acc, "company", "XM Global")),
+                            currency=str(acc.currency),
+                            trade_allowed=bool(acc.trade_allowed)
+                        )
+            except Exception as e:
+                logger.error(f"Failed to fetch live MT5 account snapshot: {e}")
 
-        default_snap = AccountSnapshot(
-            login=345841337,
-            server="XMGlobal-MT5 10",
-            balance=102.14,
-            equity=102.25,
-            margin=3.71,
-            free_margin=98.54,
-            margin_level=2756.0,
-            leverage=1000,
-            name="Demo Account",
-            company="XM Global Limited"
+        # Dynamic Offline / Disconnected State (Zero Hardcoded Mock Data)
+        return AccountSnapshot(
+            login=0,
+            server="DISCONNECTED",
+            balance=0.0,
+            equity=0.0,
+            margin=0.0,
+            free_margin=0.0,
+            margin_level=0.0,
+            leverage=0,
+            profit=0.0,
+            name="Offline Terminal",
+            company="DISCONNECTED",
+            currency="USD",
+            trade_allowed=False
         )
-        
-        try:
-            with self._lock:
-                acc = mt5.account_info()
-                if acc is None:
-                    return default_snap
-                return AccountSnapshot(
-                    login=int(acc.login),
-                    server=str(acc.server),
-                    balance=float(acc.balance),
-                    equity=float(acc.equity),
-                    margin=float(acc.margin),
-                    free_margin=float(acc.margin_free),
-                    margin_level=float(getattr(acc, "margin_level", 0.0)),
-                    leverage=int(acc.leverage),
-                    profit=float(getattr(acc, "profit", 0.0)),
-                    name=str(getattr(acc, "name", "Trader")),
-                    company=str(getattr(acc, "company", "XM Global")),
-                    currency=str(acc.currency),
-                    trade_allowed=bool(acc.trade_allowed),
-                    last_sync_time=datetime.now(timezone.utc)
-                )
-        except Exception as e:
-            logger.error(f"MT5 get_account_snapshot failed: {e}")
-            return default_snap
+
 
     def get_open_positions(self, symbol: Optional[str] = None) -> List[PositionSnapshot]:
+
         self._reconnect_if_needed()
         if self.mode == "paper" or not self.is_connected or not MT5_AVAILABLE:
             with self._lock:

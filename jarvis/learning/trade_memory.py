@@ -60,15 +60,18 @@ class TradeMemory:
             columns = [info[1] for info in cur.fetchall()]
             if 'ml_features' not in columns:
                 cur.execute("ALTER TABLE trade_records ADD COLUMN ml_features TEXT")
+            if 'triple_barrier_label' not in columns:
+                cur.execute("ALTER TABLE trade_records ADD COLUMN triple_barrier_label INTEGER DEFAULT 0")
             
             self._conn.commit()
+
 
     def record_trade(self, trade_data: Dict[str, Any]):
         with self._lock:
             cur = self._conn.cursor()
             cur.execute("""
                 INSERT OR REPLACE INTO trade_records VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                 )
             """, (
                 trade_data.get("ticket", int(datetime.now().timestamp())),
@@ -91,8 +94,10 @@ class TradeMemory:
                 trade_data.get("mae", 0.0),
                 json.dumps(trade_data.get("reasoning", {})),
                 json.dumps(trade_data.get("quality_gate", {})),
-                json.dumps(trade_data.get("ml_features", []))
+                json.dumps(trade_data.get("ml_features", [])),
+                trade_data.get("triple_barrier_label", 1 if trade_data.get("pnl", 0.0) > 0 else (-1 if trade_data.get("pnl", 0.0) < 0 else 0))
             ))
+
             self._conn.commit()
 
     def fetch_all_trades(self) -> List[Dict[str, Any]]:

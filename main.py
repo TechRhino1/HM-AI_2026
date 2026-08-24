@@ -27,7 +27,8 @@ logger = logging.getLogger("JARVIS_Main")
 
 def main():
     parser = argparse.ArgumentParser(description="JARVIS AI 3.0 — Professional Trading Intelligence Platform")
-    parser.add_argument("--mode", type=str, default="paper", choices=["paper", "live", "demo"], help="Execution mode")
+    parser.add_argument("--mode", type=str, default="live", choices=["paper", "live", "demo"], help="Execution mode")
+
     parser.add_argument("--symbol", type=str, default="XAUUSD", help="Primary target symbol")
     parser.add_argument("--once", action="store_true", help="Run a single analytical radar sweep and exit")
     parser.add_argument("--backtest", action="store_true", help="Run historical backtest and exit")

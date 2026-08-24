@@ -65,17 +65,22 @@ class WalkForwardEngine:
             n_fold = len(fold_slice)
             is_split_idx = int(n_fold * self.in_sample_pct)
 
-            # In-Sample slice
-            is_df = fold_slice.iloc[:is_split_idx].reset_index(drop=True)
+            # In-Sample slice with Purge & Embargo buffering
+            purge_bars = 15
+            embargo_bars = 15
+            is_end_purged = max(10, is_split_idx - purge_bars)
+            is_df = fold_slice.iloc[:is_end_purged].reset_index(drop=True)
             engine_is = BacktestEngine(initial_balance=self.initial_balance, risk_per_trade_pct=self.risk_per_trade_pct)
             res_is = engine_is.run_backtest(is_df, symbol=symbol, spread_pips=spread_pips)
             is_metrics = res_is["metrics"]
 
-            # Out-Of-Sample slice with full context
-            oos_df = fold_slice.reset_index(drop=True)
+            # Out-Of-Sample slice with Embargo guard & full historical context
+            oos_start_embargo = min(n_fold - 10, is_split_idx + embargo_bars)
             engine_oos = BacktestEngine(initial_balance=self.initial_balance, risk_per_trade_pct=self.risk_per_trade_pct)
-            res_oos = engine_oos.run_backtest(oos_df, symbol=symbol, spread_pips=spread_pips)
+            res_oos = engine_oos.run_backtest(fold_slice, symbol=symbol, spread_pips=spread_pips, start_bar_idx=oos_start_embargo)
             oos_metrics = res_oos["metrics"]
+
+
 
             is_sharpe = is_metrics.get("sharpe_ratio", 0.0)
             oos_sharpe = oos_metrics.get("sharpe_ratio", 0.0)

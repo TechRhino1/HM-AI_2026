@@ -70,6 +70,15 @@ class PerformanceMetricsCalculator:
 
         calmar = (net_profit / (max_dd_dollars + 1e-9)) if max_dd_dollars > 0 else 0.0
 
+        # Multi-Objective Fitness Score (Section 12 Optimization Rule)
+        multi_objective_fitness = (
+            (expectancy / 10.0) +
+            (2.0 * min(10.0, profit_factor)) +
+            min(15.0, max(-15.0, sharpe)) +
+            min(25.0, max(-25.0, sortino / 10.0)) -
+            (2.5 * max_dd_pct)
+        )
+
         return {
             "total_trades": total_trades,
             "win_rate_pct": round(win_rate, 2),
@@ -81,6 +90,8 @@ class PerformanceMetricsCalculator:
             "sharpe_ratio": round(sharpe, 2),
             "sortino_ratio": round(sortino, 2),
             "calmar_ratio": round(calmar, 2),
+            "multi_objective_fitness": round(multi_objective_fitness, 2),
             "wins": win_count,
             "losses": loss_count
         }
+

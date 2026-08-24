@@ -174,12 +174,16 @@ class OnlineMLPredictor:
             pred = self._sigmoid(np.dot(self.weights, features) + self.bias)
             error = pred - target_win  # Gradient of binary cross-entropy
             
-            # Brier score tracking
+            # Brier score tracking & Automated Model Drift Protection (Section 10 Rule)
             self._brier_window.append(error ** 2)
-            if self.get_brier_score() > 0.30:
-                logging.warning(f"Brier score degraded: {self.get_brier_score():.3f} (worse than random)")
+            current_brier = self.get_brier_score()
+            if current_brier > 0.28 and len(self._brier_window) >= 15:
+                logging.warning(f"⚠️ MODEL DRIFT DETECTED! Rolling Brier score = {current_brier:.3f}. Damping weights to prior baseline.")
+                self.weights = np.clip(self.weights * 0.70, -2.0, 2.0)
+                self.training_steps = 10
 
             # Gradient computation
+
             grad_w = (error * features) + (self.l2_reg * self.weights)
             self._grad_buffer.append((grad_w, error))
 

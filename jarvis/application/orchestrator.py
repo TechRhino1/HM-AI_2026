@@ -39,9 +39,10 @@ class JarvisOrchestrator:
     def __init__(
         self,
         symbols: Optional[List[str]] = None,
-        mode: str = "paper",
+        mode: str = "live",
         magic_number: int = 888999
     ):
+
         self.symbols = symbols or ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD"]
         self.mode = mode.lower()
 

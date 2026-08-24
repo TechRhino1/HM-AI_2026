@@ -628,7 +628,34 @@
         </div>
     </div>
 
+    <!-- ==========================================================================
+         REMOTE ACCESS AUTHENTICATION LOGIN MODAL OVERLAY
+         ========================================================================== -->
+    <div id="remote-login-modal" class="macro-news-modal-overlay" style="display:none; z-index:99999; background:rgba(4,6,12,0.94); backdrop-filter:blur(20px);">
+        <div class="macro-news-modal-content" style="max-width:380px; padding:28px 24px; text-align:center; border:1px solid rgba(56,189,248,0.35); border-radius:14px; box-shadow:0 16px 50px rgba(0,0,0,0.9);">
+            <div style="font-size:36px; margin-bottom:8px;">🔒</div>
+            <h2 style="color:#ffffff; font-size:18px; font-weight:800; letter-spacing:0.05em; margin-bottom:4px;">REMOTE ACCESS TERMINAL</h2>
+            <p style="color:var(--text-dim); font-size:11px; margin-bottom:20px; text-transform:uppercase; letter-spacing:0.06em;">Authentication Required for Remote HM AI 4.0 Desk</p>
+            <form id="remote-login-form" onsubmit="handleRemoteLogin(event)" style="display:flex; flex-direction:column; gap:14px;">
+                <div style="text-align:left;">
+                    <span class="desk-field-lbl" style="font-size:10px; font-weight:700; color:var(--accent-cyan); text-transform:uppercase;">Admin Username</span>
+                    <input id="login-username" class="desk-input" type="text" value="admin" placeholder="Enter username (default: admin)" required style="width:100%; box-sizing:border-box; margin-top:4px; font-size:12px; padding:8px 12px;">
+                </div>
+                <div style="text-align:left;">
+                    <span class="desk-field-lbl" style="font-size:10px; font-weight:700; color:var(--accent-cyan); text-transform:uppercase;">Password</span>
+                    <input id="login-password" class="desk-input" type="password" value="jarvis2026" placeholder="Enter password (default: jarvis2026)" required style="width:100%; box-sizing:border-box; margin-top:4px; font-size:12px; padding:8px 12px;">
+                </div>
+
+                <div id="login-error-msg" style="color:var(--neon-bear); font-size:11px; font-weight:600; display:none; margin-top:-4px;">Invalid credentials</div>
+                <button type="submit" class="btn-desk-buy" style="margin-top:6px; padding:10px; font-size:12px; font-weight:800; letter-spacing:0.06em; background:linear-gradient(135deg, #00f59b, #00b874); border:none; border-radius:6px; cursor:pointer;">
+                    UNLOCK REMOTE TERMINAL ➔
+                </button>
+            </form>
+        </div>
+    </div>
+
     <!-- Terminal Controller Script -->
     <script src="/static/js/terminal.js?v=4.0"></script>
 </body>
 </html>
+

@@ -20,8 +20,10 @@ from jarvis.execution.mt5_client import MT5Client
 from jarvis.data.schemas import ExecutionMode
 from jarvis.data.symbol_registry import resolve as resolve_symbol
 from jarvis.market.sessions import SessionEngine
+from jarvis.api.remote_auth import RemoteAuthEngine
 
 logger = logging.getLogger("JARVIS_WebServer")
+
 
 class JarvisRequestHandler(BaseHTTPRequestHandler):
     state_manager: StateManager = GLOBAL_STATE
@@ -33,6 +35,34 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
     
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     root_dir = os.path.dirname(base_dir)
+
+    def _check_auth(self) -> bool:
+        auth_header = self.headers.get("Authorization", "")
+        cookie_header = self.headers.get("Cookie", "")
+        token = ""
+
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:].strip()
+        elif "jarvis_auth_token=" in cookie_header:
+            try:
+                for c in cookie_header.split(";"):
+                    c = c.strip()
+                    if c.startswith("jarvis_auth_token="):
+                        token = c.split("=", 1)[1].strip()
+                        break
+            except Exception:
+                pass
+
+        if not token:
+            parsed = urlparse(self.path)
+            query = parse_qs(parsed.query)
+            token = query.get("token", [""])[0]
+
+        if not token:
+            return False
+
+        return RemoteAuthEngine.validate_token(token)
+
 
     @classmethod
     def start_background_syncer(cls):
@@ -254,6 +284,29 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                 data = json.loads(body)
             except Exception:
                 data = {}
+
+            # Remote Access Authentication Endpoints
+            if path == "/api/auth/login":
+                username = data.get("username", "")
+                password = data.get("password", "")
+                if RemoteAuthEngine.verify_credentials(username, password):
+                    session_info = RemoteAuthEngine.create_session_token(username)
+                    self._send_json(session_info)
+                else:
+                    self._send_json({"status": "UNAUTHORIZED", "error": "Invalid remote access credentials"}, status_code=401)
+                return
+            elif path == "/api/auth/verify":
+                if self._check_auth():
+                    self._send_json({"status": "AUTHENTICATED", "valid": True})
+                else:
+                    self._send_json({"status": "UNAUTHORIZED", "valid": False}, status_code=401)
+                return
+
+            # Protected Action Endpoints — Require Authentication
+            if path.startswith("/api/action/"):
+                if not self._check_auth():
+                    self._send_json({"status": "UNAUTHORIZED", "error": "Authentication required for remote execution actions"}, status_code=401)
+                    return
 
             if path == "/api/copilot/ask":
                 query = data.get("query", "")

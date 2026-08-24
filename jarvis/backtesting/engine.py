@@ -37,18 +37,23 @@ class BacktestEngine:
         self,
         df_h1: pd.DataFrame,
         symbol: str = "XAUUSD",
-        spread_pips: float = 2.0
+        spread_pips: float = 2.0,
+        slippage_delta: float = 0.05,
+        start_bar_idx: int = 50
     ) -> Dict[str, Any]:
         balance = self.initial_balance
         equity = self.initial_balance
         trades: List[Dict[str, Any]] = []
         open_trade: Optional[Dict[str, Any]] = None
 
-        min_window = 60
-        spec = resolve_symbol(symbol)
-        slippage_delta = self.slippage_pips * spec.pip_size
+        total_bars = len(df_h1)
+        if total_bars < 20:
+            return {"symbol": symbol, "final_balance": balance, "metrics": PerformanceMetricsCalculator.calculate_metrics([], balance), "trades": []}
 
-        for i in range(min_window, len(df_h1) - 1):
+        effective_start = max(20, min(total_bars - 2, start_bar_idx))
+        spec = resolve_symbol(symbol)
+        
+        for i in range(effective_start, total_bars - 1):
             history_slice = df_h1.iloc[:i]
             current_bar = df_h1.iloc[i]
             next_bar = df_h1.iloc[i + 1]

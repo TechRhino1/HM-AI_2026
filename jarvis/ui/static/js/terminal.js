@@ -635,9 +635,17 @@
         for (const t of trades) {
             const isBuy = (t.action || t.type) === 'BUY';
             const sideClass = isBuy ? 'badge-ready-buy' : 'badge-ready-sell';
-            const pnlVal = Number(t.realized_pnl !== undefined ? t.realized_pnl : (t.profit !== undefined ? t.profit : (t.expected_value || 0)));
-            const pnlColor = pnlVal >= 0 ? 'var(--neon-bull)' : 'var(--neon-bear)';
-            const pnlPrefix = pnlVal >= 0 ? '+' : '';
+            let pnlVal = 0.0;
+            if (t.realized_pnl !== undefined && t.realized_pnl !== null) {
+                pnlVal = Number(t.realized_pnl);
+            } else if (t.profit !== undefined && t.profit !== null) {
+                pnlVal = Number(t.profit);
+            } else {
+                pnlVal = 0.0;
+            }
+            const pnlColor = pnlVal > 0 ? 'var(--neon-bull)' : (pnlVal < 0 ? 'var(--neon-bear)' : 'var(--text-dim)');
+            const pnlPrefix = pnlVal > 0 ? '+' : '';
+
             const dtStr = t.timestamp ? t.timestamp.replace('T', ' ').substring(0, 19) : '--';
             const isManual = t.executor === 'MANUAL' || (t.regime === 'MANUAL_EXECUTION');
             const execBadge = isManual
@@ -1229,15 +1237,21 @@
         _lastPositionsSnapshot = snapshot;
 
         el.positionsTbody.innerHTML = positions.map(p => {
-            const isBuy = p.type === "BUY";
-            const profit = p.profit || 0;
+            const isBuy = (p.type || "BUY") === "BUY";
+            const profit = p.profit !== undefined ? p.profit : 0;
             const profitColor = profit >= 0 ? "var(--neon-bull)" : "var(--neon-bear)";
             const profitPrefix = profit >= 0 ? "+" : "";
 
+            const openPrice = p.open_price !== undefined ? p.open_price : (p.price_open !== undefined ? p.price_open : (p.price || 0));
+            const currentPrice = p.current_price !== undefined ? p.current_price : (p.price_current !== undefined ? p.price_current : openPrice);
+            const volumeVal = p.volume !== undefined ? p.volume : (p.lots !== undefined ? p.lots : 0.01);
+            const slVal = p.sl !== undefined ? p.sl : (p.stop_loss || 0);
+            const tpVal = p.tp !== undefined ? p.tp : (p.take_profit || 0);
+
             let progressPct = 50;
-            if (p.sl && p.tp && p.sl !== p.tp) {
-                const total = Math.abs(p.tp - p.sl);
-                const currentDist = isBuy ? (p.current_price - p.sl) : (p.sl - p.current_price);
+            if (slVal && tpVal && slVal !== tpVal) {
+                const total = Math.abs(tpVal - slVal);
+                const currentDist = isBuy ? (currentPrice - slVal) : (slVal - currentPrice);
                 progressPct = Math.max(5, Math.min(95, (currentDist / total) * 100));
             }
 
@@ -1246,12 +1260,12 @@
                     <td style="color:var(--text-dim);">#${p.ticket}</td>
                     <td><b style="color:#ffffff;">${p.symbol}</b></td>
                     <td><span class="badge ${isBuy ? 'badge-ready-buy' : 'badge-ready-sell'}" style="font-size:8.5px; padding:1px 5px;">${p.type}</span></td>
-                    <td class="mono-number" style="font-weight:700;">${p.volume.toFixed(2)}</td>
-                    <td class="mono-number">${formatPrice(p.open_price, p.symbol)}</td>
-                    <td class="mono-number">${formatPrice(p.current_price, p.symbol)}</td>
-                    <td class="mono-number" style="color:var(--neon-bear);">${p.sl > 0 ? formatPrice(p.sl, p.symbol) : '—'}</td>
-                    <td class="mono-number" style="color:var(--neon-bull);">${p.tp > 0 ? formatPrice(p.tp, p.symbol) : '—'}</td>
-                    <td class="mono-number" style="color:${profitColor}; font-weight:800; font-size:11.5px;">${profitPrefix}$${profit.toFixed(2)}</td>
+                    <td class="mono-number" style="font-weight:700;">${Number(volumeVal).toFixed(2)}</td>
+                    <td class="mono-number">${formatPrice(openPrice, p.symbol)}</td>
+                    <td class="mono-number">${formatPrice(currentPrice, p.symbol)}</td>
+                    <td class="mono-number" style="color:var(--neon-bear);">${slVal > 0 ? formatPrice(slVal, p.symbol) : '—'}</td>
+                    <td class="mono-number" style="color:var(--neon-bull);">${tpVal > 0 ? formatPrice(tpVal, p.symbol) : '—'}</td>
+                    <td class="mono-number" style="color:${profitColor}; font-weight:800; font-size:11.5px;">${profitPrefix}$${Number(profit).toFixed(2)}</td>
                     <td>
                         <div class="position-progress-wrap">
                             <div class="progress-track">
@@ -1269,6 +1283,7 @@
                 </tr>
             `;
         }).join("");
+
     }
 
     function renderDevilAdvocateDOM(d) {
@@ -1544,9 +1559,13 @@
     window.closePosition = async function (ticket) {
         if (!confirm(`Confirm close position #${ticket}?`)) return;
         try {
+            const token = getAuthToken();
             const res = await fetch("/api/action/close_position", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { 
+                    "Content-Type": "application/json",
+                    "Authorization": token ? `Bearer ${token}` : ""
+                },
                 body: JSON.stringify({ ticket })
             });
             const data = await res.json();
@@ -1563,7 +1582,13 @@
     window.closeAllPositions = async function () {
         if (!confirm("EMERGENCY KILL-SWITCH: Close ALL active positions immediately?")) return;
         try {
-            const res = await fetch("/api/action/close_all_positions", { method: "POST" });
+            const token = getAuthToken();
+            const res = await fetch("/api/action/close_all_positions", { 
+                method: "POST",
+                headers: {
+                    "Authorization": token ? `Bearer ${token}` : ""
+                }
+            });
             const data = await res.json();
             alert(`Closed ${data.closed_count || 0} positions.`);
             fetchTelemetry();
@@ -1581,9 +1606,13 @@
         if (!confirm(`Confirm 1-Click Manual Execution: ${action} ${lots} ${sym}?`)) return;
 
         try {
+            const token = getAuthToken();
             const res = await fetch("/api/action/manual_trade", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { 
+                    "Content-Type": "application/json",
+                    "Authorization": token ? `Bearer ${token}` : ""
+                },
                 body: JSON.stringify({ symbol: sym, action, lots, sl, tp })
             });
             const data = await res.json();
@@ -2010,11 +2039,68 @@
         }
     });
 
+    window.getAuthToken = function() {
+        return localStorage.getItem("jarvis_auth_token") || "";
+    };
+
+    window.checkRemoteAuth = async function() {
+        const token = getAuthToken();
+        const modal = document.getElementById("remote-login-modal");
+        if (!token) {
+            if (modal) modal.style.display = "flex";
+            return false;
+        }
+        try {
+            const res = await fetch("/api/auth/verify", {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (data && data.valid) {
+                if (modal) modal.style.display = "none";
+                return true;
+            }
+        } catch (e) {}
+        if (modal) modal.style.display = "flex";
+        return false;
+    };
+
+    window.handleRemoteLogin = async function(event) {
+        if (event) event.preventDefault();
+        const userEl = document.getElementById("login-username");
+        const passEl = document.getElementById("login-password");
+        const user = userEl ? userEl.value.trim() : "admin";
+        const pass = passEl ? passEl.value.trim() : "jarvis2026";
+        const errMsg = document.getElementById("login-error-msg");
+        const modal = document.getElementById("remote-login-modal");
+
+        try {
+            const res = await fetch("/api/auth/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ username: user, password: pass })
+            });
+            const data = await res.json();
+            if (data && data.token) {
+                localStorage.setItem("jarvis_auth_token", data.token);
+                document.cookie = "jarvis_auth_token=" + data.token + "; path=/; max-age=86400";
+                if (errMsg) errMsg.style.display = "none";
+                if (modal) modal.style.display = "none";
+                fetchTelemetry();
+                fetchHistory();
+                return;
+            }
+        } catch (e) {}
+        if (errMsg) errMsg.style.display = "block";
+    };
+
+
     document.addEventListener("DOMContentLoaded", () => {
         initTradingViewLightweightChart();
         initCopilotInteractivity();
         initCommandPalette();
 
+        checkRemoteAuth();
         updateMarketStatusDisplay(state.symbol);
         fetchCandles();
         fetchTelemetry();
@@ -2034,5 +2120,6 @@
     });
 
 })();
+
 
 
