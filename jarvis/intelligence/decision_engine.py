@@ -28,6 +28,9 @@ from jarvis.market.news import GLOBAL_NEWS_ENGINE
 from jarvis.data.symbol_registry import resolve as resolve_symbol
 from jarvis.risk.account_tier import is_micro_account, get_effective_min_ev
 
+from jarvis.learning.fractional_diff import FractionalDifferentiationTransformer
+from jarvis.learning.ensemble_bandit import EnsembleStrategyBandit
+
 class DecisionEngine:
     def __init__(
         self,
@@ -42,10 +45,13 @@ class DecisionEngine:
         self.hypothesis_engine = hypothesis_engine or HypothesisEngine()
         self.calibrator = calibrator or ConfidenceCalibrationEngine()
         self.ml_predictor = ml_predictor or OnlineMLPredictor()
+        self.ensemble_bandit = EnsembleStrategyBandit()
+        self.frac_diff = FractionalDifferentiationTransformer()
         self.min_ev_hurdle = min_ev_hurdle
         self.max_devil_penalty = max_devil_penalty
         self.order_flow = InstitutionalVolumeOrderFlowEngine()
         self.self_learning = SelfLearningEngine()
+
 
     def _compute_bias_and_levels(
         self,
@@ -95,26 +101,26 @@ class DecisionEngine:
         is_breakout = regime.primary_regime in (MarketRegime.BREAKOUT, MarketRegime.HIGH_VOLATILITY)
 
         if is_strong_trend:
-            sl_default_mult = 1.3       # Shallow pullbacks in strong trends: tighter structure-anchored SL
-            sl_min_bound_mult = 0.6     # Tighter lower bound
-            sl_max_bound_mult = 2.5     # Tighter upper bound
-            sl_buffer_mult = 0.15       # Tighter structural buffer
-            tp_multiplier = 3.5         # Strong confirmed trend — let winners run
-            first_target_volume_pct = 0.30  # 30% first scale-out, 70% rides to extended target
+            sl_default_mult = 1.2       # Shallow pullbacks in strong trends: tight structure-anchored SL
+            sl_min_bound_mult = 0.5     # Tighter lower bound
+            sl_max_bound_mult = 2.2     # Tighter upper bound
+            sl_buffer_mult = 0.12       # Tighter structural buffer
+            tp_multiplier = 3.8         # Strong confirmed trend — let winners run for massive R:R
+            first_target_volume_pct = 0.25  # 25% scale-out, 75% rides to target
         elif is_ranging:
-            sl_default_mult = 1.6       # Safe structural buffer outside chop
-            sl_min_bound_mult = 0.8
-            sl_max_bound_mult = 3.5
-            sl_buffer_mult = 0.25
-            tp_multiplier = 1.8         # Target internal range liquidity
-            first_target_volume_pct = 0.60  # 60% locked in quickly inside range
-        elif is_breakout:
-            sl_default_mult = 1.6
-            sl_min_bound_mult = 0.75
-            sl_max_bound_mult = 3.5
+            sl_default_mult = 1.4       # Safe structural buffer outside chop
+            sl_min_bound_mult = 0.7
+            sl_max_bound_mult = 3.0
             sl_buffer_mult = 0.20
-            tp_multiplier = 2.8         # Momentum expansion target
-            first_target_volume_pct = 0.50  # 50/50 balanced split
+            tp_multiplier = 2.2         # Target internal range liquidity
+            first_target_volume_pct = 0.50  # 50% locked in quickly inside range
+        elif is_breakout:
+            sl_default_mult = 1.4
+            sl_min_bound_mult = 0.70
+            sl_max_bound_mult = 3.0
+            sl_buffer_mult = 0.20
+            tp_multiplier = 3.2         # Breakout expansion target
+            first_target_volume_pct = 0.35
         else:
             sl_default_mult = 1.8
             sl_min_bound_mult = 0.8
