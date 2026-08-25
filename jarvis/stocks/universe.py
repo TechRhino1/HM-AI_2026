@@ -766,15 +766,14 @@ STOCK_UNIVERSE: Dict[str, Dict[str, Any]] = {
     }
 }
 
+from datetime import datetime, timezone, timedelta
+
 def get_all_symbols() -> List[str]:
     return list(STOCK_UNIVERSE.keys())
 
 def get_stock_profile(symbol: str) -> Dict[str, Any]:
     sym = (symbol or "NVDA").upper().strip()
-    if sym in STOCK_UNIVERSE:
-        return STOCK_UNIVERSE[sym]
-    # Fallback template for any custom searched ticker
-    return {
+    base_data = STOCK_UNIVERSE.get(sym, {
         "symbol": sym,
         "name": f"{sym} Corporation",
         "sector": "Technology",
@@ -789,4 +788,13 @@ def get_stock_profile(symbol: str) -> Dict[str, Any]:
         "week52_low": 75.00,
         "description": f"Publicly traded equity instrument {sym} analyzed by JARVIS AI Institutional Screener.",
         "tags": ["US_EQUITIES"]
-    }
+    }).copy()
+
+    # Deterministic earnings date & days remaining
+    seed_offset = (abs(hash(sym)) % 55) + 4
+    earnings_dt = datetime.now(timezone.utc) + timedelta(days=seed_offset)
+    base_data["earnings_date"] = earnings_dt.strftime("%b %d, %Y")
+    base_data["days_to_earnings"] = seed_offset
+    base_data["implied_volatility"] = round(24.0 + (base_data.get("beta", 1.2) * 14.0) + (abs(hash(sym)) % 10), 1)
+    
+    return base_data

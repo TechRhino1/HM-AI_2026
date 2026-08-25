@@ -85,6 +85,11 @@ class StockService:
                         "take_profit_2": analysis["trade_setup"]["take_profit_2"],
                         "risk_reward": analysis["trade_setup"]["risk_reward_ratio"],
                         "rsi": analysis["technicals"]["rsi_14"],
+                        "earnings_date": analysis["earnings"]["earnings_date"],
+                        "days_to_earnings": analysis["earnings"]["days_to_earnings"],
+                        "earnings_badge": analysis["earnings"]["warning_badge"],
+                        "earnings_warning": analysis["earnings"]["warning_level"],
+                        "implied_volatility": analysis["earnings"]["implied_volatility"],
                         "tags": analysis["tags"]
                     }
                     results.append(row)
@@ -339,6 +344,105 @@ class StockService:
             
         return alerts
 
+    def get_sector_heatmap(self) -> List[Dict[str, Any]]:
+        """
+        Aggregates equity universe performance and smart money rotation by sector.
+        """
+        self.get_screener_results()
+        if not self._cached_screener_results:
+            return []
+
+        sector_groups: Dict[str, List[Dict[str, Any]]] = {}
+        for s in self._cached_screener_results:
+            sec = s.get("sector", "General")
+            if sec not in sector_groups:
+                sector_groups[sec] = []
+            sector_groups[sec].append(s)
+
+        heatmap = []
+        for sec, items in sector_groups.items():
+            if not items:
+                continue
+            avg_chg = round(sum(it["change_pct"] for it in items) / len(items), 2)
+            avg_cmf = round(sum(it.get("cmf_20", 0.0) for it in items) / len(items), 2)
+            avg_prob = round(sum(it["breakout_probability"] for it in items) / len(items), 1)
+            
+            # Identify sector leader and top breakout candidate
+            leader = max(items, key=lambda x: x["change_pct"])
+            top_breakout = max(items, key=lambda x: x["breakout_probability"])
+            
+            # Determine Smart Money Rotation Status
+            if avg_chg > 1.2 and avg_cmf > 0.05:
+                rot_status = "LEADING_INFLOW"
+            elif avg_chg > 0 and avg_cmf > 0:
+                rot_status = "ACCUMULATION"
+            elif avg_chg < -0.8 and avg_cmf < -0.05:
+                rot_status = "OUTFLOW_DEFENSIVE"
+            else:
+                rot_status = "ROTATION_NEUTRAL"
+
+            heatmap.append({
+                "sector": sec,
+                "count": len(items),
+                "avg_change_pct": avg_chg,
+                "avg_cmf": avg_cmf,
+                "avg_probability": avg_prob,
+                "rotation_status": rot_status,
+                "top_leader_symbol": leader["symbol"],
+                "top_leader_change": leader["change_pct"],
+                "top_breakout_symbol": top_breakout["symbol"],
+                "top_breakout_prob": top_breakout["breakout_probability"],
+                "stocks": [
+                    {
+                        "symbol": it["symbol"],
+                        "change_pct": it["change_pct"],
+                        "price": it["price"],
+                        "breakout_probability": it["breakout_probability"]
+                    } for it in items[:6]
+                ]
+            })
+
+        # Sort by average change % descending
+        heatmap.sort(key=lambda x: x["avg_change_pct"], reverse=True)
+        return heatmap
+
+    def export_csv(self, market: str = "all", sector: str = "all") -> str:
+        """
+        Exports filtered stock screener opportunities to CSV format.
+        """
+        screener = self.get_screener_results(market=market, sector=sector, limit=500)
+        stocks = screener.get("stocks", [])
+        
+        headers = [
+            "Symbol", "Company", "Sector", "Price", "Change %", "Setup Grade", 
+            "Breakout Probability %", "Timing Horizon", "CMF 20", "RS vs SPY", 
+            "Entry Zone", "Stop Loss", "Target 2", "Risk Reward", "Recommendation", "Earnings Date"
+        ]
+        
+        rows = [",".join(headers)]
+        for s in stocks:
+            row = [
+                s.get("symbol", ""),
+                f'"{s.get("name", "")}"',
+                f'"{s.get("sector", "")}"',
+                str(s.get("price", "")),
+                str(s.get("change_pct", "")),
+                s.get("setup_grade", ""),
+                str(s.get("breakout_probability", "")),
+                s.get("timing_horizon", ""),
+                str(s.get("cmf_20", "")),
+                str(s.get("rs_vs_spy", "")),
+                str(s.get("entry_zone", "")),
+                str(s.get("stop_loss", "")),
+                str(s.get("take_profit_2", "")),
+                str(s.get("risk_reward", "")),
+                s.get("recommendation", ""),
+                s.get("earnings_date", "")
+            ]
+            rows.append(",".join(row))
+            
+        return "\n".join(rows)
+
     def handle_request(self, path: str, query: Dict[str, List[str]], handler: Any) -> bool:
         """
         Modular REST API router for all `/api/stocks/*` endpoints.
@@ -396,6 +500,46 @@ class StockService:
                 handler._send_json({"recommended_buys": buys, "count": len(buys)})
                 return True
 
+            elif path == "/api/stocks/heatmap":
+                heatmap = self.get_sector_heatmap()
+                handler._send_json({"sectors": heatmap, "count": len(heatmap)})
+                return True
+
+            elif path == "/api/stocks/calc_position":
+                equity = float(query.get("equity", ["10000"])[0])
+                risk_pct = float(query.get("risk_pct", ["1.0"])[0])
+                entry = float(query.get("entry", ["100"])[0])
+                sl = float(query.get("sl", ["95"])[0])
+                tp = float(query.get("tp", ["115"])[0])
+                calc = STOCK_ENGINE.calculate_position_size(
+                    account_equity=equity,
+                    risk_pct=risk_pct,
+                    entry_price=entry,
+                    stop_loss=sl,
+                    take_profit=tp
+                )
+                handler._send_json(calc)
+                return True
+
+            elif path == "/api/stocks/compare":
+                sym_a = query.get("sym1", ["NVDA"])[0]
+                sym_b = query.get("sym2", ["AMD"])[0]
+                comp = STOCK_ENGINE.compare_stocks(sym_a, sym_b)
+                handler._send_json(comp)
+                return True
+
+            elif path == "/api/stocks/export_csv":
+                market = query.get("market", ["all"])[0]
+                sector = query.get("sector", ["all"])[0]
+                csv_data = self.export_csv(market=market, sector=sector)
+                handler.send_response(200)
+                handler.send_header("Content-Type", "text/csv")
+                handler.send_header("Content-Disposition", "attachment; filename=jarvis_stock_breakouts.csv")
+                handler.send_header("Access-Control-Allow-Origin", "*")
+                handler.end_headers()
+                handler.wfile.write(csv_data.encode("utf-8"))
+                return True
+
             elif path == "/api/stocks/candles":
                 sym = query.get("symbol", ["NVDA"])[0]
                 tf = query.get("tf", ["1D"])[0]
@@ -412,3 +556,4 @@ class StockService:
 
 
 STOCK_SERVICE = StockService()
+

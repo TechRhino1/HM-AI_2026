@@ -46,7 +46,19 @@ def run_tests():
         # 9. Stock Candles
         {"name": "Candles NVDA 1D", "url": f"{base_url}/api/stocks/candles?symbol=NVDA&tf=1D", "is_json": True, "check": lambda d: len(d.get("candles", [])) == 120},
         
-        # 10. Existing Forex/Crypto Endpoints (Zero Regression Check)
+        # 10. Sector Heatmap
+        {"name": "Sector Capital Rotation Heatmap", "url": f"{base_url}/api/stocks/heatmap", "is_json": True, "check": lambda d: len(d.get("sectors", [])) > 0 and "rotation_status" in d["sectors"][0]},
+        
+        # 11. Position Size & Risk Calculator
+        {"name": "Position Sizing Calculator", "url": f"{base_url}/api/stocks/calc_position?equity=10000&risk_pct=1.0&entry=128.80&sl=124.50&tp=139.80", "is_json": True, "check": lambda d: d.get("shares", 0) > 0 and "broker_order_text" in d},
+        
+        # 12. Head-to-Head 2-Stock Comparison
+        {"name": "Head-to-Head Compare NVDA vs AMD", "url": f"{base_url}/api/stocks/compare?sym1=NVDA&sym2=AMD", "is_json": True, "check": lambda d: "ai_winner" in d and "stock_a" in d and "stock_b" in d},
+        
+        # 13. Export CSV Endpoint
+        {"name": "Export Screener CSV", "url": f"{base_url}/api/stocks/export_csv", "is_json": False, "check": lambda c: "Symbol,Company,Sector" in c},
+
+        # 14. Existing Forex/Crypto Endpoints (Zero Regression Check)
         {"name": "Existing /api/telemetry_state", "url": f"{base_url}/api/telemetry_state", "is_json": True, "check": lambda d: "execution_mode" in d and "account" in d},
         {"name": "Existing /api/candles", "url": f"{base_url}/api/candles?symbol=XAUUSD&tf=H1", "is_json": True, "check": lambda d: len(d.get("candles", [])) > 0},
     ]
@@ -82,11 +94,18 @@ def run_tests():
                         print(f"[PASS] {t['name']:<40} -> HTTP 200 OK | JSON Valid")
                         passed += 1
                 else:
-                    if "<html" in content.lower():
+                    if "check" in t:
+                        if t["check"](content):
+                            print(f"[PASS] {t['name']:<40} -> HTTP 200 OK | Text/CSV Content Validated ({len(content)} bytes)")
+                            passed += 1
+                        else:
+                            print(f"[FAIL] {t['name']:<40} -> Validation Check Failed on Content")
+                            failed += 1
+                    elif "<html" in content.lower():
                         print(f"[PASS] {t['name']:<40} -> HTTP 200 OK | HTML Rendered ({len(content)} bytes)")
                         passed += 1
                     else:
-                        print(f"[FAIL] {t['name']:<40} -> Response is not HTML")
+                        print(f"[FAIL] {t['name']:<40} -> Unexpected Response Content")
                         failed += 1
         except Exception as ex:
             print(f"[FAIL] {t['name']:<40} -> Exception: {ex}")

@@ -575,6 +575,15 @@ class StockIntelligenceEngine:
                 "s3": round(s3, 2)
             },
 
+            # Earnings & Macro Catalyst Warning Engine
+            "earnings": {
+                "earnings_date": profile.get("earnings_date", "TBD"),
+                "days_to_earnings": profile.get("days_to_earnings", 30),
+                "implied_volatility": profile.get("implied_volatility", 35.0),
+                "warning_level": "HIGH_VOLATILITY_WARNING" if profile.get("days_to_earnings", 30) <= 5 else ("UPCOMING_SOON" if profile.get("days_to_earnings", 30) <= 14 else "CLEAR_RUNWAY"),
+                "warning_badge": f"⚠️ Earnings {profile.get('days_to_earnings', 30)}d" if profile.get("days_to_earnings", 30) <= 5 else (f"📅 Earnings {profile.get('days_to_earnings', 30)}d" if profile.get("days_to_earnings", 30) <= 14 else "✅ Clear Runway")
+            },
+
             # Multi-Timeframe Alignment
             "multi_timeframe": multi_tf,
 
@@ -584,6 +593,62 @@ class StockIntelligenceEngine:
 
         self._cache[cache_key] = {"data": data, "timestamp": now}
         return data
+
+    def calculate_position_size(
+        self,
+        account_equity: float = 10000.0,
+        risk_pct: float = 1.0,
+        entry_price: float = 100.0,
+        stop_loss: float = 95.0,
+        take_profit: float = 115.0
+    ) -> Dict[str, Any]:
+        """
+        Calculates exact shares, dollar risk, capital allocation, and broker order command.
+        """
+        risk_amount = max(1.0, account_equity * (risk_pct / 100.0))
+        per_share_risk = max(0.01, abs(entry_price - stop_loss))
+        shares = int(risk_amount // per_share_risk)
+        shares = max(1, shares)
+        
+        total_capital = round(shares * entry_price, 2)
+        actual_dollar_risk = round(shares * per_share_risk, 2)
+        profit_tp = round(shares * abs(take_profit - entry_price), 2) if take_profit > 0 else round(actual_dollar_risk * 2.5, 2)
+        
+        return {
+            "account_equity": round(account_equity, 2),
+            "risk_pct": round(risk_pct, 2),
+            "dollar_risk": actual_dollar_risk,
+            "shares": shares,
+            "total_capital_required": total_capital,
+            "capital_pct_of_account": round((total_capital / account_equity) * 100.0, 1) if account_equity > 0 else 0.0,
+            "dollar_profit_target": profit_tp,
+            "risk_reward_ratio": round(profit_tp / actual_dollar_risk, 2) if actual_dollar_risk > 0 else 2.5,
+            "broker_order_text": f"BUY {shares} shares @ ${entry_price:.2f} | SL: ${stop_loss:.2f} | TP: ${take_profit:.2f}"
+        }
+
+    def compare_stocks(self, sym_a: str, sym_b: str) -> Dict[str, Any]:
+        """
+        Generates side-by-side quantitative breakout comparison between two equities.
+        """
+        data_a = self.analyze_stock(sym_a)
+        data_b = self.analyze_stock(sym_b)
+        
+        winner = sym_a if data_a["breakout_probability"] >= data_b["breakout_probability"] else sym_b
+        
+        return {
+            "stock_a": data_a,
+            "stock_b": data_b,
+            "ai_winner": winner,
+            "comparison_matrix": {
+                "breakout_probability": {"stock_a": data_a["breakout_probability"], "stock_b": data_b["breakout_probability"]},
+                "setup_grade": {"stock_a": data_a["setup_grade"], "stock_b": data_b["setup_grade"]},
+                "cmf_20": {"stock_a": data_a["order_flow"]["cmf_20"], "stock_b": data_b["order_flow"]["cmf_20"]},
+                "rs_vs_spy": {"stock_a": data_a["order_flow"]["rs_vs_spy"], "stock_b": data_b["order_flow"]["rs_vs_spy"]},
+                "rvol": {"stock_a": data_a["rvol"], "stock_b": data_b["rvol"]},
+                "risk_reward": {"stock_a": data_a["trade_setup"]["risk_reward_ratio"], "stock_b": data_b["trade_setup"]["risk_reward_ratio"]},
+                "squeeze_status": {"stock_a": data_a["squeeze_status"], "stock_b": data_b["squeeze_status"]}
+            }
+        }
 
 
 STOCK_ENGINE = StockIntelligenceEngine()

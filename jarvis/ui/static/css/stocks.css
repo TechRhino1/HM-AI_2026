@@ -573,6 +573,227 @@ body {
 }
 
 /* ==========================================================================
+   AUTO-SCAN & TOOLBAR CONTROLS
+   ========================================================================== */
+.auto-scan-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(14, 20, 32, 0.7);
+    border: 1px solid var(--border-subtle);
+    padding: 3px 8px;
+    border-radius: 6px;
+}
+
+.btn-control-icon {
+    background: transparent;
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    color: var(--accent-cyan);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-control-icon:hover {
+    background: rgba(0, 212, 255, 0.15);
+    border-color: var(--accent-cyan);
+}
+
+.scan-select {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-primary);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.scan-countdown-tag {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--neon-bull);
+    min-width: 24px;
+    text-align: center;
+}
+
+.table-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.btn-toolbar {
+    background: rgba(0, 212, 255, 0.08);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    color: var(--accent-cyan);
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.btn-toolbar:hover {
+    background: var(--accent-cyan);
+    color: #000000;
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.35);
+}
+
+/* ==========================================================================
+   SECTOR CAPITAL ROTATION HEATMAP
+   ========================================================================== */
+.sector-heatmap-panel {
+    background: var(--bg-panel);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    border-radius: 8px;
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.heatmap-header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(51, 65, 85, 0.3);
+}
+
+.btn-close-mini {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-size: 13px;
+    cursor: pointer;
+    padding: 2px 6px;
+}
+
+.btn-close-mini:hover {
+    color: #ffffff;
+}
+
+.heatmap-tiles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+}
+
+.heatmap-tile {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.heatmap-tile:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    border-color: var(--accent-cyan);
+}
+
+.heatmap-tile-inflow {
+    border-color: rgba(0, 245, 155, 0.4);
+    background: linear-gradient(180deg, rgba(0, 245, 155, 0.08), rgba(12, 18, 30, 0.9));
+}
+
+.heatmap-tile-outflow {
+    border-color: rgba(255, 59, 92, 0.35);
+    background: linear-gradient(180deg, rgba(255, 59, 92, 0.08), rgba(12, 18, 30, 0.9));
+}
+
+.heatmap-tile-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.heatmap-sec-name {
+    font-size: 11.5px;
+    font-weight: 800;
+    color: #ffffff;
+}
+
+.heatmap-chg {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.heatmap-flow-badge {
+    font-size: 9.5px;
+    font-weight: 800;
+    padding: 2px 6px;
+    border-radius: 3px;
+    width: fit-content;
+}
+
+.flow-inflow {
+    background: rgba(0, 245, 155, 0.15);
+    color: var(--neon-bull);
+    border: 1px solid rgba(0, 245, 155, 0.3);
+}
+
+.flow-outflow {
+    background: rgba(255, 59, 92, 0.15);
+    color: var(--neon-bear);
+    border: 1px solid rgba(255, 59, 92, 0.3);
+}
+
+.flow-neutral {
+    background: rgba(100, 116, 139, 0.15);
+    color: var(--text-dim);
+    border: 1px solid rgba(100, 116, 139, 0.3);
+}
+
+/* ==========================================================================
+   EARNINGS CATALYST BADGES
+   ========================================================================== */
+.badge-earnings-warn {
+    background: rgba(255, 59, 92, 0.15);
+    color: var(--neon-bear);
+    border: 1px solid rgba(255, 59, 92, 0.4);
+    font-weight: 800;
+    font-size: 10.5px;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.badge-earnings-soon {
+    background: rgba(251, 191, 36, 0.15);
+    color: var(--neon-amber);
+    border: 1px solid rgba(251, 191, 36, 0.4);
+    font-weight: 700;
+    font-size: 10.5px;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.badge-earnings-clear {
+    background: rgba(0, 245, 155, 0.08);
+    color: var(--text-dim);
+    border: 1px solid rgba(51, 65, 85, 0.3);
+    font-size: 10.5px;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* ==========================================================================
    MAIN CONTENT GRID: TABLE VIEW + WATCHLIST / DETAILS
    ========================================================================== */
 .screener-main-grid {
