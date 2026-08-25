@@ -8,8 +8,13 @@ import csv
 import io
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
-
-from jarvis.india.universe import INDIA_UNIVERSE, get_all_india_symbols, get_india_profile, get_india_indices
+from jarvis.india.universe import (
+    INDIA_UNIVERSE,
+    get_all_india_symbols,
+    get_all_india_stocks,
+    get_india_profile,
+    get_india_indices
+)
 from jarvis.india.india_engine import INDIA_ENGINE
 from jarvis.india.options_engine import INDIA_OPTIONS
 from jarvis.india.nse_rules import NSE_RULES
@@ -34,12 +39,14 @@ class IndiaMarketsService:
                 "symbol": data["symbol"],
                 "name": data["name"],
                 "price": data["current_price"],
-                "change_val": data["change_val"],
                 "change_pct": data["change_pct"],
-                "cpr_width": data["cpr"]["width_classification"],
+                "change_val": data["change_val"],
+                "cpr_classification": data["cpr"]["width_classification"],
                 "cpr_label": data["cpr"]["width_label"],
-                "breakout_prob": data["breakout_probability"],
-                "recommendation": data["recommendation"]
+                "camarilla_h4": data["camarilla"]["h4_breakout"],
+                "camarilla_l4": data["camarilla"]["l4_breakdown"],
+                "vwap": data["vwap_structure"]["vwap"],
+                "bias": data["multi_timeframe"]["1D"]["bias"]
             })
         return res
 
@@ -50,16 +57,25 @@ class IndiaMarketsService:
         cpr_type: str = "all",
         min_prob: float = 0.0,
         sort_by: str = "probability",
-        sort_dir: str = "desc"
+        sort_dir: str = "desc",
+        include_indices: bool = False
     ) -> Dict[str, Any]:
         """
-        Scans all Indian universe instruments and applies multi-factor filters.
+        Scans Indian universe instruments. Strictly scans individual corporate equities when include_indices=False.
         """
-        symbols = get_all_india_symbols()
+        if include_indices:
+            symbols = get_all_india_symbols()
+        else:
+            symbols = get_all_india_stocks()
+
         scanned_list = []
 
         for sym in symbols:
             analysis = INDIA_ENGINE.analyze_india_instrument(sym, timeframe="1D")
+
+            # Strictly exclude indices unless explicitly requested
+            if not include_indices and (analysis.get("is_index", False) or analysis.get("sector") == "Indices"):
+                continue
             
             # Filter by sector
             if sector != "all" and analysis["sector"].lower() != sector.lower():
@@ -85,6 +101,7 @@ class IndiaMarketsService:
                 "name": analysis["name"],
                 "sector": analysis["sector"],
                 "market": analysis["market"],
+                "is_index": analysis.get("is_index", False),
                 "price": analysis["current_price"],
                 "change_pct": analysis["change_pct"],
                 "change_val": analysis["change_val"],
@@ -97,6 +114,9 @@ class IndiaMarketsService:
                 "is_squeeze": analysis["is_squeeze"],
                 "squeeze_status": analysis["squeeze_status"],
                 "lot_size": analysis["lot_size"],
+                "notional_contract_value_inr": analysis.get("notional_contract_value_inr", round(analysis["current_price"] * analysis["lot_size"], 2)),
+                "sebi_regulatory": analysis.get("sebi_regulatory", {}),
+                "score_breakdown": analysis.get("score_breakdown", {}),
                 "cpr": analysis["cpr"],
                 "camarilla": analysis["camarilla"],
                 "vwap": analysis["vwap_structure"]["vwap"],
@@ -118,8 +138,14 @@ class IndiaMarketsService:
         elif sort_by == "symbol":
             scanned_list.sort(key=lambda x: x["symbol"], reverse=not rev)
 
-        # Curate Top 3 "AI Recommended: Buy Now" Opportunities
-        ai_buys = [s for s in scanned_list if s["breakout_probability"] >= 75 and s["price"] > s["vwap"]][:4]
+        # Curate Top 4 "AI Recommended: Buy Now" Opportunities (Strictly Non-Index Equities)
+        ai_buys = [
+            s for s in scanned_list 
+            if not s.get("is_index", False) 
+            and s["breakout_probability"] >= 72 
+            and s["price"] > s["vwap"]
+            and not s.get("sebi_regulatory", {}).get("is_fno_ban", False)
+        ][:4]
 
         return {
             "count": len(scanned_list),
@@ -216,13 +242,14 @@ class IndiaMarketsService:
         HTTP Request router for all `/api/india/*` endpoints.
         """
         try:
-            if path == "/api/india/scanner":
+            if path in ["/api/india/scanner", "/api/india/stocks"]:
                 sector = query.get("sector", ["all"])[0]
                 market = query.get("market", ["all"])[0]
                 cpr_type = query.get("cpr", ["all"])[0]
                 min_prob = float(query.get("min_prob", [0.0])[0])
                 sort_by = query.get("sort_by", ["probability"])[0]
                 sort_dir = query.get("sort_dir", ["desc"])[0]
+                inc_idx = query.get("include_indices", ["0"])[0] in ["1", "true", "True"]
 
                 res = self.get_scanner_data(
                     sector=sector,
@@ -230,7 +257,8 @@ class IndiaMarketsService:
                     cpr_type=cpr_type,
                     min_prob=min_prob,
                     sort_by=sort_by,
-                    sort_dir=sort_dir
+                    sort_dir=sort_dir,
+                    include_indices=inc_idx
                 )
                 self._send_json(handler, res)
                 return True

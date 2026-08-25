@@ -186,27 +186,30 @@ class NSERuleEngine:
     @staticmethod
     def calculate_stt_and_charges(turnover: float, instrument_type: str = "OPTIONS") -> Dict[str, float]:
         """
-        Calculates SEBI, STT, Exchange Turnover, GST, and Stamp Duty breakdown.
+        Calculates SEBI, STT (Revised 2024-2026 Union Budget rates), Exchange Turnover, GST, and Stamp Duty.
         """
         if instrument_type == "EQUITY_DELIVERY":
-            stt = turnover * 0.001
+            stt = turnover * 0.001       # 0.1% on buy/sell
             brokerage = min(20.0, turnover * 0.0005)
             exchange_txn = turnover * 0.0000345
+            stamp_duty = turnover * 0.00015
         elif instrument_type == "EQUITY_INTRADAY":
-            stt = turnover * 0.00025
+            stt = turnover * 0.00025     # 0.025% on sell
             brokerage = min(20.0, turnover * 0.0003)
             exchange_txn = turnover * 0.0000345
+            stamp_duty = turnover * 0.00003
         elif instrument_type == "FUTURES":
-            stt = turnover * 0.000125
+            stt = turnover * 0.0002      # 0.02% (Hiked by 150% in 2024-2026 budget)
             brokerage = 20.0
             exchange_txn = turnover * 0.00002
+            stamp_duty = turnover * 0.00002
         else: # OPTIONS (Premium Turnover)
-            stt = turnover * 0.000625
+            stt = turnover * 0.001       # 0.1% on premium turnover
             brokerage = 20.0
             exchange_txn = turnover * 0.00053
+            stamp_duty = turnover * 0.00003
 
-        sebi_charges = turnover * 0.000001
-        stamp_duty = turnover * 0.00003
+        sebi_charges = turnover * 0.000001 # ₹10 per crore
         gst = (brokerage + exchange_txn + sebi_charges) * 0.18
         total_tax_and_charges = round(stt + brokerage + exchange_txn + sebi_charges + stamp_duty + gst, 2)
 
@@ -218,6 +221,38 @@ class NSERuleEngine:
             "stamp_duty": round(stamp_duty, 2),
             "gst": round(gst, 2),
             "total_charges": total_tax_and_charges
+        }
+
+    @staticmethod
+    def calculate_margin_requirement(
+        symbol: str,
+        spot_price: float,
+        quantity: int,
+        is_short_option: bool = False,
+        is_expiry_day: bool = False
+    ) -> Dict[str, Any]:
+        """
+        SEBI 2024-2026 Upfront Peak Margin & Extreme Loss Margin (ELM) estimator.
+        - ₹15L-20L contract size framework
+        - 100% Upfront collection
+        - Additional 2% ELM on expiry day for short index options
+        """
+        contract_value = spot_price * quantity
+        base_span_pct = 0.12 # 12% SPAN proxy
+        exposure_pct = 0.03  # 3% Exposure proxy
+        elm_pct = 0.02 if (is_short_option and is_expiry_day) else 0.0
+
+        total_margin_pct = base_span_pct + exposure_pct + elm_pct
+        required_margin = round(contract_value * total_margin_pct, 2)
+
+        return {
+            "contract_value": round(contract_value, 2),
+            "span_margin": round(contract_value * base_span_pct, 2),
+            "exposure_margin": round(contract_value * exposure_pct, 2),
+            "elm_margin": round(contract_value * elm_pct, 2),
+            "total_margin_required": required_margin,
+            "margin_pct": round(total_margin_pct * 100.0, 1),
+            "is_expiry_day_elm_applied": bool(elm_pct > 0)
         }
 
 

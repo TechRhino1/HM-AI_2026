@@ -513,11 +513,16 @@ INDIA_UNIVERSE: Dict[str, Dict[str, Any]] = {
 def get_all_india_symbols() -> List[str]:
     return list(INDIA_UNIVERSE.keys())
 
+def get_all_india_stocks() -> List[str]:
+    """Returns only individual corporate equities (strictly excluding indices)."""
+    return [k for k, v in INDIA_UNIVERSE.items() if v.get("sector") != "Indices" and "INDEX" not in v.get("tags", [])]
+
 def get_india_indices() -> List[str]:
+    """Returns only benchmark and sectoral indices."""
     return [k for k, v in INDIA_UNIVERSE.items() if v.get("sector") == "Indices" or "INDEX" in v.get("tags", [])]
 
 def get_india_profile(symbol: str) -> Dict[str, Any]:
-    sym = (symbol or "NIFTY").upper().strip().replace(".NSE", "").replace(".BSE", "")
+    sym = (symbol or "RELIANCE").upper().strip().replace(".NSE", "").replace(".BSE", "")
     profile = INDIA_UNIVERSE.get(sym, {
         "symbol": sym,
         "name": f"{sym} India Limited",
@@ -536,11 +541,23 @@ def get_india_profile(symbol: str) -> Dict[str, Any]:
         "tags": ["NSE", "EQUITY"]
     }).copy()
 
+    is_index = (profile.get("sector") == "Indices" or "INDEX" in profile.get("tags", []))
+    profile["is_index"] = is_index
+
     # Deterministic Indian quarterly earnings date
     seed_offset = (abs(hash(sym)) % 45) + 3
     earnings_dt = datetime.now(timezone.utc) + timedelta(days=seed_offset)
     profile["earnings_date"] = earnings_dt.strftime("%d-%b-%Y")
     profile["days_to_earnings"] = seed_offset
     profile["implied_volatility"] = round(12.5 + (profile.get("beta", 1.1) * 8.5) + (abs(hash(sym)) % 6), 1)
+
+    # 2024-2026 SEBI Surveillance & MWPL status
+    hash_val = abs(hash(sym))
+    profile["circuit_limit_pct"] = "NO_BAND (F&O)" if "F&O" in profile.get("tags", []) else "20%"
+    profile["asm_stage"] = 1 if (hash_val % 19 == 0) else 0
+    profile["gsm_stage"] = 0
+    mwpl_pct = round(15.0 + (hash_val % 68), 1)
+    profile["mwpl_utilization_pct"] = mwpl_pct
+    profile["is_fno_ban"] = bool(mwpl_pct >= 95.0)
 
     return profile

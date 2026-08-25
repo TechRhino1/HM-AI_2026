@@ -257,7 +257,7 @@
     function renderScreenerTableDOM() {
         if (!el.screenerTableBody) return;
 
-        let list = state.stocks.slice();
+        let list = state.stocks.filter(s => !s.is_index && s.sector !== "Indices");
 
         // Search query filter
         const q = state.filters.searchQuery.toLowerCase().trim();
@@ -266,7 +266,7 @@
         }
 
         state.filteredStocks = list;
-        if (el.tableCountBadge) el.tableCountBadge.textContent = `${list.length} Instruments Analyzed`;
+        if (el.tableCountBadge) el.tableCountBadge.textContent = `${list.length} Corporate Stocks Analyzed`;
 
         if (list.length === 0) {
             el.screenerTableBody.innerHTML = `

@@ -225,25 +225,45 @@ class IndiaTechnicalEngine:
         kc_lower = sma20 - (1.5 * atr14)
         is_squeeze = (bb_upper < kc_upper) and (bb_lower > kc_lower)
 
-        # Quantitative Breakout Probability
-        prob_score = 50.0
-        if current_price > cpr["tc"]: prob_score += 12.0
-        if current_price > vwap: prob_score += 10.0
-        if current_price > camarilla["h3_reversal"]: prob_score += 10.0
-        if rsi >= 58 and rsi <= 72: prob_score += 8.0
-        if rvol >= 1.4: prob_score += 8.0
-        if is_squeeze: prob_score += 7.0
-        if change_pct > 0.5: prob_score += 5.0
-        prob_score = min(98.0, max(25.0, prob_score + (hash(symbol) % 7)))
-        prob_score = round(prob_score, 1)
+        # Quantitative 6-Factor Radar Breakdown
+        market_regime_score = round(min(98.0, max(30.0, 50.0 + (15.0 if current_price > sma20 else -10.0) + (10.0 if change_pct > 0 else -8.0))), 1)
+        cpr_structure_score = round(min(98.0, max(30.0, 50.0 + (25.0 if current_price > cpr["tc"] else (-15.0 if current_price < cpr["bc"] else 5.0)))), 1)
+        camarilla_breakout_score = round(min(98.0, max(30.0, 50.0 + (25.0 if current_price > camarilla["h4_breakout"] else (12.0 if current_price > camarilla["h3_reversal"] else -10.0)))), 1)
+        vwap_corridor_score = round(min(98.0, max(30.0, 50.0 + (22.0 if current_price > vwap else -15.0))), 1)
+        vsa_volume_score = round(min(98.0, max(30.0, 50.0 + (25.0 if rvol >= 1.5 else (10.0 if rvol >= 1.0 else -10.0)))), 1)
+        momentum_squeeze_score = round(min(98.0, max(30.0, 50.0 + (25.0 if is_squeeze else 5.0) + (10.0 if (rsi >= 55 and rsi <= 72) else -5.0))), 1)
 
-        # Grade Assignment
-        if prob_score >= 82:
+        # Quantitative Breakout Probability (Weighted Composite)
+        prob_score = round(
+            (cpr_structure_score * 0.22) +
+            (vwap_corridor_score * 0.20) +
+            (camarilla_breakout_score * 0.18) +
+            (vsa_volume_score * 0.15) +
+            (momentum_squeeze_score * 0.15) +
+            (market_regime_score * 0.10),
+            1
+        )
+
+        is_fno_ban = profile.get("is_fno_ban", False)
+        asm_stage = profile.get("asm_stage", 0)
+
+        # Grade Assignment & SEBI Surveillance Downgrade
+        if is_fno_ban:
+            setup_grade = "F&O BAN (MWPL >95%)"
+            grade_badge = "BAN"
+            recommendation = "NO FRESH POSITIONS (F&O BAN)"
+            opp_state = "NO TRADE"
+        elif asm_stage >= 2:
+            setup_grade = "SEBI ASM STAGE 2"
+            grade_badge = "ASM"
+            recommendation = "HIGH SURVEILLANCE RISK"
+            opp_state = "AVOID"
+        elif prob_score >= 80:
             setup_grade = "GRADE A+ PRIME"
             grade_badge = "A+"
             recommendation = "STRONG BUY BREAKOUT"
             opp_state = "STRONG BUY"
-        elif prob_score >= 72:
+        elif prob_score >= 70:
             setup_grade = "GRADE A (HIGH CONVICTION)"
             grade_badge = "A"
             recommendation = "BUY BREAKOUT SETUP"
@@ -301,7 +321,9 @@ class IndiaTechnicalEngine:
             "industry": profile.get("industry", "NSE Equities"),
             "market": profile.get("market", "NSE_EQUITY"),
             "market_cap": profile.get("market_cap", "₹50,000 Cr"),
+            "is_index": profile.get("is_index", False),
             "lot_size": lot_size,
+            "notional_contract_value_inr": round(current_price * lot_size, 2),
             "freeze_limit": NSE_RULES.get_freeze_limit(symbol),
             "current_price": current_price,
             "day_open": day_open,
@@ -322,6 +344,25 @@ class IndiaTechnicalEngine:
             "is_squeeze": is_squeeze,
             "squeeze_status": "🔥 COILING SQUEEZE" if is_squeeze else "EXPANDING VOLATILITY",
             
+            # SEBI Regulatory Flags
+            "sebi_regulatory": {
+                "asm_stage": asm_stage,
+                "gsm_stage": profile.get("gsm_stage", 0),
+                "mwpl_utilization_pct": profile.get("mwpl_utilization_pct", 35.0),
+                "is_fno_ban": is_fno_ban,
+                "circuit_limit": profile.get("circuit_limit_pct", "20%")
+            },
+
+            # 6-Factor Radar Breakdown
+            "score_breakdown": {
+                "market_regime": market_regime_score,
+                "cpr_structure": cpr_structure_score,
+                "camarilla_breakout": camarilla_breakout_score,
+                "vwap_corridor": vwap_corridor_score,
+                "vsa_volume": vsa_volume_score,
+                "momentum_squeeze": momentum_squeeze_score
+            },
+
             # CPR & Camarilla Structural Levels
             "cpr": cpr,
             "camarilla": camarilla,
