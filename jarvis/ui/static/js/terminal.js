@@ -487,11 +487,8 @@
             return;
         }
 
-        const sym = (state.symbol || "XAUUSD").toUpperCase();
-        const positions = (state.positions || []).filter(p => {
-            const pSym = (p.symbol || "").toUpperCase();
-            return pSym === sym || pSym.includes(sym) || sym.includes(pSym);
-        });
+        const activeChartSym = state.symbol || "XAUUSD";
+        const positions = (state.positions || []).filter(p => isSameSymbol(p.symbol, activeChartSym));
 
         if (positions.length > 0) {
             // Update Active Trade Floating HUD on Chart
@@ -565,7 +562,7 @@
             });
         } else {
             // No active positions on this symbol: render AI Planned Setup Bracket if available
-            const activeDec = state.latestDecisions ? state.latestDecisions[state.symbol] : null;
+            const activeDec = getDecisionForSymbol(state.symbol);
             if (activeDec && activeDec.entry_price && activeDec.stop_loss && Math.abs(activeDec.entry_price - activeDec.stop_loss) > 1e-5) {
                 if (hudEl) {
                     hudEl.style.display = "flex";
@@ -781,6 +778,59 @@
     /* ==========================================================================
        PRECISION FORMATTING & STATUS HELPERS (Requirements 8, 9)
        ========================================================================== */
+    function cleanSymbolKey(sym) {
+        if (!sym) return "";
+        let s = String(sym).toUpperCase().trim();
+        // Remove common broker suffixes like #, .m, .r, .raw, _i, /
+        s = s.replace(/[^A-Z0-9]/g, "");
+        if (s.endsWith("RAW") || s.endsWith("PRO") || s.endsWith("ECN")) {
+            s = s.replace(/(RAW|PRO|ECN)$/, "");
+        } else if (s.endsWith("M") && s.length === 7) {
+            s = s.slice(0, 6);
+        }
+        return s;
+    }
+
+    function isSameSymbol(symA, symB) {
+        if (!symA || !symB) return false;
+        const a = cleanSymbolKey(symA);
+        const b = cleanSymbolKey(symB);
+        if (a === b) return true;
+
+        // Gold Aliases
+        const isGoldA = a.includes("XAU") || a.includes("GOLD");
+        const isGoldB = b.includes("XAU") || b.includes("GOLD");
+        if (isGoldA && isGoldB) return true;
+
+        // Bitcoin Aliases
+        const isBtcA = a.startsWith("BTC") || a.includes("BITCOIN");
+        const isBtcB = b.startsWith("BTC") || b.includes("BITCOIN");
+        if (isBtcA && isBtcB) {
+            return true;
+        }
+
+        // Ethereum Aliases
+        const isEthA = a.startsWith("ETH") || a.includes("ETHEREUM");
+        const isEthB = b.startsWith("ETH") || b.includes("ETHEREUM");
+        if (isEthA && isEthB) return true;
+
+        // Standard 6-char forex pairs (e.g. EURUSD vs EURUSDm)
+        if (a.length >= 6 && b.length >= 6 && a.slice(0, 6) === b.slice(0, 6)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    function getDecisionForSymbol(symbol) {
+        if (!state.latestDecisions || !symbol) return null;
+        if (state.latestDecisions[symbol]) return state.latestDecisions[symbol];
+        for (const [k, v] of Object.entries(state.latestDecisions)) {
+            if (isSameSymbol(k, symbol)) return v;
+        }
+        return null;
+    }
+
     function formatPrice(val, symbol) {
         if (val === null || val === undefined || isNaN(val) || val === "" || val === 0) return "--";
         const num = Number(val);
@@ -977,11 +1027,11 @@
         // Render Sub-components
         renderScannerRadarDOM(state.radarOpportunities);
         renderActiveTradesDOM(state.positions);
-        renderDevilAdvocateDOM(state.latestDecisions[state.symbol]);
+        const activeDec = getDecisionForSymbol(state.symbol);
+        renderDevilAdvocateDOM(activeDec);
 
         // Synchronize 1-Click Desk input values for active symbol
         if (el.deskActiveSymbol) el.deskActiveSymbol.textContent = state.symbol;
-        const activeDec = state.latestDecisions[state.symbol];
         if (activeDec) {
             const winProb = activeDec.probabilities && activeDec.probabilities[activeDec.bias ? activeDec.bias.toLowerCase() : "buy"]
                 ? activeDec.probabilities[activeDec.bias ? activeDec.bias.toLowerCase() : "buy"]
@@ -2084,7 +2134,7 @@
         if (el.deskActiveSymbol) el.deskActiveSymbol.textContent = sym;
 
         // Reset & immediate re-bind of 1-Click Execution Desk inputs to new symbol's decision
-        const activeDec = state.latestDecisions[sym];
+        const activeDec = getDecisionForSymbol(sym);
         if (activeDec) {
             const hasValidBracket = activeDec.stop_loss && activeDec.entry_price && (Math.abs(activeDec.stop_loss - activeDec.entry_price) > 1e-5);
             if (el.deskSl) el.deskSl.value = hasValidBracket ? formatPrice(activeDec.stop_loss, sym) : "";
