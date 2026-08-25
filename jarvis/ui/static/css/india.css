@@ -972,3 +972,135 @@ body {
 .btn-modal-close:hover, .btn-close-panel:hover {
     color: #ffffff;
 }
+
+/* ==========================================================================
+   9. MOBILE & TABLET RESPONSIVE STYLES
+   ========================================================================== */
+
+@media (max-width: 1024px) {
+    .india-hud {
+        padding: 8px 14px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .search-container {
+        width: 100%;
+        order: 3;
+    }
+
+    .india-layout-container {
+        padding: 12px 12px 60px 12px;
+    }
+
+    .dossier-body-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .india-hud {
+        padding: 6px 10px;
+    }
+
+    .brand-text {
+        font-size: 13px;
+    }
+
+    .badge-nse-live {
+        display: none;
+    }
+
+    .nav-links-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        width: 100%;
+        padding: 4px 0;
+        gap: 4px;
+    }
+
+    .btn-nav-switch {
+        padding: 4px 8px;
+        font-size: 11px;
+        white-space: nowrap;
+    }
+
+    .indices-ticker-bar {
+        padding: 6px 10px;
+        gap: 8px;
+    }
+
+    .fii-dii-ribbon {
+        padding: 6px 10px;
+        gap: 8px;
+    }
+
+    .filter-panel-card {
+        padding: 10px 12px;
+    }
+
+    .filter-pills-wrap {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        flex-wrap: nowrap;
+        padding-bottom: 2px;
+    }
+
+    .sector-pill, .cpr-pill, .prob-pill {
+        padding: 4px 8px;
+        font-size: 10px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .buy-now-cards-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .sector-heatmap-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .screener-table-card {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .screener-table {
+        min-width: 680px;
+    }
+
+    .modal-card, .modal-card-wide {
+        width: 96vw;
+        max-width: 96vw;
+        max-height: 88vh;
+    }
+
+    .modal-body-scrollable {
+        padding: 12px 10px;
+    }
+
+    .modal-ticker-name {
+        font-size: 16px;
+    }
+
+    .matrix-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .brand-text {
+        font-size: 12px;
+    }
+
+    .btn-nav-switch {
+        font-size: 10px;
+        padding: 4px 6px;
+    }
+
+    .buy-now-plan-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+

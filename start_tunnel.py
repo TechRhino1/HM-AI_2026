@@ -9,6 +9,12 @@ import json
 import sys
 import time
 
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 def get_local_wifi_ip():
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -23,12 +29,12 @@ def main():
     local_ip = get_local_wifi_ip()
     port = 8501
 
-    print("=" * 80)
-    print("        HM AI 4.0 — WORLDWIDE REMOTE MOBILE ACCESS LAUNCHER")
-    print("=" * 80)
-    print(f"\n1. PERMANENT LOCAL WI-FI ACCESS (Never changes at home):")
-    print(f"   👉  http://{local_ip}:{port}")
-    print("\n2. STARTING AUTHENTICATED GLOBAL HTTPS TUNNEL (For 4G/5G mobile access)...")
+    print("=" * 80, flush=True)
+    print("        HM AI 4.0 -- WORLDWIDE REMOTE MOBILE ACCESS LAUNCHER", flush=True)
+    print("=" * 80, flush=True)
+    print(f"\n1. PERMANENT LOCAL WI-FI ACCESS (Never changes at home):", flush=True)
+    print(f"   ->  http://{local_ip}:{port}", flush=True)
+    print("\n2. STARTING AUTHENTICATED GLOBAL HTTPS TUNNEL (For 4G/5G mobile access)...", flush=True)
 
     cmd = [
         "ssh",
@@ -40,7 +46,7 @@ def main():
     ]
 
     try:
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
         tunnel_url = None
 
         for _ in range(25):
@@ -56,23 +62,23 @@ def main():
             time.sleep(0.5)
 
         if tunnel_url:
-            print("\n" + "*" * 80)
-            print("  LIVE AUTHENTICATED MOBILE HTTPS URL (Access anywhere globally):")
-            print(f"  👉  {tunnel_url}")
-            print("\n  Default Username : admin")
-            print("  Default Password : Hm@5656")
-            print("*" * 80 + "\n")
-            print("  Authenticated Account: tech54321.in@gmail.com")
-            print("  Tunnel is running in background. Press Ctrl+C to close.")
+            print("\n" + "*" * 80, flush=True)
+            print("  LIVE AUTHENTICATED MOBILE HTTPS URL (Access anywhere globally):", flush=True)
+            print(f"  ->  {tunnel_url}", flush=True)
+            print("\n  Default Username : admin", flush=True)
+            print("  Default Password : Hm@5656", flush=True)
+            print("*" * 80 + "\n", flush=True)
+            print("  Authenticated Account: tech54321.in@gmail.com", flush=True)
+            print("  Tunnel is running in background. Press Ctrl+C to close.", flush=True)
             proc.wait()
         else:
-            print("\nTunnel established. Access locally at: http://{local_ip}:{port}")
+            print(f"\nTunnel established. Access locally at: http://{local_ip}:{port}", flush=True)
             proc.wait()
 
     except KeyboardInterrupt:
-        print("\nTunnel closed by user.")
+        print("\nTunnel closed by user.", flush=True)
     except Exception as e:
-        print(f"\nTunnel launcher error: {e}")
+        print(f"\nTunnel launcher error: {e}", flush=True)
 
 if __name__ == "__main__":
     main()

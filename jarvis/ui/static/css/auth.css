@@ -8,6 +8,7 @@
     align-items: center;
     gap: 8px;
     margin-left: auto;
+    flex-shrink: 0;
 }
 
 .auth-user-pill {
@@ -22,6 +23,7 @@
     font-weight: 700;
     color: #e2e8f0;
     transition: all 0.2s ease;
+    white-space: nowrap;
 }
 
 .auth-user-pill:hover {
@@ -54,6 +56,8 @@
     align-items: center;
     gap: 5px;
     transition: all 0.15s ease;
+    white-space: nowrap;
+    min-height: 28px;
 }
 
 .auth-logout-btn:hover {
@@ -61,6 +65,10 @@
     color: #ffffff;
     border-color: #ef4444;
     box-shadow: 0 0 12px rgba(239, 68, 68, 0.4);
+}
+
+.auth-logout-btn:active {
+    transform: scale(0.95);
 }
 
 .auth-login-btn {
@@ -76,12 +84,18 @@
     align-items: center;
     gap: 5px;
     transition: all 0.15s ease;
+    white-space: nowrap;
+    min-height: 28px;
 }
 
 .auth-login-btn:hover {
     background: var(--accent-cyan, #00d4ff);
     color: #000000;
     box-shadow: 0 0 12px rgba(0, 212, 255, 0.4);
+}
+
+.auth-login-btn:active {
+    transform: scale(0.95);
 }
 
 /* Universal Auth Modal Overlay */
@@ -248,4 +262,47 @@
 
 .auth-close-btn:hover {
     color: #ffffff;
+}
+
+/* ==========================================================================
+   MOBILE RESPONSIVENESS (< 600px)
+   ========================================================================== */
+@media (max-width: 600px) {
+    .auth-header-widget {
+        gap: 4px;
+    }
+
+    .auth-user-pill {
+        padding: 3px 6px;
+        font-size: 10px;
+    }
+
+    .auth-user-role-tag {
+        display: none; /* Keep clean on small mobile header */
+    }
+
+    .auth-logout-btn, .auth-login-btn {
+        padding: 3px 8px;
+        font-size: 10px;
+    }
+
+    .universal-auth-card {
+        padding: 22px 16px;
+        max-width: 94vw;
+        border-radius: 12px;
+    }
+
+    .auth-card-title {
+        font-size: 16px;
+    }
+
+    .auth-input-field {
+        font-size: 12px;
+        padding: 8px 34px 8px 10px;
+    }
+
+    .auth-submit-btn {
+        padding: 10px;
+        font-size: 11px;
+    }
 }

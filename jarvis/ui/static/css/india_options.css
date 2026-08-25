@@ -1099,3 +1099,114 @@ body {
     background: var(--neon-saffron);
     color: #000000;
 }
+
+/* ==========================================================================
+   MOBILE & TABLET RESPONSIVE STYLES
+   ========================================================================== */
+
+@media (max-width: 1024px) {
+    .opt-hud {
+        padding: 8px 14px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .opt-workspace-grid {
+        grid-template-columns: 1fr;
+        padding: 12px 12px 60px 12px;
+    }
+}
+
+@media (max-width: 768px) {
+    .opt-hud {
+        padding: 6px 10px;
+    }
+
+    .brand-text {
+        font-size: 13px;
+    }
+
+    .badge-nse-live {
+        display: none;
+    }
+
+    .nav-links-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        width: 100%;
+        padding: 4px 0;
+        gap: 4px;
+    }
+
+    .btn-nav-switch {
+        padding: 4px 8px;
+        font-size: 11px;
+        white-space: nowrap;
+    }
+
+    .opt-summary-strip {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        padding: 8px 10px;
+    }
+
+    .summary-card {
+        padding: 6px 8px;
+    }
+
+    .single-signal-cards-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .sig-params-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .sig-confluence-chips {
+        flex-wrap: wrap;
+    }
+
+    .payoff-chart-container {
+        height: 200px;
+    }
+
+    .strike-dist-container {
+        height: 180px;
+    }
+
+    .opt-chain-container {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .option-chain-table {
+        min-width: 660px;
+    }
+
+    .greek-pills-row {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        flex-wrap: nowrap;
+    }
+
+    .greek-pill {
+        flex-shrink: 0;
+    }
+}
+
+@media (max-width: 480px) {
+    .brand-text {
+        font-size: 12px;
+    }
+
+    .btn-nav-switch {
+        font-size: 10px;
+        padding: 4px 6px;
+    }
+
+    .opt-summary-strip {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+

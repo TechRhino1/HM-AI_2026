@@ -1873,13 +1873,22 @@ header.terminal-hud {
         order: 2;
         gap: 6px;
         margin-left: auto;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        display: flex;
+        align-items: center;
+        max-width: 60%;
     }
+
+    .hud-actions::-webkit-scrollbar { display: none; }
 
     .btn-terminal, .cmd-hint-btn {
         padding: 5px 9px;
         font-size: 10px;
         border-radius: 4px;
         font-weight: 700;
+        white-space: nowrap;
+        flex-shrink: 0;
     }
 
     .hud-telemetry {
