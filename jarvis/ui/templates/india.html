@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HM AI 4.0 — India Markets (NSE/BSE, Indices & F&O Intelligence)</title>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Lightweight Charts Library -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    <!-- India Terminal Stylesheet -->
+    <link rel="stylesheet" href="/static/css/india.css?v=1.0">
+</head>
+<body>
+
+    <!-- ==========================================================================
+         TOP INSTITUTIONAL HUD HEADER
+         ========================================================================== -->
+    <header class="india-hud">
+        <div class="brand-wrapper">
+            <div class="brand-logo">
+                <div class="brand-flag-icon">🇮🇳</div>
+                <div class="brand-text">HM <span>AI 4.0</span> • India Markets Intelligence</div>
+            </div>
+            <div class="badge badge-nse-live">
+                <span class="pulse-dot"></span> NSE / BSE & F&O ENGINE ACTIVE
+            </div>
+        </div>
+
+        <!-- Global Cross-Market Navigation Switches -->
+        <div class="nav-links-wrapper">
+            <a href="/" class="btn-nav-switch">
+                <span>⚡ Forex / Crypto Terminal</span>
+            </a>
+            <a href="/stocks" class="btn-nav-switch">
+                <span>🇺🇸 US Stocks Screener</span>
+            </a>
+            <a href="/india" class="btn-nav-switch active">
+                <span>🇮🇳 India Markets (NSE/BSE)</span>
+            </a>
+        </div>
+
+        <!-- Global Search Box -->
+        <div class="search-container">
+            <div class="search-input-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="india-search-input" placeholder="Search NSE/BSE symbol (e.g. NIFTY, RELIANCE, TCS, ZOMATO)..." autocomplete="off">
+                <kbd class="search-kbd">ENTER</kbd>
+            </div>
+            <div id="india-search-autocomplete" class="autocomplete-dropdown" style="display:none;"></div>
+        </div>
+    </header>
+
+    <!-- ==========================================================================
+         TOP INDICES & CPR STATUS BAR
+         ========================================================================== -->
+    <div class="indices-ticker-bar">
+        <div class="indices-title-tag">🇮🇳 BENCHMARK INDICES:</div>
+        <div id="indices-track" class="indices-track">
+            <!-- Dynamically populated by JS -->
+            <div class="index-pill-loading">Loading live NIFTY, BANKNIFTY, SENSEX telemetry...</div>
+        </div>
+    </div>
+
+    <!-- ==========================================================================
+         INSTITUTIONAL FII / DII CASH & DERIVATIVES FLOW RIBBON
+         ========================================================================== -->
+    <div class="fii-dii-ribbon">
+        <div class="fii-card">
+            <span class="flow-label">FII Net Cash:</span>
+            <span id="fii-cash-val" class="flow-val text-bull">+₹1,845.50 Cr</span>
+        </div>
+        <div class="fii-card">
+            <span class="flow-label">DII Net Cash:</span>
+            <span id="dii-cash-val" class="flow-val text-bull">+₹2,410.20 Cr</span>
+        </div>
+        <div class="fii-card">
+            <span class="flow-label">FII Futures Long:</span>
+            <span id="fii-long-val" class="flow-val text-cyan">68.5%</span>
+        </div>
+        <div class="fii-card">
+            <span class="flow-label">NIFTY Option PCR:</span>
+            <span id="nifty-pcr-val" class="flow-val text-gold">1.22 (Bullish Floor)</span>
+        </div>
+        <div class="fii-card">
+            <span class="flow-label">SEBI Margin Regime:</span>
+            <span class="badge badge-sebi">100% Peak Margin Compliant</span>
+        </div>
+    </div>
+
+    <!-- ==========================================================================
+         MAIN VIEWPORT CONTAINER
+         ========================================================================== -->
+    <div class="india-layout-container">
+
+        <!-- Filter & Control Toolbar -->
+        <div class="filter-panel-card">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <span class="filter-label">SECTOR:</span>
+                    <div class="filter-pills-wrap">
+                        <button class="sector-pill active" onclick="window.setSectorFilter('all', this)">All</button>
+                        <button class="sector-pill" onclick="window.setSectorFilter('Indices', this)">Indices</button>
+                        <button class="sector-pill" onclick="window.setSectorFilter('Financial Services', this)">Banking & Fin</button>
+                        <button class="sector-pill" onclick="window.setSectorFilter('Technology', this)">IT / Tech</button>
+                        <button class="sector-pill" onclick="window.setSectorFilter('Consumer Cyclical', this)">Auto & Retail</button>
+                        <button class="sector-pill" onclick="window.setSectorFilter('Industrials', this)">Defense & Infra</button>
+                        <button class="sector-pill" onclick="window.setSectorFilter('Energy & Conglomerate', this)">Energy / Petrochem</button>
+                        <button class="sector-pill" onclick="window.setSectorFilter('Basic Materials', this)">Metals</button>
+                        <button class="sector-pill" onclick="window.setSectorFilter('Healthcare', this)">Pharma</button>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <span class="filter-label">CPR STRUCTURE:</span>
+                    <div class="filter-pills-wrap">
+                        <button class="cpr-pill active" onclick="window.setCprFilter('all', this)">All CPR</button>
+                        <button class="cpr-pill" onclick="window.setCprFilter('narrow', this)">⚡ Narrow CPR (Breakout)</button>
+                        <button class="cpr-pill" onclick="window.setCprFilter('wide', this)">🧱 Wide CPR (Rangebound)</button>
+                    </div>
+                </div>
+
+                <div class="filter-group">
+                    <span class="filter-label">MIN AI PROBABILITY:</span>
+                    <div class="filter-pills-wrap">
+                        <button class="prob-pill active" onclick="window.setProbFilter(0, this)">All (0%+)</button>
+                        <button class="prob-pill" onclick="window.setProbFilter(60, this)">60%+</button>
+                        <button class="prob-pill" onclick="window.setProbFilter(75, this)">🔥 75%+ Prime</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Ribbon (Heatmap, Option Chain, Strategy Builder, CSV) -->
+            <div class="toolbar-bottom-row">
+                <div class="toolbar-left-actions">
+                    <button class="btn-action-tool" onclick="window.toggleSectorHeatmap()">
+                        <span>🗺️</span> Sector Rotation Heatmap
+                    </button>
+                    <button class="btn-action-tool" onclick="window.openOptionChainModal('NIFTY')">
+                        <span>📊</span> NIFTY Option Chain (CE/PE)
+                    </button>
+                    <button class="btn-action-tool" onclick="window.openOptionChainModal('BANKNIFTY')">
+                        <span>⚡</span> BANKNIFTY Option Chain
+                    </button>
+                    <button class="btn-action-tool" onclick="window.openAiStrategyModal('NIFTY')">
+                        <span>🧠</span> AI Defined-Risk Strategy Builder
+                    </button>
+                </div>
+
+                <div class="toolbar-right-actions">
+                    <div class="auto-scan-box">
+                        <span class="scan-label">Auto-Scan:</span>
+                        <select id="auto-scan-interval" onchange="window.setAutoScanInterval(this.value)">
+                            <option value="15">15s</option>
+                            <option value="30" selected>30s</option>
+                            <option value="60">60s</option>
+                            <option value="0">Paused</option>
+                        </select>
+                        <span id="scan-countdown" class="scan-countdown-tag">30s</span>
+                    </div>
+                    <button class="btn-action-tool" onclick="window.exportIndiaCsv()">
+                        <span>📥</span> Export CSV
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================================================
+             SECTOR ROTATION HEATMAP PANEL (COLLAPSIBLE)
+             ========================================================================== -->
+        <div id="sector-heatmap-section" class="sector-heatmap-panel" style="display:none;">
+            <div class="heatmap-header-bar">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:16px;">🗺️</span>
+                    <span style="font-weight:800; font-size:13px; color:#ffffff;">NSE Sector Capital Rotation Matrix</span>
+                    <span class="badge badge-nse">Live Flow</span>
+                </div>
+                <button class="btn-close-panel" onclick="window.toggleSectorHeatmap()">✕</button>
+            </div>
+            <div id="sector-heatmap-grid" class="sector-heatmap-grid">
+                <!-- Dynamically populated by JS -->
+            </div>
+        </div>
+
+        <!-- ==========================================================================
+             AI RECOMMENDED: BUY NOW SHOWCASE SECTION
+             ========================================================================== -->
+        <div class="ai-buy-now-section">
+            <div class="buy-now-header-bar">
+                <div class="buy-now-title">
+                    <span class="buy-now-pulse-icon">⚡</span>
+                    <span style="font-weight:900; font-size:14px; letter-spacing:0.5px; background:linear-gradient(90deg, #00f59b, #ff9900); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">
+                        AI RECOMMENDED: BUY NOW (NSE/BSE SETUPS)
+                    </span>
+                    <span class="badge badge-prime">PRIME HIGH CONVICTION</span>
+                </div>
+                <div style="font-size:11px; color:var(--text-dim);">
+                    Algorithmic setups with Narrow CPR breakout, VWAP support, positive institutional order flow, and asymmetrical R:R.
+                </div>
+            </div>
+            
+            <div id="ai-buy-now-grid" class="buy-now-cards-grid">
+                <!-- Dynamically populated by JS -->
+                <div style="grid-column: 1 / -1; text-align:center; padding:18px; color:var(--text-dim); font-size:12px;">
+                    Scanning Indian equity universe and options flow for prime Buy Now triggers...
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================================================
+             MAIN SCREENER TABLE CARD
+             ========================================================================== -->
+        <div class="screener-main-grid">
+            <div class="screener-table-card">
+                <div class="table-header-bar">
+                    <div class="table-title">
+                        <span>📊 Ranked NSE/BSE Breakout & CPR Opportunities</span>
+                        <span id="table-count-badge" class="table-count-badge">Scanning Universe...</span>
+                    </div>
+
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:11px; color:var(--text-dim);">Click any row for Full AI Dossier & Option Chain</span>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="screener-table">
+                        <thead>
+                            <tr>
+                                <th onclick="window.sortTableBy('setup_grade')">Grade ⬍</th>
+                                <th onclick="window.sortTableBy('symbol')">Symbol / Company ⬍</th>
+                                <th>CPR Structure</th>
+                                <th>Camarilla H4 Breakout</th>
+                                <th>VWAP Level</th>
+                                <th onclick="window.sortTableBy('price')">LTP (₹) ⬍</th>
+                                <th onclick="window.sortTableBy('change_pct')">Change % ⬍</th>
+                                <th onclick="window.sortTableBy('probability')">AI Prob % ⬍</th>
+                                <th>RVOL</th>
+                                <th>Lot Size</th>
+                                <th>Opportunity State</th>
+                                <th>AI Recommendation</th>
+                                <th style="text-align:right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="screener-table-tbody">
+                            <tr>
+                                <td colspan="13" style="text-align:center; padding:30px; color:var(--text-dim);">
+                                    Scanning NSE equity derivatives and calculating CPR / Camarilla matrices...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ==========================================================================
+         STOCK INTELLIGENCE DOSSIER MODAL
+         ========================================================================== -->
+    <div id="india-dossier-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-card">
+            <!-- Modal Header -->
+            <div class="modal-header">
+                <div class="modal-header-left">
+                    <div class="modal-ticker-row">
+                        <span id="dossier-ticker" class="modal-ticker-name">RELIANCE</span>
+                        <span id="dossier-grade-badge" class="badge-grade-a-plus">GRADE A+ PRIME</span>
+                        <span id="dossier-opp-state" class="badge badge-strong-buy">STRONG BUY</span>
+                    </div>
+                    <div id="dossier-company" class="modal-comp-name">Reliance Industries Ltd • Energy & Conglomerate</div>
+                </div>
+
+                <div class="modal-header-right">
+                    <div class="modal-price-box">
+                        <div id="dossier-live-price" class="modal-price-val">₹2,980.00</div>
+                        <div id="dossier-change-badge" class="modal-change-tag">+2.45% (+₹71.20)</div>
+                    </div>
+                    <button class="btn-modal-close" onclick="window.closeIndiaDossier()">✕</button>
+                </div>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="modal-body-scrollable">
+                
+                <!-- Quick Metric Badges -->
+                <div class="dossier-kpi-bar">
+                    <div class="kpi-item">
+                        <span class="kpi-label">AI Breakout Odds</span>
+                        <div class="dossier-meter-wrap">
+                            <div class="dossier-meter-bar">
+                                <div id="dossier-prob-fill" class="prob-meter-fill prob-high" style="width:85%;"></div>
+                            </div>
+                            <span id="dossier-prob-val" class="kpi-val text-cyan">85%</span>
+                        </div>
+                    </div>
+                    <div class="kpi-item">
+                        <span class="kpi-label">CPR Classification</span>
+                        <span id="dossier-cpr-tag" class="kpi-val text-gold">Narrow CPR (Trending)</span>
+                    </div>
+                    <div class="kpi-item">
+                        <span class="kpi-label">Camarilla H4 Breakout</span>
+                        <span id="dossier-cam-h4" class="kpi-val text-bull">₹3,015.00</span>
+                    </div>
+                    <div class="kpi-item">
+                        <span class="kpi-label">VWAP Distance</span>
+                        <span id="dossier-vwap-tag" class="kpi-val text-bull">+1.2% Above VWAP</span>
+                    </div>
+                    <div class="kpi-item">
+                        <span class="kpi-label">NSE Lot Size</span>
+                        <span id="dossier-lot-size" class="kpi-val text-white">250 Shares</span>
+                    </div>
+                </div>
+
+                <!-- Main Dossier Content Grid (Chart + Technicals & Position Sizer) -->
+                <div class="dossier-content-grid">
+                    
+                    <!-- Left: Interactive Chart & MTF -->
+                    <div class="dossier-left-pane">
+                        <div class="pane-card chart-pane-card">
+                            <div class="chart-header-row">
+                                <div class="chart-title">
+                                    <span>📈 Real-Time Price Structure & Levels</span>
+                                </div>
+                                <div class="tf-selector-group">
+                                    <button class="stock-tf-btn active" onclick="window.setDossierTf('1D', this)">1D</button>
+                                    <button class="stock-tf-btn" onclick="window.setDossierTf('1H', this)">1H</button>
+                                    <button class="stock-tf-btn" onclick="window.setDossierTf('15M', this)">15M</button>
+                                    <button class="stock-tf-btn" onclick="window.setDossierTf('5M', this)">5M</button>
+                                </div>
+                            </div>
+                            <div id="dossier-tv-chart" class="dossier-chart-viewport"></div>
+                        </div>
+
+                        <!-- Trade Plan & Levels -->
+                        <div class="pane-card">
+                            <div class="card-title">🎯 Algorithmic Execution Trade Plan</div>
+                            <div class="trade-plan-grid">
+                                <div class="plan-metric-box">
+                                    <span class="plan-metric-lbl">Entry Trigger</span>
+                                    <span id="plan-entry" class="plan-metric-val text-cyan">₹2,985.00</span>
+                                </div>
+                                <div class="plan-metric-box">
+                                    <span class="plan-metric-lbl">Stop Loss (SL)</span>
+                                    <span id="plan-sl" class="plan-metric-val text-bear">₹2,925.00</span>
+                                </div>
+                                <div class="plan-metric-box">
+                                    <span class="plan-metric-lbl">Target 1 (TP1)</span>
+                                    <span id="plan-tp1" class="plan-metric-val text-bull">₹3,050.00</span>
+                                </div>
+                                <div class="plan-metric-box">
+                                    <span class="plan-metric-lbl">Target 2 (TP2)</span>
+                                    <span id="plan-tp2" class="plan-metric-val text-bull">₹3,120.00</span>
+                                </div>
+                                <div class="plan-metric-box">
+                                    <span class="plan-metric-lbl">Risk:Reward</span>
+                                    <span id="plan-rr" class="plan-metric-val text-gold">1:2.25</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Multi-Timeframe Matrix -->
+                        <div class="pane-card">
+                            <div class="card-title">🌐 Multi-Timeframe Structural Trend Alignment</div>
+                            <div id="multi-tf-grid" class="multi-tf-grid">
+                                <!-- Dynamically populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Position Sizer & Option Action -->
+                    <div class="dossier-right-pane">
+                        
+                        <!-- SEBI / Indian Lot Position Calculator -->
+                        <div class="pane-card calc-pane-card">
+                            <div class="card-title">
+                                <span>🧮 Indian Lot Size & Risk Calculator</span>
+                                <span class="badge badge-nse">SEBI Margin</span>
+                            </div>
+                            <div class="calc-inputs-row">
+                                <div class="calc-field">
+                                    <label>Trading Capital (₹)</label>
+                                    <input type="number" id="calc-equity-input" value="500000" step="10000" oninput="window.updatePositionCalculator()">
+                                </div>
+                                <div class="calc-field">
+                                    <label>Max Risk (%)</label>
+                                    <input type="number" id="calc-risk-pct-input" value="1.0" step="0.25" min="0.1" max="5.0" oninput="window.updatePositionCalculator()">
+                                </div>
+                            </div>
+
+                            <div class="calc-results-matrix">
+                                <div class="calc-res-item">
+                                    <span class="calc-res-lbl">Lots to Trade</span>
+                                    <span id="calc-out-lots" class="calc-res-val text-cyan">2 Lots</span>
+                                </div>
+                                <div class="calc-res-item">
+                                    <span class="calc-res-lbl">Total Shares</span>
+                                    <span id="calc-out-shares" class="calc-res-val text-white">500 sh</span>
+                                </div>
+                                <div class="calc-res-item">
+                                    <span class="calc-res-lbl">Capital / Margin</span>
+                                    <span id="calc-out-capital" class="calc-res-val text-white">₹3,27,800</span>
+                                </div>
+                                <div class="calc-res-item">
+                                    <span class="calc-res-lbl">Max Risk (SL Hit)</span>
+                                    <span id="calc-out-loss" class="calc-res-val text-bear">-₹5,000.00</span>
+                                </div>
+                                <div class="calc-res-item">
+                                    <span class="calc-res-lbl">Target Profit (TP)</span>
+                                    <span id="calc-out-profit" class="calc-res-val text-bull">+₹11,250.00</span>
+                                </div>
+                                <div class="calc-res-item">
+                                    <span class="calc-res-lbl">R:R Ratio</span>
+                                    <span id="calc-rr-tag" class="calc-res-val text-gold">1:2.25</span>
+                                </div>
+                            </div>
+
+                            <button id="btn-copy-broker-order" class="btn-copy-ticket" onclick="window.copyBrokerOrder()">
+                                <span>📋</span> Copy Broker Order Ticket (Zerodha / Upstox)
+                            </button>
+                        </div>
+
+                        <!-- 1-Click Option Chain Launcher -->
+                        <div class="pane-card" style="border:1px solid rgba(0,245,155,0.4); background:rgba(0,245,155,0.03);">
+                            <div class="card-title" style="color:var(--neon-bull);">⚡ Derivatives & Options Intelligence</div>
+                            <div style="font-size:12px; color:var(--text-dim); margin-bottom:12px;">
+                                View complete CE/PE option chain, live Open Interest buildups, Max Pain Strike, and AI defined-risk spreads for <b id="dossier-opt-sym" class="text-white">RELIANCE</b>.
+                            </div>
+                            <div style="display:flex; gap:8px;">
+                                <button class="btn-action-tool" style="flex:1;" onclick="window.openOptionChainModal(window.getCurrentDossierSymbol())">
+                                    <span>📊</span> Open Option Chain
+                                </button>
+                                <button class="btn-action-tool" style="flex:1;" onclick="window.openAiStrategyModal(window.getCurrentDossierSymbol())">
+                                    <span>🧠</span> AI Strategy Legs
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- CPR & Pivot Levels Breakdown -->
+                        <div class="pane-card">
+                            <div class="card-title">🧭 Central Pivot Range (CPR) Levels</div>
+                            <div class="cpr-breakdown-grid">
+                                <div class="cpr-item">
+                                    <span class="cpr-lbl">TC (Top Central):</span>
+                                    <span id="cpr-tc-val" class="cpr-val text-cyan">₹2,992.00</span>
+                                </div>
+                                <div class="cpr-item">
+                                    <span class="cpr-lbl">Pivot Point:</span>
+                                    <span id="cpr-p-val" class="cpr-val text-gold">₹2,980.00</span>
+                                </div>
+                                <div class="cpr-item">
+                                    <span class="cpr-lbl">BC (Bottom Central):</span>
+                                    <span id="cpr-bc-val" class="cpr-val text-cyan">₹2,968.00</span>
+                                </div>
+                                <div class="cpr-item">
+                                    <span class="cpr-lbl">CPR Width:</span>
+                                    <span id="cpr-width-val" class="cpr-val text-white">0.42% (Narrow)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- News & Corporate Catalyst Feed -->
+                        <div class="pane-card">
+                            <div class="card-title">📰 Corporate Announcements & Catalyst News</div>
+                            <div id="dossier-news-list" class="news-list-wrap">
+                                <!-- Dynamically populated by JS -->
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================================================
+         OPTION CHAIN MODAL (CE / PE MATRIX)
+         ========================================================================== -->
+    <div id="india-opt-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-card modal-card-wide">
+            <div class="modal-header">
+                <div class="modal-header-left">
+                    <div class="modal-ticker-row">
+                        <span id="opt-chain-ticker" class="modal-ticker-name">NIFTY</span>
+                        <span class="badge badge-nse">OPTION CHAIN (CE / PE)</span>
+                    </div>
+                    <div id="opt-chain-spot-info" class="modal-comp-name">Spot: ₹24,850.00 • Lot: 25 • Expiry: 29-AUG-2026</div>
+                </div>
+
+                <div class="modal-header-right">
+                    <div style="display:flex; align-items:center; gap:12px; margin-right:12px;">
+                        <span id="opt-max-pain-badge" class="badge badge-prime">Max Pain: 24,850</span>
+                        <span id="opt-pcr-badge" class="badge badge-gold">PCR: 1.22 (Bullish)</span>
+                    </div>
+                    <button class="btn-modal-close" onclick="window.closeOptionChainModal()">✕</button>
+                </div>
+            </div>
+
+            <div class="modal-body-scrollable">
+                <div class="table-responsive">
+                    <table class="option-chain-table">
+                        <thead>
+                            <tr>
+                                <th colspan="5" class="th-calls">CALLS (CE)</th>
+                                <th class="th-strike">STRIKE</th>
+                                <th colspan="5" class="th-puts">PUTS (PE)</th>
+                            </tr>
+                            <tr class="sub-th-row">
+                                <th>OI Chg %</th>
+                                <th>Open Int</th>
+                                <th>Volume</th>
+                                <th>IV %</th>
+                                <th>LTP (₹)</th>
+                                <th class="strike-col-th">Strike Price</th>
+                                <th>LTP (₹)</th>
+                                <th>IV %</th>
+                                <th>Volume</th>
+                                <th>Open Int</th>
+                                <th>OI Chg %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="opt-chain-tbody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================================================
+         AI DEFINED-RISK STRATEGY BUILDER MODAL
+         ========================================================================== -->
+    <div id="india-strategy-modal" class="modal-overlay" style="display:none;">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-header-left">
+                    <div class="modal-ticker-row">
+                        <span id="strat-modal-ticker" class="modal-ticker-name">NIFTY</span>
+                        <span class="badge badge-nse">AI OPTIONS STRATEGY BUILDER</span>
+                    </div>
+                    <div class="modal-comp-name">Defined-Risk Asymmetric Payoff Optimization</div>
+                </div>
+                <div class="modal-header-right">
+                    <button class="btn-modal-close" onclick="window.closeAiStrategyModal()">✕</button>
+                </div>
+            </div>
+
+            <div class="modal-body-scrollable">
+                <div class="strat-bias-toggle-row">
+                    <span style="font-size:12px; font-weight:700; color:var(--text-dim);">Market Outlook:</span>
+                    <button class="strat-bias-btn active" onclick="window.setStrategyBias('BULLISH', this)">🟢 Bullish (Bull Call Spread)</button>
+                    <button class="strat-bias-btn" onclick="window.setStrategyBias('BEARISH', this)">🔴 Bearish (Bear Put Spread)</button>
+                    <button class="strat-bias-btn" onclick="window.setStrategyBias('NEUTRAL', this)">⚖️ Rangebound (Iron Condor)</button>
+                </div>
+
+                <div id="strategy-payload-container" style="margin-top:16px;">
+                    <!-- Dynamically populated by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- India Controller Script -->
+    <script src="/static/js/india.js?v=1.0"></script>
+</body>
+</html>

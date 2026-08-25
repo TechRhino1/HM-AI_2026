@@ -1,0 +1,367 @@
+"""
+JARVIS AI 3.0 — India Markets REST Dispatcher & Service Coordinator
+Provides unified JSON API endpoints for Indian Market Scanning, Option Chain Analytics,
+Greeks, FII/DII Institutional Flows, CPR/Camarilla Pivots, and NSE/SEBI Rule Validation.
+"""
+import json
+import csv
+import io
+from typing import Dict, Any, List, Optional
+from datetime import datetime, timezone
+
+from jarvis.india.universe import INDIA_UNIVERSE, get_all_india_symbols, get_india_profile, get_india_indices
+from jarvis.india.india_engine import INDIA_ENGINE
+from jarvis.india.options_engine import INDIA_OPTIONS
+from jarvis.india.nse_rules import NSE_RULES
+from jarvis.india.news_analyzer import INDIA_NEWS
+from jarvis.india.risk_engine import INDIA_RISK
+
+
+class IndiaMarketsService:
+    """
+    Central API Service for India Markets (NSE/BSE & F&O).
+    """
+
+    def get_indices_snapshot(self) -> List[Dict[str, Any]]:
+        """
+        Returns live telemetry summary for major Indian Benchmark & Sectoral indices.
+        """
+        indices_syms = ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "SENSEX", "NIFTYIT", "NIFTYAUTO"]
+        res = []
+        for sym in indices_syms:
+            data = INDIA_ENGINE.analyze_india_instrument(sym, timeframe="1D")
+            res.append({
+                "symbol": data["symbol"],
+                "name": data["name"],
+                "price": data["current_price"],
+                "change_val": data["change_val"],
+                "change_pct": data["change_pct"],
+                "cpr_width": data["cpr"]["width_classification"],
+                "cpr_label": data["cpr"]["width_label"],
+                "breakout_prob": data["breakout_probability"],
+                "recommendation": data["recommendation"]
+            })
+        return res
+
+    def get_scanner_data(
+        self,
+        sector: str = "all",
+        market: str = "all",
+        cpr_type: str = "all",
+        min_prob: float = 0.0,
+        sort_by: str = "probability",
+        sort_dir: str = "desc"
+    ) -> Dict[str, Any]:
+        """
+        Scans all Indian universe instruments and applies multi-factor filters.
+        """
+        symbols = get_all_india_symbols()
+        scanned_list = []
+
+        for sym in symbols:
+            analysis = INDIA_ENGINE.analyze_india_instrument(sym, timeframe="1D")
+            
+            # Filter by sector
+            if sector != "all" and analysis["sector"].lower() != sector.lower():
+                continue
+
+            # Filter by market (NSE_INDEX, NSE_EQUITY, BSE_INDEX)
+            if market != "all" and analysis["market"].lower() != market.lower():
+                continue
+
+            # Filter by CPR type
+            if cpr_type != "all":
+                if cpr_type == "narrow" and analysis["cpr"]["width_classification"] != "NARROW_CPR":
+                    continue
+                elif cpr_type == "wide" and analysis["cpr"]["width_classification"] != "WIDE_CPR":
+                    continue
+
+            # Filter by min probability
+            if analysis["breakout_probability"] < min_prob:
+                continue
+
+            scanned_list.append({
+                "symbol": analysis["symbol"],
+                "name": analysis["name"],
+                "sector": analysis["sector"],
+                "market": analysis["market"],
+                "price": analysis["current_price"],
+                "change_pct": analysis["change_pct"],
+                "change_val": analysis["change_val"],
+                "breakout_probability": analysis["breakout_probability"],
+                "setup_grade": analysis["setup_grade"],
+                "grade_badge": analysis["grade_badge"],
+                "opportunity_state": analysis["opportunity_state"],
+                "recommendation": analysis["recommendation"],
+                "rvol": analysis["rvol"],
+                "is_squeeze": analysis["is_squeeze"],
+                "squeeze_status": analysis["squeeze_status"],
+                "lot_size": analysis["lot_size"],
+                "cpr": analysis["cpr"],
+                "camarilla": analysis["camarilla"],
+                "vwap": analysis["vwap_structure"]["vwap"],
+                "vwap_dist_pct": analysis["vwap_structure"]["distance_from_vwap_pct"],
+                "entry_zone": analysis["trade_setup"]["entry_zone"],
+                "stop_loss": analysis["trade_setup"]["stop_loss"],
+                "take_profit_2": analysis["trade_setup"]["take_profit_2"],
+                "expected_gain_pct": analysis["trade_setup"]["expected_gain_pct"]
+            })
+
+        # Sorting
+        rev = (sort_dir.lower() == "desc")
+        if sort_by == "probability":
+            scanned_list.sort(key=lambda x: x["breakout_probability"], reverse=rev)
+        elif sort_by == "price":
+            scanned_list.sort(key=lambda x: x["price"], reverse=rev)
+        elif sort_by == "change_pct":
+            scanned_list.sort(key=lambda x: x["change_pct"], reverse=rev)
+        elif sort_by == "symbol":
+            scanned_list.sort(key=lambda x: x["symbol"], reverse=not rev)
+
+        # Curate Top 3 "AI Recommended: Buy Now" Opportunities
+        ai_buys = [s for s in scanned_list if s["breakout_probability"] >= 75 and s["price"] > s["vwap"]][:4]
+
+        return {
+            "count": len(scanned_list),
+            "stocks": scanned_list,
+            "ai_recommended_buys": ai_buys,
+            "scanned_at": datetime.now(timezone.utc).isoformat()
+        }
+
+    def get_sector_heatmap(self) -> Dict[str, Any]:
+        """
+        Aggregates Indian sectoral performance and smart money capital flows.
+        """
+        sectors_map: Dict[str, List[Dict[str, Any]]] = {}
+        for sym, prof in INDIA_UNIVERSE.items():
+            if prof.get("sector") == "Indices":
+                continue
+            sec = prof.get("sector", "Diversified")
+            if sec not in sectors_map:
+                sectors_map[sec] = []
+            
+            data = INDIA_ENGINE.analyze_india_instrument(sym, timeframe="1D")
+            sectors_map[sec].append(data)
+
+        heatmap_list = []
+        for sec, items in sectors_map.items():
+            if not items:
+                continue
+            avg_chg = sum(x["change_pct"] for x in items) / len(items)
+            sorted_items = sorted(items, key=lambda x: x["change_pct"], reverse=True)
+            top_lead = sorted_items[0]
+
+            if avg_chg >= 1.2:
+                status = "LEADING_INFLOW"
+            elif avg_chg >= 0.0:
+                status = "ACCUMULATION"
+            elif avg_chg >= -1.0:
+                status = "ROTATION_NEUTRAL"
+            else:
+                status = "OUTFLOW_DEFENSIVE"
+
+            heatmap_list.append({
+                "sector": sec,
+                "stock_count": len(items),
+                "avg_change_pct": round(avg_chg, 2),
+                "top_leader_symbol": top_lead["symbol"],
+                "top_leader_change": top_lead["change_pct"],
+                "rotation_status": status
+            })
+
+        heatmap_list.sort(key=lambda x: x["avg_change_pct"], reverse=True)
+        return {"sectors": heatmap_list}
+
+    def export_csv(self, sector: str = "all", market: str = "all") -> str:
+        """
+        Generates clean CSV output for all scanned Indian instruments.
+        """
+        res = self.get_scanner_data(sector=sector, market=market)
+        stocks = res.get("stocks", [])
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "Symbol", "Name", "Sector", "Market", "Price (INR)", "Change %", "Breakout Prob %",
+            "Grade", "Recommendation", "Opportunity State", "CPR Classification", "CPR Pivot",
+            "Camarilla H4 Breakout", "VWAP (INR)", "Lot Size", "Entry Zone (INR)", "Stop Loss (INR)", "Target (INR)"
+        ])
+
+        for s in stocks:
+            writer.writerow([
+                s["symbol"],
+                s["name"],
+                s["sector"],
+                s["market"],
+                f"₹{s['price']:.2f}",
+                f"{s['change_pct']:.2f}%",
+                f"{s['breakout_probability']}%",
+                s["setup_grade"],
+                s["recommendation"],
+                s["opportunity_state"],
+                s["cpr"]["width_classification"],
+                f"₹{s['cpr']['pivot']:.2f}",
+                f"₹{s['camarilla']['h4_breakout']:.2f}",
+                f"₹{s['vwap']:.2f}",
+                s["lot_size"],
+                f"₹{s['entry_zone']:.2f}",
+                f"₹{s['stop_loss']:.2f}",
+                f"₹{s['take_profit_2']:.2f}"
+            ])
+
+        return output.getvalue()
+
+    def handle_request(self, path: str, query: Dict[str, List[str]], handler) -> bool:
+        """
+        HTTP Request router for all `/api/india/*` endpoints.
+        """
+        try:
+            if path == "/api/india/scanner":
+                sector = query.get("sector", ["all"])[0]
+                market = query.get("market", ["all"])[0]
+                cpr_type = query.get("cpr", ["all"])[0]
+                min_prob = float(query.get("min_prob", [0.0])[0])
+                sort_by = query.get("sort_by", ["probability"])[0]
+                sort_dir = query.get("sort_dir", ["desc"])[0]
+
+                res = self.get_scanner_data(
+                    sector=sector,
+                    market=market,
+                    cpr_type=cpr_type,
+                    min_prob=min_prob,
+                    sort_by=sort_by,
+                    sort_dir=sort_dir
+                )
+                self._send_json(handler, res)
+                return True
+
+            elif path == "/api/india/indices":
+                res = self.get_indices_snapshot()
+                self._send_json(handler, {"indices": res})
+                return True
+
+            elif path == "/api/india/details":
+                sym = query.get("symbol", ["NIFTY"])[0].upper().strip()
+                tf = query.get("tf", ["1D"])[0].upper().strip()
+                analysis = INDIA_ENGINE.analyze_india_instrument(sym, timeframe=tf)
+                analysis["news"] = INDIA_NEWS.get_stock_news(sym)
+                analysis["rules"] = {
+                    "lot_size": NSE_RULES.get_lot_size(sym),
+                    "freeze_limit": NSE_RULES.get_freeze_limit(sym),
+                    "strike_step": NSE_RULES.get_strike_step(sym, analysis["current_price"]),
+                    "expiry_schedule": NSE_RULES.get_expiry_schedule(sym)
+                }
+                self._send_json(handler, analysis)
+                return True
+
+            elif path == "/api/india/option_chain":
+                sym = query.get("symbol", ["NIFTY"])[0].upper().strip()
+                exp = query.get("expiry", [None])[0]
+                res = INDIA_OPTIONS.generate_option_chain(sym, expiry=exp)
+                self._send_json(handler, res)
+                return True
+
+            elif path == "/api/india/options_ai":
+                sym = query.get("symbol", ["NIFTY"])[0].upper().strip()
+                bias = query.get("bias", ["BULLISH"])[0].upper().strip()
+                res = INDIA_OPTIONS.generate_ai_options_strategy(sym, bias=bias)
+                self._send_json(handler, res)
+                return True
+
+            elif path == "/api/india/fii_dii":
+                res = INDIA_NEWS.get_fii_dii_flows()
+                self._send_json(handler, res)
+                return True
+
+            elif path == "/api/india/heatmap":
+                res = self.get_sector_heatmap()
+                self._send_json(handler, res)
+                return True
+
+            elif path == "/api/india/rules":
+                sym = query.get("symbol", ["NIFTY"])[0].upper().strip()
+                profile = get_india_profile(sym)
+                rules = {
+                    "symbol": sym,
+                    "lot_size": NSE_RULES.get_lot_size(sym),
+                    "freeze_limit": NSE_RULES.get_freeze_limit(sym),
+                    "strike_step": NSE_RULES.get_strike_step(sym, profile.get("base_price", 1000.0)),
+                    "expiry_schedule": NSE_RULES.get_expiry_schedule(sym)
+                }
+                self._send_json(handler, rules)
+                return True
+
+            elif path == "/api/india/calc_position":
+                sym = query.get("symbol", ["NIFTY"])[0].upper().strip()
+                entry = float(query.get("entry", [1000.0])[0])
+                sl = float(query.get("sl", [980.0])[0])
+                tp = float(query.get("tp", [1050.0])[0])
+                equity = float(query.get("equity", [500000.0])[0])
+                risk_pct = float(query.get("risk_pct", [1.0])[0])
+                itype = query.get("type", ["EQUITY_CASH"])[0]
+
+                res = INDIA_RISK.calculate_position(
+                    symbol=sym,
+                    entry_price=entry,
+                    stop_loss=sl,
+                    take_profit=tp,
+                    account_equity_inr=equity,
+                    risk_pct=risk_pct,
+                    instrument_type=itype
+                )
+                self._send_json(handler, res)
+                return True
+
+            elif path == "/api/india/search":
+                q = query.get("q", [""])[0].lower().strip()
+                matches = []
+                for sym, prof in INDIA_UNIVERSE.items():
+                    if q in sym.lower() or q in prof.get("name", "").lower():
+                        matches.append({
+                            "symbol": sym,
+                            "name": prof.get("name"),
+                            "sector": prof.get("sector"),
+                            "price": prof.get("base_price"),
+                            "lot_size": prof.get("lot_size", 100)
+                        })
+                self._send_json(handler, {"results": matches[:10]})
+                return True
+
+            elif path == "/api/india/candles":
+                sym = query.get("symbol", ["NIFTY"])[0].upper().strip()
+                tf = query.get("tf", ["1D"])[0].upper().strip()
+                candles = INDIA_ENGINE.generate_candles(sym, timeframe=tf)
+                self._send_json(handler, {"symbol": sym, "timeframe": tf, "candles": candles})
+                return True
+
+            elif path == "/api/india/export_csv":
+                sec = query.get("sector", ["all"])[0]
+                mkt = query.get("market", ["all"])[0]
+                csv_data = self.export_csv(sector=sec, market=mkt)
+                
+                handler.send_response(200)
+                handler.send_header("Content-Type", "text/csv; charset=utf-8")
+                handler.send_header("Content-Disposition", 'attachment; filename="NSE_India_AI_Breakouts.csv"')
+                handler.send_header("Access-Control-Allow-Origin", "*")
+                handler.end_headers()
+                handler.wfile.write(csv_data.encode("utf-8"))
+                return True
+
+            return False
+
+        except Exception as e:
+            handler.send_response(500)
+            handler.send_header("Content-Type", "application/json")
+            handler.end_headers()
+            handler.wfile.write(json.dumps({"error": str(e)}).encode("utf-8"))
+            return True
+
+    def _send_json(self, handler, data: Any):
+        handler.send_response(200)
+        handler.send_header("Content-Type", "application/json; charset=utf-8")
+        handler.send_header("Access-Control-Allow-Origin", "*")
+        handler.end_headers()
+        handler.wfile.write(json.dumps(data, indent=2).encode("utf-8"))
+
+
+INDIA_SERVICE = IndiaMarketsService()
