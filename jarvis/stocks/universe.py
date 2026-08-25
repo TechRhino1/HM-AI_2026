@@ -1,0 +1,608 @@
+"""
+JARVIS AI 3.0 — Stock Universe Definition
+Contains comprehensive metadata for major US and global equities across all key sectors.
+"""
+from typing import Dict, Any, List
+
+STOCK_UNIVERSE: Dict[str, Dict[str, Any]] = {
+    # -------------------------------------------------------------
+    # 1. SEMICONDUCTORS & AI HARDWARE
+    # -------------------------------------------------------------
+    "NVDA": {
+        "symbol": "NVDA",
+        "name": "NVIDIA Corporation",
+        "sector": "Technology",
+        "industry": "Semiconductors",
+        "market": "US_EQUITIES",
+        "market_cap": "$3.12T",
+        "base_price": 128.50,
+        "beta": 1.72,
+        "avg_volume": "48.5M",
+        "pe_ratio": 64.2,
+        "week52_high": 140.76,
+        "week52_low": 45.11,
+        "description": "Global leader in accelerated computing, AI enterprise GPUs, CUDA software, and data center infrastructure.",
+        "tags": ["AI_LEADER", "SEMIS", "MEGA_CAP", "S&P500", "NASDAQ100"]
+    },
+    "AMD": {
+        "symbol": "AMD",
+        "name": "Advanced Micro Devices, Inc.",
+        "sector": "Technology",
+        "industry": "Semiconductors",
+        "market": "US_EQUITIES",
+        "market_cap": "$255.4B",
+        "base_price": 158.20,
+        "beta": 1.68,
+        "avg_volume": "38.2M",
+        "pe_ratio": 112.5,
+        "week52_high": 227.30,
+        "week52_low": 94.04,
+        "description": "Developer of high-performance computing, graphics and visualization technologies, and Instinct AI accelerators.",
+        "tags": ["AI_CHIPS", "SEMIS", "HIGH_BETA", "NASDAQ100"]
+    },
+    "AVGO": {
+        "symbol": "AVGO",
+        "name": "Broadcom Inc.",
+        "sector": "Technology",
+        "industry": "Semiconductors",
+        "market": "US_EQUITIES",
+        "market_cap": "$780.6B",
+        "base_price": 164.50,
+        "beta": 1.25,
+        "avg_volume": "14.2M",
+        "pe_ratio": 48.3,
+        "week52_high": 185.16,
+        "week52_low": 80.82,
+        "description": "Designer and developer of semiconductor devices and infrastructure software solutions for AI networks.",
+        "tags": ["AI_NETWORKING", "SEMIS", "DIVIDEND_GROWTH", "S&P500"]
+    },
+    "TSM": {
+        "symbol": "TSM",
+        "name": "Taiwan Semiconductor Manufacturing Co.",
+        "sector": "Technology",
+        "industry": "Semiconductors",
+        "market": "GLOBAL_ADR",
+        "market_cap": "$890.1B",
+        "base_price": 174.80,
+        "beta": 1.22,
+        "avg_volume": "18.9M",
+        "pe_ratio": 32.8,
+        "week52_high": 193.47,
+        "week52_low": 84.09,
+        "description": "The world's largest dedicated semiconductor foundry, fabricating advanced sub-3nm chips for global tech titans.",
+        "tags": ["FOUNDRY_LEADER", "SEMIS", "GLOBAL_LEADER"]
+    },
+    "ARM": {
+        "symbol": "ARM",
+        "name": "Arm Holdings plc",
+        "sector": "Technology",
+        "industry": "Semiconductors",
+        "market": "GLOBAL_ADR",
+        "market_cap": "$142.3B",
+        "base_price": 136.40,
+        "beta": 2.15,
+        "avg_volume": "11.6M",
+        "pe_ratio": 138.4,
+        "week52_high": 188.75,
+        "week52_low": 46.50,
+        "description": "Architect of energy-efficient microprocessor IP powering over 99% of global smartphones and cloud silicon.",
+        "tags": ["AI_ARCHITECTURE", "SEMIS", "HIGH_GROWTH"]
+    },
+    "SMCI": {
+        "symbol": "SMCI",
+        "name": "Super Micro Computer, Inc.",
+        "sector": "Technology",
+        "industry": "Computer Hardware",
+        "market": "US_EQUITIES",
+        "market_cap": "$31.8B",
+        "base_price": 542.00,
+        "beta": 2.45,
+        "avg_volume": "12.4M",
+        "pe_ratio": 24.6,
+        "week52_high": 1229.00,
+        "week52_low": 226.50,
+        "description": "Provider of high-density liquid-cooled server architectures optimized for AI hyper-clusters.",
+        "tags": ["AI_SERVERS", "HIGH_VOLATILITY", "S&P500"]
+    },
+    "MU": {
+        "symbol": "MU",
+        "name": "Micron Technology, Inc.",
+        "sector": "Technology",
+        "industry": "Semiconductors",
+        "market": "US_EQUITIES",
+        "market_cap": "$118.5B",
+        "base_price": 105.80,
+        "beta": 1.48,
+        "avg_volume": "22.3M",
+        "pe_ratio": 18.2,
+        "week52_high": 157.50,
+        "week52_low": 65.20,
+        "description": "Producer of high-bandwidth memory (HBM3e) and flash memory essential for AI training clusters.",
+        "tags": ["HBM_MEMORY", "SEMIS", "CYCLICAL_VALUE"]
+    },
+    "QCOM": {
+        "symbol": "QCOM",
+        "name": "QUALCOMM Incorporated",
+        "sector": "Technology",
+        "industry": "Semiconductors",
+        "market": "US_EQUITIES",
+        "market_cap": "$188.2B",
+        "base_price": 168.90,
+        "beta": 1.28,
+        "avg_volume": "10.5M",
+        "pe_ratio": 21.4,
+        "week52_high": 230.63,
+        "week52_low": 104.33,
+        "description": "Pioneer in mobile computing, 5G wireless telecommunications, and on-device AI Snapdragon processors.",
+        "tags": ["EDGE_AI", "SEMIS", "5G_LEADER"]
+    },
+
+    # -------------------------------------------------------------
+    # 2. MEGA-CAP TECH & CLOUD HYPERSCALERS
+    # -------------------------------------------------------------
+    "AAPL": {
+        "symbol": "AAPL",
+        "name": "Apple Inc.",
+        "sector": "Technology",
+        "industry": "Consumer Electronics",
+        "market": "US_EQUITIES",
+        "market_cap": "$3.45T",
+        "base_price": 226.40,
+        "beta": 0.88,
+        "avg_volume": "46.2M",
+        "pe_ratio": 34.1,
+        "week52_high": 237.23,
+        "week52_low": 164.08,
+        "description": "Consumer hardware titan, ecosystem creator, and developer of Apple Intelligence neural systems.",
+        "tags": ["MEGA_CAP", "CONSUMER_TECH", "CASH_COW", "DOW30", "S&P500"]
+    },
+    "MSFT": {
+        "symbol": "MSFT",
+        "name": "Microsoft Corporation",
+        "sector": "Technology",
+        "industry": "Software - Infrastructure",
+        "market": "US_EQUITIES",
+        "market_cap": "$3.18T",
+        "base_price": 428.10,
+        "beta": 0.91,
+        "avg_volume": "19.8M",
+        "pe_ratio": 35.8,
+        "week52_high": 468.35,
+        "week52_low": 309.45,
+        "description": "Dominant enterprise software and cloud computing platform powering Copilot and OpenAI workloads on Azure.",
+        "tags": ["AI_SOFTWARE", "CLOUD_HYPERSCALER", "MEGA_CAP", "DOW30"]
+    },
+    "AMZN": {
+        "symbol": "AMZN",
+        "name": "Amazon.com, Inc.",
+        "sector": "Consumer Cyclical",
+        "industry": "Internet Retail & Cloud",
+        "market": "US_EQUITIES",
+        "market_cap": "$1.95T",
+        "base_price": 186.75,
+        "beta": 1.15,
+        "avg_volume": "34.5M",
+        "pe_ratio": 43.6,
+        "week52_high": 201.20,
+        "week52_low": 118.35,
+        "description": "Global e-commerce leader and operator of AWS, the largest cloud infrastructure provider.",
+        "tags": ["CLOUD_AWS", "E_COMMERCE", "MEGA_CAP", "S&P500"]
+    },
+    "GOOGL": {
+        "symbol": "GOOGL",
+        "name": "Alphabet Inc.",
+        "sector": "Communication Services",
+        "industry": "Internet Content & Information",
+        "market": "US_EQUITIES",
+        "market_cap": "$2.05T",
+        "base_price": 166.30,
+        "beta": 1.05,
+        "avg_volume": "24.1M",
+        "pe_ratio": 24.2,
+        "week52_high": 191.75,
+        "week52_low": 120.21,
+        "description": "Parent of Google, YouTube, Android, DeepMind, and Google Cloud, leading multimodal GenAI (Gemini).",
+        "tags": ["SEARCH_MONOPOLY", "AI_FRONTIER", "CLOUD", "MEGA_CAP"]
+    },
+    "META": {
+        "symbol": "META",
+        "name": "Meta Platforms, Inc.",
+        "sector": "Communication Services",
+        "industry": "Internet Content & Social",
+        "market": "US_EQUITIES",
+        "market_cap": "$1.32T",
+        "base_price": 521.80,
+        "beta": 1.22,
+        "avg_volume": "13.8M",
+        "pe_ratio": 26.8,
+        "week52_high": 544.23,
+        "week52_low": 279.40,
+        "description": "Operator of Instagram, WhatsApp, Facebook, Quest VR, and pioneer in open-source AI (Llama models).",
+        "tags": ["SOCIAL_NETWORK", "AI_MODELS", "AD_TECH", "MEGA_CAP"]
+    },
+    "TSLA": {
+        "symbol": "TSLA",
+        "name": "Tesla, Inc.",
+        "sector": "Consumer Cyclical",
+        "industry": "Auto Manufacturers & Clean Tech",
+        "market": "US_EQUITIES",
+        "market_cap": "$685.2B",
+        "base_price": 214.30,
+        "beta": 2.38,
+        "avg_volume": "68.4M",
+        "pe_ratio": 62.4,
+        "week52_high": 271.00,
+        "week52_low": 138.80,
+        "description": "Electric vehicle manufacturer, energy storage provider, and Full Self-Driving (FSD) vision AI robotics firm.",
+        "tags": ["EV_LEADER", "AUTONOMOUS_AI", "ROBOTICS", "HIGH_BETA"]
+    },
+
+    # -------------------------------------------------------------
+    # 3. HIGH-GROWTH SAAS, FINTECH & DATA RUNNERS
+    # -------------------------------------------------------------
+    "PLTR": {
+        "symbol": "PLTR",
+        "name": "Palantir Technologies Inc.",
+        "sector": "Technology",
+        "industry": "Software - Infrastructure",
+        "market": "US_EQUITIES",
+        "market_cap": "$72.4B",
+        "base_price": 32.40,
+        "beta": 2.65,
+        "avg_volume": "52.8M",
+        "pe_ratio": 88.2,
+        "week52_high": 35.80,
+        "week52_low": 13.68,
+        "description": "Enterprise analytics and defense AI platform with proprietary Artificial Intelligence Platform (AIP).",
+        "tags": ["DEFENSE_AI", "ENTERPRISE_DATA", "HIGH_MOMENTUM"]
+    },
+    "COIN": {
+        "symbol": "COIN",
+        "name": "Coinbase Global, Inc.",
+        "sector": "Financial Services",
+        "industry": "Financial Data & Crypto Exchanges",
+        "market": "US_EQUITIES",
+        "market_cap": "$54.1B",
+        "base_price": 218.60,
+        "beta": 3.12,
+        "avg_volume": "9.4M",
+        "pe_ratio": 41.5,
+        "week52_high": 283.48,
+        "week52_low": 69.63,
+        "description": "Leading regulated crypto exchange platform, Layer-2 Base network operator, and institutional custodian.",
+        "tags": ["CRYPTO_BETA", "FINTECH", "HIGH_VOLATILITY"]
+    },
+    "MSTR": {
+        "symbol": "MSTR",
+        "name": "MicroStrategy Incorporated",
+        "sector": "Technology",
+        "industry": "Software - Application & Treasury",
+        "market": "US_EQUITIES",
+        "market_cap": "$29.6B",
+        "base_price": 142.50,
+        "beta": 3.45,
+        "avg_volume": "14.1M",
+        "pe_ratio": 48.0,
+        "week52_high": 200.00,
+        "week52_low": 32.50,
+        "description": "Enterprise analytics firm operating a strategic corporate Bitcoin treasury reserve strategy.",
+        "tags": ["BITCOIN_PROXY", "HIGH_BETA", "MOMENTUM_RUNNER"]
+    },
+    "NFLX": {
+        "symbol": "NFLX",
+        "name": "Netflix, Inc.",
+        "sector": "Communication Services",
+        "industry": "Entertainment & Streaming",
+        "market": "US_EQUITIES",
+        "market_cap": "$302.5B",
+        "base_price": 702.40,
+        "beta": 1.25,
+        "avg_volume": "3.8M",
+        "pe_ratio": 42.1,
+        "week52_high": 713.80,
+        "week52_low": 344.73,
+        "description": "World's leading video streaming subscription platform expanding into ad-tiers and live sports.",
+        "tags": ["STREAMING_KING", "S&P500", "SUBSCRIPTION_SAAS"]
+    },
+    "UBER": {
+        "symbol": "UBER",
+        "name": "Uber Technologies, Inc.",
+        "sector": "Technology",
+        "industry": "Software - Application & Mobility",
+        "market": "US_EQUITIES",
+        "market_cap": "$154.2B",
+        "base_price": 74.20,
+        "beta": 1.34,
+        "avg_volume": "16.2M",
+        "pe_ratio": 36.8,
+        "week52_high": 82.14,
+        "week52_low": 39.38,
+        "description": "Global leader in ride-hailing mobility, food delivery (UberEats), and freight logistics.",
+        "tags": ["MOBILITY_NETWORK", "PROFITABLE_GROWTH", "S&P500"]
+    },
+    "PANW": {
+        "symbol": "PANW",
+        "name": "Palo Alto Networks, Inc.",
+        "sector": "Technology",
+        "industry": "Software - Cybersecurity",
+        "market": "US_EQUITIES",
+        "market_cap": "$115.4B",
+        "base_price": 352.10,
+        "beta": 1.18,
+        "avg_volume": "4.2M",
+        "pe_ratio": 52.4,
+        "week52_high": 380.84,
+        "week52_low": 201.17,
+        "description": "Global cybersecurity platform providing enterprise firewalls, cloud security, and AI threat defense.",
+        "tags": ["CYBERSECURITY", "SAAS_PLATFORM", "S&P500"]
+    },
+    "CRM": {
+        "symbol": "CRM",
+        "name": "Salesforce, Inc.",
+        "sector": "Technology",
+        "industry": "Software - Application",
+        "market": "US_EQUITIES",
+        "market_cap": "$251.2B",
+        "base_price": 260.50,
+        "beta": 1.15,
+        "avg_volume": "6.8M",
+        "pe_ratio": 44.5,
+        "week52_high": 318.71,
+        "week52_low": 193.68,
+        "description": "Enterprise customer relationship management (CRM) cloud platform introducing autonomous AI agents (Agentforce).",
+        "tags": ["ENTERPRISE_CRM", "AGENTIC_AI", "DOW30"]
+    },
+    "SHOP": {
+        "symbol": "SHOP",
+        "name": "Shopify Inc.",
+        "sector": "Technology",
+        "industry": "Software - Application",
+        "market": "US_EQUITIES",
+        "market_cap": "$98.6B",
+        "base_price": 76.80,
+        "beta": 2.15,
+        "avg_volume": "11.4M",
+        "pe_ratio": 72.1,
+        "week52_high": 91.57,
+        "week52_low": 45.50,
+        "description": "Essential internet infrastructure for commerce, enabling multi-channel merchants to operate global storefronts.",
+        "tags": ["E_COMMERCE_SAAS", "HIGH_BETA", "GROWTH"]
+    },
+
+    # -------------------------------------------------------------
+    # 4. HEALTHCARE, BIOTECH & PHARMA
+    # -------------------------------------------------------------
+    "LLY": {
+        "symbol": "LLY",
+        "name": "Eli Lilly and Company",
+        "sector": "Healthcare",
+        "industry": "Drug Manufacturers - General",
+        "market": "US_EQUITIES",
+        "market_cap": "$885.4B",
+        "base_price": 932.50,
+        "beta": 0.42,
+        "avg_volume": "3.6M",
+        "pe_ratio": 115.2,
+        "week52_high": 972.53,
+        "week52_low": 516.57,
+        "description": "Pharmaceutical leader driving groundbreaking GLP-1 weight loss and diabetes treatments (Mounjaro/Zepbound).",
+        "tags": ["GLP1_LEADER", "BIOPHARMA", "DEFENSIVE_GROWTH", "S&P500"]
+    },
+    "JNJ": {
+        "symbol": "JNJ",
+        "name": "Johnson & Johnson",
+        "sector": "Healthcare",
+        "industry": "Medical Devices & Pharma",
+        "market": "US_EQUITIES",
+        "market_cap": "$388.2B",
+        "base_price": 161.40,
+        "beta": 0.52,
+        "avg_volume": "6.8M",
+        "pe_ratio": 24.8,
+        "week52_high": 168.96,
+        "week52_low": 143.16,
+        "description": "Diversified healthcare titan producing innovative pharmaceuticals and med-tech surgical robotic equipment.",
+        "tags": ["DIVIDEND_ARISTOCRAT", "HEALTHCARE", "LOW_BETA", "DOW30"]
+    },
+    "UNH": {
+        "symbol": "UNH",
+        "name": "UnitedHealth Group Incorporated",
+        "sector": "Healthcare",
+        "industry": "Healthcare Plans",
+        "market": "US_EQUITIES",
+        "market_cap": "$534.6B",
+        "base_price": 578.90,
+        "beta": 0.62,
+        "avg_volume": "3.2M",
+        "pe_ratio": 32.4,
+        "week52_high": 595.00,
+        "week52_low": 436.38,
+        "description": "The largest health insurance and managed care organization in the United States, operating Optum health services.",
+        "tags": ["HEALTHCARE_PLANS", "BLUE_CHIP", "DOW30", "S&P500"]
+    },
+
+    # -------------------------------------------------------------
+    # 5. FINANCIALS & BANKING
+    # -------------------------------------------------------------
+    "JPM": {
+        "symbol": "JPM",
+        "name": "JPMorgan Chase & Co.",
+        "sector": "Financial Services",
+        "industry": "Banks - Diversified",
+        "market": "US_EQUITIES",
+        "market_cap": "$624.5B",
+        "base_price": 218.40,
+        "beta": 1.08,
+        "avg_volume": "9.2M",
+        "pe_ratio": 12.4,
+        "week52_high": 225.48,
+        "week52_low": 139.11,
+        "description": "The largest bank in the United States and a major global financial services firm.",
+        "tags": ["BANKING_TITAN", "FINANCIALS", "DIVIDEND", "DOW30", "S&P500"]
+    },
+    "V": {
+        "symbol": "V",
+        "name": "Visa Inc.",
+        "sector": "Financial Services",
+        "industry": "Credit Services & Payments",
+        "market": "US_EQUITIES",
+        "market_cap": "$552.1B",
+        "base_price": 272.50,
+        "beta": 0.94,
+        "avg_volume": "5.8M",
+        "pe_ratio": 29.8,
+        "week52_high": 290.96,
+        "week52_low": 227.68,
+        "description": "The world's largest payment processing network, processing over 200 billion global transactions annually.",
+        "tags": ["PAYMENT_RAILS", "FINTECH_MOAT", "DOW30"]
+    },
+    "BAC": {
+        "symbol": "BAC",
+        "name": "Bank of America Corporation",
+        "sector": "Financial Services",
+        "industry": "Banks - Diversified",
+        "market": "US_EQUITIES",
+        "market_cap": "$312.4B",
+        "base_price": 39.80,
+        "beta": 1.35,
+        "avg_volume": "38.5M",
+        "pe_ratio": 13.8,
+        "week52_high": 44.44,
+        "week52_low": 24.96,
+        "description": "Major American multinational investment bank and financial services holding company.",
+        "tags": ["VALUE_BANKING", "FINANCIALS", "S&P500"]
+    },
+
+    # -------------------------------------------------------------
+    # 6. ENERGY & COMMODITIES
+    # -------------------------------------------------------------
+    "XOM": {
+        "symbol": "XOM",
+        "name": "Exxon Mobil Corporation",
+        "sector": "Energy",
+        "industry": "Oil & Gas Integrated",
+        "market": "US_EQUITIES",
+        "market_cap": "$468.2B",
+        "base_price": 118.20,
+        "beta": 0.88,
+        "avg_volume": "15.4M",
+        "pe_ratio": 14.1,
+        "week52_high": 123.75,
+        "week52_low": 95.77,
+        "description": "The largest US integrated energy enterprise engaged in exploration, refining, and chemical production.",
+        "tags": ["ENERGY_GIANT", "OIL_AND_GAS", "DIVIDEND_YIELD", "S&P500"]
+    },
+    "CVX": {
+        "symbol": "CVX",
+        "name": "Chevron Corporation",
+        "sector": "Energy",
+        "industry": "Oil & Gas Integrated",
+        "market": "US_EQUITIES",
+        "market_cap": "$272.5B",
+        "base_price": 148.60,
+        "beta": 0.85,
+        "avg_volume": "7.2M",
+        "pe_ratio": 13.9,
+        "week52_high": 167.11,
+        "week52_low": 139.62,
+        "description": "Multinational energy corporation with premier upstream assets in the Permian Basin and Gulf of Mexico.",
+        "tags": ["ENERGY_VALUE", "DIVIDEND_ARISTOCRAT", "DOW30"]
+    },
+
+    # -------------------------------------------------------------
+    # 7. INDUSTRIALS, DEFENSE & AEROSPACE
+    # -------------------------------------------------------------
+    "BA": {
+        "symbol": "BA",
+        "name": "The Boeing Company",
+        "sector": "Industrials",
+        "industry": "Aerospace & Defense",
+        "market": "US_EQUITIES",
+        "market_cap": "$98.4B",
+        "base_price": 158.40,
+        "beta": 1.55,
+        "avg_volume": "7.8M",
+        "pe_ratio": -18.2,
+        "week52_high": 267.54,
+        "week52_low": 149.20,
+        "description": "Global aerospace manufacturer of commercial jetliners, defense satellites, and military aircraft.",
+        "tags": ["AEROSPACE", "DEFENSE", "TURNAROUND_PLAY", "DOW30"]
+    },
+    "CAT": {
+        "symbol": "CAT",
+        "name": "Caterpillar Inc.",
+        "sector": "Industrials",
+        "industry": "Farm & Heavy Construction Machinery",
+        "market": "US_EQUITIES",
+        "market_cap": "$172.8B",
+        "base_price": 358.90,
+        "beta": 1.12,
+        "avg_volume": "2.8M",
+        "pe_ratio": 16.5,
+        "week52_high": 382.46,
+        "week52_low": 223.76,
+        "description": "World's leading manufacturer of heavy construction and mining equipment, diesel engines, and industrial turbines.",
+        "tags": ["INFRASTRUCTURE", "INDUSTRIALS", "DOW30", "S&P500"]
+    },
+
+    # -------------------------------------------------------------
+    # 8. CONSUMER & RETAIL
+    # -------------------------------------------------------------
+    "WMT": {
+        "symbol": "WMT",
+        "name": "Walmart Inc.",
+        "sector": "Consumer Defensive",
+        "industry": "Discount Stores & Omnichannel Retail",
+        "market": "US_EQUITIES",
+        "market_cap": "$602.4B",
+        "base_price": 75.10,
+        "beta": 0.52,
+        "avg_volume": "18.2M",
+        "pe_ratio": 31.8,
+        "week52_high": 76.50,
+        "week52_low": 49.85,
+        "description": "Global retail power with unmatched supply chain efficiency, expanding e-commerce, and high-margin advertising.",
+        "tags": ["RETAIL_LEADER", "DEFENSIVE", "DOW30", "S&P500"]
+    },
+    "COST": {
+        "symbol": "COST",
+        "name": "Costco Wholesale Corporation",
+        "sector": "Consumer Defensive",
+        "industry": "Discount Stores & Membership Warehouses",
+        "market": "US_EQUITIES",
+        "market_cap": "$395.6B",
+        "base_price": 892.40,
+        "beta": 0.78,
+        "avg_volume": "2.1M",
+        "pe_ratio": 54.2,
+        "week52_high": 905.00,
+        "week52_low": 535.15,
+        "description": "Operator of membership warehouses offering high-volume, low-margin goods with extreme customer loyalty.",
+        "tags": ["MEMBERSHIP_MOAT", "COMPOUNDER", "S&P500"]
+    }
+}
+
+def get_all_symbols() -> List[str]:
+    return list(STOCK_UNIVERSE.keys())
+
+def get_stock_profile(symbol: str) -> Dict[str, Any]:
+    sym = (symbol or "NVDA").upper().strip()
+    if sym in STOCK_UNIVERSE:
+        return STOCK_UNIVERSE[sym]
+    # Fallback template for any custom searched ticker
+    return {
+        "symbol": sym,
+        "name": f"{sym} Corporation",
+        "sector": "Technology",
+        "industry": "General Equities",
+        "market": "US_EQUITIES",
+        "market_cap": "$45.0B",
+        "base_price": 100.00,
+        "beta": 1.20,
+        "avg_volume": "10.0M",
+        "pe_ratio": 25.0,
+        "week52_high": 125.00,
+        "week52_low": 75.00,
+        "description": f"Publicly traded equity instrument {sym} analyzed by JARVIS AI Institutional Screener.",
+        "tags": ["US_EQUITIES"]
+    }

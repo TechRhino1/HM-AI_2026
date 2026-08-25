@@ -200,8 +200,14 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
         try:
             if path == "/" or path == "/index.html":
                 self._serve_terminal_ui()
+            elif path in ["/stocks", "/stocks.html", "/screener"]:
+                self._serve_stocks_ui()
             elif path.startswith("/static/"):
                 self._serve_static_file(path)
+            elif path.startswith("/api/stocks/"):
+                from jarvis.stocks.stock_service import STOCK_SERVICE
+                if not STOCK_SERVICE.handle_request(path, query, self):
+                    self.send_error(404, f"Stock API {path} not found")
             elif path == "/api/telemetry_state":
                 snap = self.state_manager.get_state_snapshot()
                 if not snap.get("account"):
@@ -490,6 +496,35 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
             self.wfile.write(content_bytes)
         else:
             self.send_error(404, "Terminal UI index.html not found")
+
+    def _serve_stocks_ui(self):
+        now = time.time()
+        if "__stocks_html__" in self._STATIC_CACHE:
+            content_bytes, mime_type, ts = self._STATIC_CACHE["__stocks_html__"]
+            if now - ts < 5.0:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(content_bytes)))
+                self.send_header("Cache-Control", "no-cache")
+                self.end_headers()
+                self.wfile.write(content_bytes)
+                return
+
+        ui_path = os.path.join(self.base_dir, "ui", "templates", "stocks.html")
+        if os.path.exists(ui_path):
+            with open(ui_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            content_bytes = content.encode("utf-8")
+            self._STATIC_CACHE["__stocks_html__"] = (content_bytes, "text/html", now)
+
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(content_bytes)))
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self.wfile.write(content_bytes)
+        else:
+            self.send_error(404, "Stocks UI stocks.html not found")
 
 def start_server(host: str = "0.0.0.0", port: int = 8501) -> ThreadingHTTPServer:
     ThreadingHTTPServer.allow_reuse_address = True

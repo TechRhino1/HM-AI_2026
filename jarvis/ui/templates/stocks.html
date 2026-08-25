@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HM AI 4.0 — AI Breakout Stock Screener & Equity Intelligence</title>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- TradingView Lightweight Charts Library -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    <!-- Stock Screener Stylesheet -->
+    <link rel="stylesheet" href="/static/css/stocks.css?v=4.0">
+</head>
+<body>
+
+    <!-- ==========================================================================
+         TOP INSTITUTIONAL HUD HEADER
+         ========================================================================== -->
+    <header class="stocks-hud">
+        <div class="brand-wrapper">
+            <div class="brand-logo">
+                <div class="brand-icon">⚡</div>
+                <div class="brand-text">HM <span>AI 4.0</span> • Stock Intelligence</div>
+            </div>
+            <div class="badge badge-live">
+                <span class="pulse-dot"></span> AI SCREENER ACTIVE
+            </div>
+        </div>
+
+        <div class="nav-links-wrapper">
+            <a href="/" class="btn-nav-switch">
+                <span>⚡ Forex / Crypto Terminal</span>
+            </a>
+            <a href="/stocks" class="btn-nav-switch btn-nav-active">
+                <span>📊 AI Stock Screener</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- ==========================================================================
+         REAL-TIME BREAKOUT ALERT TICKER RIBBON
+         ========================================================================== -->
+    <div class="alert-ticker-ribbon">
+        <div class="ticker-label">
+            <span>⚡ LIVE BREAKOUT ALERTS:</span>
+        </div>
+        <div class="ticker-track" id="alert-ticker-track">
+            <!-- Dynamic Real-Time Breakout Alerts populated by JS -->
+            <div class="ticker-alert-pill">Scanning high-probability equity setups...</div>
+        </div>
+    </div>
+
+    <!-- ==========================================================================
+         MAIN SCREENER APPLICATION CONTAINER
+         ========================================================================== -->
+    <div class="screener-app-container">
+
+        <!-- Controls Deck: Search & Multi-Factor Filters -->
+        <div class="controls-deck">
+            <div class="search-and-stats-row">
+                <!-- Search Box with Autocomplete -->
+                <div class="search-box-wrapper">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="stock-search-input" class="search-input" placeholder="Search ticker or company (e.g. NVDA, AAPL, TSLA, Palantir)..." autocomplete="off">
+                    <div id="search-autocomplete" class="search-autocomplete-dropdown"></div>
+                </div>
+
+                <!-- Quick Screener Telemetry -->
+                <div class="screener-quick-stats">
+                    <div class="quick-stat-item">
+                        <span class="quick-stat-label">Universe Scanned</span>
+                        <span id="stat-total-scanned" class="quick-stat-val">35</span>
+                    </div>
+                    <div class="quick-stat-item">
+                        <span class="quick-stat-label">High-Prob Setups (&gt;75%)</span>
+                        <span id="stat-high-prob-count" class="quick-stat-val" style="color:var(--neon-bull);">--</span>
+                    </div>
+                    <div class="quick-stat-item">
+                        <span class="quick-stat-label">Coiling Squeezes</span>
+                        <span id="stat-squeeze-count" class="quick-stat-val" style="color:var(--neon-amber);">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filter Pills Row -->
+            <div class="filter-pills-row">
+                <span class="filter-group-label">Sector:</span>
+                <button class="filter-pill sector-pill active" onclick="window.setSectorFilter('all', this)">All Sectors</button>
+                <button class="filter-pill sector-pill" onclick="window.setSectorFilter('Technology', this)">Technology &amp; AI</button>
+                <button class="filter-pill sector-pill" onclick="window.setSectorFilter('Semiconductors', this)">Semiconductors</button>
+                <button class="filter-pill sector-pill" onclick="window.setSectorFilter('Healthcare', this)">Healthcare</button>
+                <button class="filter-pill sector-pill" onclick="window.setSectorFilter('Financial Services', this)">Financials</button>
+                <button class="filter-pill sector-pill" onclick="window.setSectorFilter('Energy', this)">Energy</button>
+                <button class="filter-pill sector-pill" onclick="window.setSectorFilter('Consumer', this)">Consumer</button>
+                <button class="filter-pill sector-pill" onclick="window.setSectorFilter('Industrials', this)">Industrials</button>
+
+                <div style="width:1px; height:18px; background:var(--border-subtle); margin:0 4px;"></div>
+
+                <span class="filter-group-label">Timeframe:</span>
+                <button class="filter-pill tf-pill" onclick="window.setTimeframeFilter('15M', this)">15M</button>
+                <button class="filter-pill tf-pill" onclick="window.setTimeframeFilter('1H', this)">1H</button>
+                <button class="filter-pill tf-pill" onclick="window.setTimeframeFilter('4H', this)">4H</button>
+                <button class="filter-pill tf-pill active" onclick="window.setTimeframeFilter('1D', this)">1D (Daily)</button>
+
+                <div style="width:1px; height:18px; background:var(--border-subtle); margin:0 4px;"></div>
+
+                <span class="filter-group-label">AI Signal:</span>
+                <button class="filter-pill type-pill active" onclick="window.setTypeFilter('all', this)">All Signals</button>
+                <button class="filter-pill type-pill" onclick="window.setTypeFilter('squeeze', this)">🔥 Volatility Squeeze</button>
+                <button class="filter-pill type-pill" onclick="window.setTypeFilter('vol_surge', this)">📊 Volume Surge (&gt;1.5x)</button>
+                <button class="filter-pill type-pill" onclick="window.setTypeFilter('fired_breakout', this)">⚡ Fired Breakouts</button>
+
+                <div style="width:1px; height:18px; background:var(--border-subtle); margin:0 4px;"></div>
+
+                <span class="filter-group-label">Min Prob:</span>
+                <button class="filter-pill prob-pill active" onclick="window.setProbFilter(0, this)">All</button>
+                <button class="filter-pill prob-pill" onclick="window.setProbFilter(70, this)">&gt; 70%</button>
+                <button class="filter-pill prob-pill" onclick="window.setProbFilter(80, this)">&gt; 80%</button>
+
+                <button class="filter-pill" style="margin-left:auto; border-color:var(--neon-amber);" onclick="window.toggleWatchlistOnly(this)">
+                    ★ Watchlist Only
+                </button>
+            </div>
+        </div>
+
+        <!-- Screener Table Card -->
+        <div class="screener-main-grid">
+            <div class="screener-table-card">
+                <div class="table-header-bar">
+                    <div class="table-title">
+                        <span>📊 Ranked AI Breakout Screener Opportunities</span>
+                        <span id="table-count-badge" class="table-count-badge">Loading...</span>
+                    </div>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="screener-table">
+                        <thead>
+                            <tr>
+                                <th style="width:30px;">★</th>
+                                <th onclick="window.sortTableBy('symbol')">Stock Ticker ⬍</th>
+                                <th onclick="window.sortTableBy('sector')">Sector ⬍</th>
+                                <th onclick="window.sortTableBy('price')">Last Price ⬍</th>
+                                <th onclick="window.sortTableBy('change_pct')">Change % ⬍</th>
+                                <th onclick="window.sortTableBy('probability')">Breakout Probability ⬍</th>
+                                <th>Squeeze Status</th>
+                                <th onclick="window.sortTableBy('rvol')">RVOL ⬍</th>
+                                <th>AI Recommendation</th>
+                                <th style="text-align:right;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="screener-table-tbody">
+                            <!-- Dynamic Table Rows populated by JS -->
+                            <tr>
+                                <td colspan="10" style="text-align:center; padding:30px; color:var(--text-dim);">
+                                    Scanning equity universe and calculating multi-factor breakout scores...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ==========================================================================
+         STOCK INTELLIGENCE DOSSIER MODAL
+         ========================================================================== -->
+    <div id="stock-dossier-modal" class="stock-dossier-modal">
+        <div class="dossier-card">
+            <!-- Modal Header -->
+            <div class="dossier-header">
+                <div class="dossier-title-left">
+                    <div>
+                        <span id="dossier-ticker" class="dossier-ticker">NVDA</span>
+                        <div id="dossier-company" class="dossier-company">NVIDIA Corporation • Technology • Cap: $3.12T</div>
+                    </div>
+                    <div style="margin-left:18px;">
+                        <span id="dossier-live-price" class="dossier-live-price">$128.50</span>
+                        <span id="dossier-change-badge" class="badge" style="margin-left:8px; border:1px solid rgba(0,245,155,0.4); font-size:12px;">+3.45%</span>
+                    </div>
+                </div>
+                <button class="btn-close-modal" onclick="window.closeStockDossier()">✕</button>
+            </div>
+
+            <!-- Modal Content Grid -->
+            <div class="dossier-body-grid">
+                <!-- Left Column: Chart & Multi-TF -->
+                <div style="display:flex; flex-direction:column; gap:16px;">
+                    <!-- Chart Card -->
+                    <div class="dossier-chart-card">
+                        <div class="chart-header-row">
+                            <span style="font-weight:800; font-size:12.5px;">📈 Interactive Institutional Chart with S/R Zones</span>
+                            <div class="chart-tf-buttons">
+                                <button class="stock-tf-btn" onclick="window.setDossierTf('15M', this)">15M</button>
+                                <button class="stock-tf-btn" onclick="window.setDossierTf('1H', this)">1H</button>
+                                <button class="stock-tf-btn" onclick="window.setDossierTf('4H', this)">4H</button>
+                                <button class="stock-tf-btn active" onclick="window.setDossierTf('1D', this)">1D</button>
+                                <button class="stock-tf-btn" onclick="window.setDossierTf('1W', this)">1W</button>
+                            </div>
+                        </div>
+                        <div id="dossier-tv-chart" class="tv-chart-box"></div>
+                    </div>
+
+                    <!-- Multi-Timeframe Alignment Matrix -->
+                    <div class="multi-tf-matrix-card">
+                        <span style="font-weight:800; font-size:12px; color:var(--text-secondary);">⚡ Multi-Timeframe Trend Alignment Matrix</span>
+                        <div id="multi-tf-grid" class="matrix-grid">
+                            <!-- Populated dynamically by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Technical Indicators Panel -->
+                    <div style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:8px; padding:14px;">
+                        <span style="font-weight:800; font-size:12px; color:var(--text-secondary); margin-bottom:8px; display:block;">📊 Momentum &amp; Volatility Indicators</span>
+                        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;">
+                            <div class="plan-item">
+                                <span class="plan-label">RSI (14)</span>
+                                <span id="tech-rsi" class="plan-value" style="color:var(--accent-cyan);">--</span>
+                            </div>
+                            <div class="plan-item">
+                                <span class="plan-label">MACD Histogram</span>
+                                <span id="tech-macd" class="plan-value" style="color:var(--neon-bull);">--</span>
+                            </div>
+                            <div class="plan-item">
+                                <span class="plan-label">ADX Trend Strength</span>
+                                <span id="tech-adx" class="plan-value">--</span>
+                            </div>
+                            <div class="plan-item">
+                                <span class="plan-label">ATR Volatility</span>
+                                <span id="tech-atr" class="plan-value">--</span>
+                            </div>
+                            <div class="plan-item">
+                                <span class="plan-label">Relative Volume (RVOL)</span>
+                                <span id="tech-rvol" class="plan-value" style="color:var(--neon-amber);">--</span>
+                            </div>
+                            <div class="plan-item">
+                                <span class="plan-label">BB Band Width %</span>
+                                <span id="tech-bb-width" class="plan-value">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: AI Setup Plan, S/R Levels, News Sentiment -->
+                <div style="display:flex; flex-direction:column; gap:16px;">
+                    <!-- AI Institutional Trade Setup Plan -->
+                    <div class="trade-plan-card">
+                        <div class="trade-plan-header">
+                            <div>
+                                <span style="font-size:10.5px; font-weight:800; color:var(--accent-cyan); text-transform:uppercase;">AI Breakout Probability</span>
+                                <div style="display:flex; align-items:center; gap:8px; margin-top:2px;">
+                                    <span id="dossier-prob-val" style="font-family:var(--font-mono); font-size:24px; font-weight:900; color:#ffffff;">88%</span>
+                                    <span id="dossier-rec-badge" class="badge badge-rec-strong">STRONG BUY BREAKOUT</span>
+                                </div>
+                            </div>
+                            <div style="text-align:right;">
+                                <span id="dossier-squeeze-badge" class="badge badge-squeeze-extreme">🔥 COILING SQUEEZE</span>
+                                <div id="dossier-risk-rating" style="font-size:10px; color:var(--text-dim); margin-top:4px; font-weight:700;">Risk: MEDIUM</div>
+                            </div>
+                        </div>
+
+                        <div class="prob-meter-bar" style="height:8px; margin-top:4px;">
+                            <div id="dossier-prob-fill" class="prob-meter-fill prob-high" style="width:88%;"></div>
+                        </div>
+
+                        <div class="trade-plan-grid" style="margin-top:8px;">
+                            <div class="plan-item">
+                                <span class="plan-label">Suggested Entry Zone</span>
+                                <span id="plan-entry" class="plan-value" style="color:var(--accent-cyan);">$128.80</span>
+                            </div>
+                            <div class="plan-item">
+                                <span class="plan-label">Invalidation Stop Loss</span>
+                                <span id="plan-sl" class="plan-value" style="color:var(--neon-bear);">$124.50</span>
+                            </div>
+                            <div class="plan-item">
+                                <span class="plan-label">Target 1 (TP1)</span>
+                                <span id="plan-tp1" class="plan-value" style="color:var(--neon-bull);">$134.20</span>
+                            </div>
+                            <div class="plan-item">
+                                <span class="plan-label">Target 2 (TP2 - Target)</span>
+                                <span id="plan-tp2" class="plan-value" style="color:var(--neon-bull);">$139.80</span>
+                            </div>
+                            <div class="plan-item">
+                                <span class="plan-label">Target 3 (Runner TP3)</span>
+                                <span id="plan-tp3" class="plan-value" style="color:var(--neon-bull);">$146.50</span>
+                            </div>
+                            <div class="plan-item">
+                                <span class="plan-label">Risk : Reward Ratio</span>
+                                <span id="plan-rr" class="plan-value" style="color:var(--neon-gold);">1:2.85</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Support & Resistance Table -->
+                    <div style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:8px; padding:14px;">
+                        <span style="font-weight:800; font-size:12px; color:var(--text-secondary); margin-bottom:8px; display:block;">📍 Key Support &amp; Resistance Thresholds</span>
+                        <div style="display:grid; grid-template-columns:repeat(7, 1fr); gap:4px; text-align:center;">
+                            <div class="plan-item" style="padding:6px 2px;">
+                                <span class="plan-label" style="color:var(--neon-bear);">R3</span>
+                                <span id="sr-r3" class="mono-num" style="font-size:11px;">--</span>
+                            </div>
+                            <div class="plan-item" style="padding:6px 2px;">
+                                <span class="plan-label" style="color:var(--neon-bear);">R2</span>
+                                <span id="sr-r2" class="mono-num" style="font-size:11px;">--</span>
+                            </div>
+                            <div class="plan-item" style="padding:6px 2px;">
+                                <span class="plan-label" style="color:var(--neon-bear);">R1</span>
+                                <span id="sr-r1" class="mono-num" style="font-size:11px;">--</span>
+                            </div>
+                            <div class="plan-item" style="padding:6px 2px; border-color:var(--accent-cyan);">
+                                <span class="plan-label" style="color:var(--accent-cyan);">PIVOT</span>
+                                <span id="sr-pivot" class="mono-num" style="font-size:11px;">--</span>
+                            </div>
+                            <div class="plan-item" style="padding:6px 2px;">
+                                <span class="plan-label" style="color:var(--neon-bull);">S1</span>
+                                <span id="sr-s1" class="mono-num" style="font-size:11px;">--</span>
+                            </div>
+                            <div class="plan-item" style="padding:6px 2px;">
+                                <span class="plan-label" style="color:var(--neon-bull);">S2</span>
+                                <span id="sr-s2" class="mono-num" style="font-size:11px;">--</span>
+                            </div>
+                            <div class="plan-item" style="padding:6px 2px;">
+                                <span class="plan-label" style="color:var(--neon-bull);">S3</span>
+                                <span id="sr-s3" class="mono-num" style="font-size:11px;">--</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- News & AI Sentiment Intelligence -->
+                    <div class="news-sentiment-card">
+                        <span style="font-weight:800; font-size:12px; color:var(--text-secondary);">📰 Latest News &amp; AI Sentiment Analysis</span>
+                        <div id="dossier-news-list" style="display:flex; flex-direction:column; gap:8px;">
+                            <!-- Populated dynamically by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stock Controller Script -->
+    <script src="/static/js/stocks.js?v=4.0"></script>
+</body>
+</html>
