@@ -977,130 +977,292 @@ body {
    9. MOBILE & TABLET RESPONSIVE STYLES
    ========================================================================== */
 
-@media (max-width: 1024px) {
-    .india-hud {
-        padding: 8px 14px;
-        flex-wrap: wrap;
-        gap: 8px;
+@media (max-width: 900px) {
+    body {
+        overflow-x: hidden;
+        width: 100vw;
     }
 
-    .search-container {
+    /* Fixed Clean 3-Row Header on Mobile */
+    .india-hud {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        padding: 8px 10px !important;
+        gap: 8px !important;
+        background: rgba(8, 12, 22, 0.96) !important;
+        position: sticky;
+        top: 0;
+        z-index: 1000;
         width: 100%;
-        order: 3;
+        box-sizing: border-box;
     }
 
-    .india-layout-container {
-        padding: 12px 12px 60px 12px;
-    }
-
-    .dossier-body-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 768px) {
-    .india-hud {
-        padding: 6px 10px;
+    .india-hud .brand-wrapper {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        width: 100% !important;
     }
 
     .brand-text {
-        font-size: 13px;
+        font-size: 13px !important;
     }
 
     .badge-nse-live {
-        display: none;
+        display: none !important;
     }
 
-    .nav-links-wrapper {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        width: 100%;
-        padding: 4px 0;
+    .india-hud .auth-header-widget {
+        margin-left: auto;
+        display: flex;
         gap: 4px;
     }
 
+    /* Row 2: Cross-Market Navigation Pills with Momentum Touch Scroll */
+    .nav-links-wrapper {
+        display: flex !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        white-space: nowrap !important;
+        width: 100% !important;
+        gap: 6px !important;
+        padding: 2px 0 !important;
+        scrollbar-width: none;
+        order: 2;
+    }
+
+    .nav-links-wrapper::-webkit-scrollbar {
+        display: none;
+    }
+
     .btn-nav-switch {
-        padding: 4px 8px;
-        font-size: 11px;
-        white-space: nowrap;
+        flex-shrink: 0 !important;
+        padding: 5px 10px !important;
+        font-size: 11px !important;
+        border-radius: 5px;
     }
 
+    /* Row 3: Search Box 100% Width */
+    .search-container {
+        width: 100% !important;
+        order: 3;
+    }
+
+    .search-input-box {
+        width: 100%;
+        padding: 6px 10px;
+    }
+
+    .search-input-box input {
+        font-size: 13px; /* Prevents auto-zoom on iOS */
+    }
+
+    /* Ticker Bars & Ribbons Horizontal Touch Scroll */
     .indices-ticker-bar {
-        padding: 6px 10px;
-        gap: 8px;
+        padding: 6px 10px !important;
+        gap: 6px !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        white-space: nowrap !important;
+        scrollbar-width: none;
     }
+    .indices-ticker-bar::-webkit-scrollbar { display: none; }
 
-    .fii-dii-ribbon {
-        padding: 6px 10px;
-        gap: 8px;
-    }
-
-    .filter-panel-card {
-        padding: 10px 12px;
-    }
-
-    .filter-pills-wrap {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        flex-wrap: nowrap;
-        padding-bottom: 2px;
-    }
-
-    .sector-pill, .cpr-pill, .prob-pill {
-        padding: 4px 8px;
+    .indices-title-tag {
         font-size: 10px;
-        white-space: nowrap;
         flex-shrink: 0;
     }
 
+    .index-pill {
+        flex-shrink: 0;
+        padding: 3px 8px;
+        font-size: 10px;
+    }
+
+    .fii-dii-ribbon {
+        padding: 6px 10px !important;
+        gap: 8px !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        white-space: nowrap !important;
+        scrollbar-width: none;
+    }
+    .fii-dii-ribbon::-webkit-scrollbar { display: none; }
+
+    .fii-card {
+        flex-shrink: 0;
+        font-size: 10px;
+    }
+
+    /* Main Container */
+    .india-layout-container {
+        padding: 10px 8px 60px 8px !important;
+        gap: 12px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* Filter Deck Mobile Formatting */
+    .filter-panel-card {
+        padding: 10px !important;
+        gap: 10px;
+    }
+
+    .filter-row {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+    }
+
+    .filter-group {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 4px !important;
+        width: 100%;
+    }
+
+    .filter-label {
+        font-size: 10px;
+    }
+
+    .filter-pills-wrap {
+        display: flex !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        white-space: nowrap !important;
+        width: 100% !important;
+        gap: 4px !important;
+        padding-bottom: 3px !important;
+        scrollbar-width: none;
+    }
+    .filter-pills-wrap::-webkit-scrollbar { display: none; }
+
+    .sector-pill, .cpr-pill, .prob-pill {
+        flex-shrink: 0 !important;
+        padding: 4px 8px !important;
+        font-size: 10.5px !important;
+    }
+
+    .toolbar-bottom-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+
+    .toolbar-left-actions, .toolbar-right-actions {
+        display: flex;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        white-space: nowrap;
+        width: 100%;
+        gap: 6px;
+        scrollbar-width: none;
+    }
+    .toolbar-left-actions::-webkit-scrollbar, .toolbar-right-actions::-webkit-scrollbar { display: none; }
+
+    .btn-action-tool {
+        flex-shrink: 0;
+        padding: 6px 10px;
+        font-size: 10.5px;
+    }
+
+    /* Buy Now Cards: 1 Column on Phone */
     .buy-now-cards-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr !important;
+        gap: 10px;
+    }
+
+    .buy-now-plan-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 4px;
     }
 
     .sector-heatmap-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr !important;
     }
 
+    /* Screener Table: Fully Contained Touch Scroll */
     .screener-table-card {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
+        width: 100% !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        border-radius: 8px;
+        display: block;
     }
 
     .screener-table {
-        min-width: 680px;
+        min-width: 680px !important;
+        font-size: 11px;
     }
 
+    .screener-table th, .screener-table td {
+        padding: 8px 10px !important;
+    }
+
+    /* Modals (Dossier & Option Chain) on Mobile */
     .modal-card, .modal-card-wide {
-        width: 96vw;
-        max-width: 96vw;
-        max-height: 88vh;
+        width: 96vw !important;
+        max-width: 96vw !important;
+        max-height: 90vh !important;
+        border-radius: 10px;
+        margin: auto;
     }
 
-    .modal-body-scrollable {
-        padding: 12px 10px;
+    .modal-header {
+        padding: 10px 12px !important;
     }
 
     .modal-ticker-name {
-        font-size: 16px;
+        font-size: 16px !important;
+    }
+
+    .modal-body-scrollable {
+        padding: 10px !important;
+        gap: 10px !important;
+        max-height: calc(90vh - 60px);
+    }
+
+    .dossier-body-grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+
+    .tv-chart-box {
+        height: 280px !important;
+    }
+
+    .trade-plan-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 6px !important;
     }
 
     .matrix-grid {
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(4, 1fr) !important;
+        gap: 4px !important;
+    }
+
+    .option-chain-table {
+        min-width: 680px !important;
     }
 }
 
 @media (max-width: 480px) {
     .brand-text {
-        font-size: 12px;
+        font-size: 12px !important;
     }
 
     .btn-nav-switch {
-        font-size: 10px;
-        padding: 4px 6px;
+        font-size: 10px !important;
+        padding: 4px 6px !important;
     }
 
-    .buy-now-plan-grid {
-        grid-template-columns: 1fr 1fr;
+    .filter-label {
+        font-size: 9.5px !important;
+    }
+
+    .buy-now-card {
+        padding: 10px !important;
     }
 }
 

@@ -1392,112 +1392,236 @@ body {
    MOBILE & TABLET RESPONSIVE STYLES
    ========================================================================== */
 
-@media (max-width: 1024px) {
-    .stocks-hud {
-        padding: 8px 14px;
-        flex-wrap: wrap;
-        gap: 8px;
+@media (max-width: 900px) {
+    body {
+        overflow-x: hidden;
+        width: 100vw;
     }
 
-    .search-container {
+    /* Fixed Clean 2-Row Header on Mobile */
+    .stocks-hud {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        padding: 8px 10px !important;
+        gap: 8px !important;
+        background: rgba(8, 12, 22, 0.96) !important;
+        position: sticky;
+        top: 0;
+        z-index: 1000;
         width: 100%;
-        order: 3;
+        box-sizing: border-box;
     }
 
-    .stocks-layout-container {
-        padding: 12px 12px 60px 12px;
-    }
-
-    .dossier-body-grid {
-        grid-template-columns: 1fr;
-    }
-}
-
-@media (max-width: 768px) {
-    .stocks-hud {
-        padding: 6px 10px;
+    .stocks-hud .brand-wrapper {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        width: 100% !important;
     }
 
     .brand-text {
-        font-size: 13px;
+        font-size: 13px !important;
     }
 
     .badge-live {
-        display: none;
+        display: none !important;
     }
 
-    .nav-links-wrapper {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        width: 100%;
-        padding: 4px 0;
+    .stocks-hud .auth-header-widget {
+        margin-left: auto;
+        display: flex;
         gap: 4px;
     }
 
+    /* Row 2: Cross-Market Navigation Pills with Momentum Touch Scroll */
+    .nav-links-wrapper {
+        display: flex !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        white-space: nowrap !important;
+        width: 100% !important;
+        gap: 6px !important;
+        padding: 2px 0 !important;
+        scrollbar-width: none;
+    }
+
+    .nav-links-wrapper::-webkit-scrollbar {
+        display: none;
+    }
+
     .btn-nav-switch {
-        padding: 4px 8px;
-        font-size: 11px;
-        white-space: nowrap;
+        flex-shrink: 0 !important;
+        padding: 5px 10px !important;
+        font-size: 11px !important;
+        border-radius: 5px;
     }
 
-    .filter-panel-card {
-        padding: 10px 12px;
+    /* Alert Ribbon */
+    .alert-ticker-ribbon {
+        padding: 6px 10px !important;
+        gap: 8px !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        white-space: nowrap !important;
+        scrollbar-width: none;
     }
+    .alert-ticker-ribbon::-webkit-scrollbar { display: none; }
 
-    .filter-pills-wrap {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        flex-wrap: nowrap;
-        padding-bottom: 2px;
-    }
-
-    .sector-pill, .tech-pill {
-        padding: 4px 8px;
+    .ticker-label {
         font-size: 10px;
-        white-space: nowrap;
         flex-shrink: 0;
     }
 
+    .ticker-alert-pill {
+        font-size: 10px;
+        flex-shrink: 0;
+    }
+
+    /* Main Container */
+    .screener-app-container {
+        padding: 10px 8px 60px 8px !important;
+        gap: 12px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* Controls Deck */
+    .controls-deck {
+        padding: 10px !important;
+        gap: 10px;
+    }
+
+    .search-and-stats-row {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 10px !important;
+    }
+
+    .search-box-wrapper {
+        width: 100% !important;
+    }
+
+    .search-input {
+        font-size: 13px !important; /* Prevents auto-zoom on iOS */
+        padding: 8px 10px 8px 32px !important;
+    }
+
+    .screener-quick-stats {
+        display: flex !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        white-space: nowrap !important;
+        width: 100% !important;
+        gap: 8px !important;
+        padding-bottom: 2px !important;
+        scrollbar-width: none;
+    }
+    .screener-quick-stats::-webkit-scrollbar { display: none; }
+
+    .quick-stat-item {
+        flex-shrink: 0;
+        padding: 4px 8px;
+    }
+
+    .auto-scan-box {
+        flex-shrink: 0;
+    }
+
+    /* Filter Pills Row */
+    .filter-pills-row {
+        display: flex !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        white-space: nowrap !important;
+        width: 100% !important;
+        gap: 5px !important;
+        padding: 4px 0 !important;
+        scrollbar-width: none;
+    }
+    .filter-pills-row::-webkit-scrollbar { display: none; }
+
+    .filter-group-label {
+        font-size: 10px;
+        flex-shrink: 0;
+    }
+
+    .filter-pill {
+        flex-shrink: 0 !important;
+        padding: 4px 8px !important;
+        font-size: 10.5px !important;
+    }
+
+    /* AI Buy Now Cards Grid */
     .buy-now-cards-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr !important;
+        gap: 10px;
     }
 
-    .sector-heatmap-grid {
-        grid-template-columns: 1fr;
-    }
-
+    /* Screener Table Touch Scroll */
     .screener-table-card {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
+        width: 100% !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        border-radius: 8px;
+        display: block;
     }
 
     .screener-table {
-        min-width: 680px;
+        min-width: 680px !important;
+        font-size: 11px;
     }
 
-    .modal-card, .modal-card-wide {
-        width: 96vw;
-        max-width: 96vw;
-        max-height: 88vh;
+    .screener-table th, .screener-table td {
+        padding: 8px 10px !important;
     }
 
-    .modal-body-scrollable {
-        padding: 12px 10px;
+    /* Dossier Modal */
+    .dossier-card {
+        width: 96vw !important;
+        max-width: 96vw !important;
+        max-height: 90vh !important;
+        border-radius: 10px;
+        margin: auto;
+    }
+
+    .dossier-body-grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+    }
+
+    .tv-chart-box {
+        height: 280px !important;
+    }
+
+    .trade-plan-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 6px !important;
     }
 
     .matrix-grid {
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(4, 1fr) !important;
+        gap: 4px !important;
+    }
+
+    .sector-heatmap-grid {
+        grid-template-columns: 1fr !important;
     }
 }
 
 @media (max-width: 480px) {
     .brand-text {
-        font-size: 12px;
+        font-size: 12px !important;
     }
 
     .btn-nav-switch {
-        font-size: 10px;
-        padding: 4px 6px;
+        font-size: 10px !important;
+        padding: 4px 6px !important;
+    }
+
+    .quick-stat-val {
+        font-size: 11px;
     }
 }
+
 

@@ -1104,91 +1104,211 @@ body {
    MOBILE & TABLET RESPONSIVE STYLES
    ========================================================================== */
 
-@media (max-width: 1024px) {
-    .opt-hud {
-        padding: 8px 14px;
-        flex-wrap: wrap;
-        gap: 8px;
+@media (max-width: 900px) {
+    body {
+        overflow-x: hidden;
+        width: 100vw;
     }
 
-    .opt-workspace-grid {
-        grid-template-columns: 1fr;
-        padding: 12px 12px 60px 12px;
-    }
-}
-
-@media (max-width: 768px) {
+    /* Fixed Clean 3-Row Header on Mobile */
     .opt-hud {
-        padding: 6px 10px;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        padding: 8px 10px !important;
+        gap: 8px !important;
+        background: rgba(8, 12, 22, 0.96) !important;
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .opt-hud .brand-wrapper {
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        width: 100% !important;
     }
 
     .brand-text {
-        font-size: 13px;
+        font-size: 13px !important;
     }
 
     .badge-nse-live {
-        display: none;
+        display: none !important;
     }
 
-    .nav-links-wrapper {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        width: 100%;
-        padding: 4px 0;
+    .opt-hud .auth-header-widget {
+        margin-left: auto;
+        display: flex;
         gap: 4px;
     }
 
+    /* Row 2: Cross-Market Navigation Pills with Momentum Touch Scroll */
+    .nav-links-wrapper {
+        display: flex !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        white-space: nowrap !important;
+        width: 100% !important;
+        gap: 6px !important;
+        padding: 2px 0 !important;
+        scrollbar-width: none;
+        order: 2;
+    }
+
+    .nav-links-wrapper::-webkit-scrollbar {
+        display: none;
+    }
+
     .btn-nav-switch {
-        padding: 4px 8px;
-        font-size: 11px;
-        white-space: nowrap;
+        flex-shrink: 0 !important;
+        padding: 5px 10px !important;
+        font-size: 11px !important;
+        border-radius: 5px;
     }
 
-    .opt-summary-strip {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 8px;
-        padding: 8px 10px;
+    /* Row 3: Search Box 100% Width */
+    .search-container {
+        width: 100% !important;
+        order: 3;
     }
 
-    .summary-card {
-        padding: 6px 8px;
+    .search-input-box {
+        width: 100%;
+        padding: 6px 10px;
     }
 
+    .search-input-box input {
+        font-size: 13px; /* Prevents auto-zoom on iOS */
+    }
+
+    /* Underlying & Expiry Selector Bar */
+    .underlying-selector-bar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        padding: 6px 10px !important;
+        gap: 8px !important;
+    }
+
+    .underlying-pills-scroll {
+        display: flex !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        white-space: nowrap !important;
+        width: 100% !important;
+        gap: 5px !important;
+        padding-bottom: 2px !important;
+        scrollbar-width: none;
+    }
+    .underlying-pills-scroll::-webkit-scrollbar { display: none; }
+
+    .und-pill {
+        flex-shrink: 0 !important;
+        padding: 4px 8px !important;
+        font-size: 10.5px !important;
+    }
+
+    .expiry-selector-wrap {
+        width: 100% !important;
+        justify-content: space-between !important;
+    }
+
+    /* Spot KPI Summary Ribbon */
+    .opt-kpi-ribbon {
+        display: flex !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        white-space: nowrap !important;
+        width: 100% !important;
+        padding: 6px 10px !important;
+        gap: 8px !important;
+        scrollbar-width: none;
+    }
+    .opt-kpi-ribbon::-webkit-scrollbar { display: none; }
+
+    .kpi-box {
+        flex-shrink: 0 !important;
+        padding: 4px 8px !important;
+    }
+
+    /* Main 2-Pane Workspace Grid: Stack Vertically */
+    .opt-workspace-grid {
+        grid-template-columns: 1fr !important;
+        padding: 10px 8px 60px 8px !important;
+        gap: 12px;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .pane-card {
+        padding: 10px !important;
+        gap: 10px;
+    }
+
+    .payoff-chart-container {
+        height: 220px !important;
+    }
+
+    .strike-dist-container {
+        height: 180px !important;
+    }
+
+    /* Single Signal Cards */
     .single-signal-cards-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr !important;
+        gap: 10px;
     }
 
     .sig-params-grid {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr 1fr !important;
+        gap: 6px;
     }
 
     .sig-confluence-chips {
         flex-wrap: wrap;
     }
 
-    .payoff-chart-container {
-        height: 200px;
+    .spreads-container {
+        gap: 10px;
     }
 
-    .strike-dist-container {
-        height: 180px;
+    .spread-card-item {
+        padding: 10px;
     }
 
+    .spread-detail-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 6px;
+    }
+
+    /* Option Chain Table Touch Scroll */
     .opt-chain-container {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
+        width: 100% !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        border-radius: 8px;
+        display: block;
     }
 
     .option-chain-table {
-        min-width: 660px;
+        min-width: 680px !important;
+        font-size: 10.5px;
+    }
+
+    .option-chain-table th, .option-chain-table td {
+        padding: 6px 8px !important;
     }
 
     .greek-pills-row {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
         flex-wrap: nowrap;
+        scrollbar-width: none;
     }
+    .greek-pills-row::-webkit-scrollbar { display: none; }
 
     .greek-pill {
         flex-shrink: 0;
@@ -1197,16 +1317,17 @@ body {
 
 @media (max-width: 480px) {
     .brand-text {
-        font-size: 12px;
+        font-size: 12px !important;
     }
 
     .btn-nav-switch {
-        font-size: 10px;
-        padding: 4px 6px;
+        font-size: 10px !important;
+        padding: 4px 6px !important;
     }
 
-    .opt-summary-strip {
+    .sig-card-actions {
         grid-template-columns: 1fr 1fr;
     }
 }
+
 
