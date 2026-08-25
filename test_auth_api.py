@@ -57,9 +57,9 @@ def run_auth_tests():
 
     # 1. Test Login with Valid Admin Credentials
     admin_session = test_post(
-        "1. Login Valid Admin (admin / jarvis2026)",
+        "1. Login Valid Admin (admin / Hm@5656)",
         "/api/auth/login",
-        {"username": "admin", "password": "jarvis2026"},
+        {"username": "admin", "password": "Hm@5656"},
         200,
         validator=lambda d: bool(d.get("token") and d.get("role") == "ADMIN")
     )

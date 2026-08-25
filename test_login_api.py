@@ -3,7 +3,7 @@ import json
 
 def test_login():
     url = "http://127.0.0.1:8501/api/auth/login"
-    payload = json.dumps({"username": "admin", "password": "jarvis2026"}).encode("utf-8")
+    payload = json.dumps({"username": "admin", "password": "Hm@5656"}).encode("utf-8")
     req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
     try:
         with urllib.request.urlopen(req) as resp:

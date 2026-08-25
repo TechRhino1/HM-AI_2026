@@ -2411,10 +2411,18 @@
         if (event) event.preventDefault();
         const userEl = document.getElementById("login-username");
         const passEl = document.getElementById("login-password");
-        const user = userEl ? userEl.value.trim() : "admin";
-        const pass = passEl ? passEl.value.trim() : "jarvis2026";
+        const user = userEl ? userEl.value.trim() : "";
+        const pass = passEl ? passEl.value.trim() : "";
         const errMsg = document.getElementById("login-error-msg");
         const modal = document.getElementById("remote-login-modal");
+
+        if (!user || !pass) {
+            if (errMsg) {
+                errMsg.textContent = "Please enter your username and password";
+                errMsg.style.display = "block";
+            }
+            return;
+        }
 
         try {
             const res = await fetch("/api/auth/login", {

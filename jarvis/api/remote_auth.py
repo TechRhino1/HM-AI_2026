@@ -15,7 +15,7 @@ SECRET_KEY = os.environ.get("JARVIS_SECRET_KEY", secrets.token_hex(32))
 
 # Default Remote Access Admin Credentials (Override via environment variables)
 ADMIN_USERNAME = os.environ.get("JARVIS_ADMIN_USER", "admin")
-DEFAULT_PASS_RAW = os.environ.get("JARVIS_ADMIN_PASS", "jarvis2026")
+DEFAULT_PASS_RAW = os.environ.get("JARVIS_ADMIN_PASS", "Hm@5656")
 
 
 class RemoteAuthEngine:
@@ -48,7 +48,7 @@ class RemoteAuthEngine:
             }
 
         # 1. Primary Admin Account
-        admin_pass = DEFAULT_PASS_RAW.strip() if DEFAULT_PASS_RAW else "jarvis2026"
+        admin_pass = DEFAULT_PASS_RAW.strip() if DEFAULT_PASS_RAW else "Hm@5656"
         cls._users["admin"] = _make_user_record("admin", admin_pass, "ADMIN", "System Administrator")
 
         # 2. Trader Account

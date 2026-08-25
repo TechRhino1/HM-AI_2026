@@ -45,7 +45,7 @@ def main():
     print(f"  👉  {tunnel_url}")
     print("\n  No IP password required!")
     print("  Default Username: admin")
-    print("  Default Password: jarvis2026")
+    print("  Default Password: Hm@5656")
     print("*" * 80 + "\n")
 
 if __name__ == "__main__":

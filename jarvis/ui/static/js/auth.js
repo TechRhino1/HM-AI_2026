@@ -162,13 +162,13 @@
                             <div class="auth-form-group">
                                 <label class="auth-input-lbl">Username</label>
                                 <div class="auth-input-wrapper">
-                                    <input type="text" id="auth-input-user" class="auth-input-field" placeholder="Enter username (e.g. admin)" required autocomplete="username" value="admin">
+                                    <input type="text" id="auth-input-user" class="auth-input-field" placeholder="Enter username (e.g. admin)" required autocomplete="username" value="">
                                 </div>
                             </div>
                             <div class="auth-form-group">
                                 <label class="auth-input-lbl">Password</label>
                                 <div class="auth-input-wrapper">
-                                    <input type="password" id="auth-input-pass" class="auth-input-field" placeholder="Enter password (default: jarvis2026)" required autocomplete="current-password" value="jarvis2026">
+                                    <input type="password" id="auth-input-pass" class="auth-input-field" placeholder="Enter password" required autocomplete="current-password" value="">
                                     <button type="button" class="auth-pwd-toggle" onclick="window.HM_AUTH.togglePasswordVisibility()">👁️</button>
                                 </div>
                             </div>
