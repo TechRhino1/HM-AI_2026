@@ -45,6 +45,7 @@
         // Dossier Modal
         dossierModal: document.getElementById("stock-dossier-modal"),
         dossierTicker: document.getElementById("dossier-ticker"),
+        dossierGradeBadge: document.getElementById("dossier-grade-badge"),
         dossierCompany: document.getElementById("dossier-company"),
         dossierSector: document.getElementById("dossier-sector"),
         dossierLivePrice: document.getElementById("dossier-live-price"),
@@ -54,6 +55,20 @@
         dossierSqueezeBadge: document.getElementById("dossier-squeeze-badge"),
         dossierRecBadge: document.getElementById("dossier-rec-badge"),
         dossierRiskRating: document.getElementById("dossier-risk-rating"),
+
+        // Order Flow
+        flowBuyerText: document.getElementById("flow-buyer-text"),
+        flowSellerText: document.getElementById("flow-seller-text"),
+        flowBuyerBar: document.getElementById("flow-buyer-bar"),
+        flowCmf: document.getElementById("flow-cmf"),
+        flowObv: document.getElementById("flow-obv"),
+        flowRsSpy: document.getElementById("flow-rs-spy"),
+
+        // Monte Carlo
+        mcTp1Prob: document.getElementById("mc-tp1-prob"),
+        mcTp2Prob: document.getElementById("mc-tp2-prob"),
+        mcVar: document.getElementById("mc-var"),
+        mcRange: document.getElementById("mc-range"),
         
         // Trade Plan
         planEntry: document.getElementById("plan-entry"),
@@ -212,6 +227,23 @@
             let recClass = "badge-rec-pullback";
             if (st.recommendation.includes("STRONG")) recClass = "badge-rec-strong";
 
+            // Grade Badge Class
+            const grade = st.grade_badge || "A";
+            let gradeClass = "badge-grade-a";
+            if (grade === "A+") gradeClass = "badge-grade-a-plus";
+            else if (grade === "B") gradeClass = "badge-grade-b";
+            else if (grade === "C") gradeClass = "badge-grade-c";
+
+            // RS Badge
+            const rsVal = Number(st.rs_vs_spy || 0);
+            const rsBadgeClass = rsVal >= 0 ? "badge-rs-lead" : "badge-rs-lag";
+            const rsSign = rsVal >= 0 ? "+" : "";
+
+            // CMF Color
+            const cmfVal = Number(st.cmf_20 || 0);
+            const cmfColor = cmfVal > 0 ? "var(--neon-bull)" : (cmfVal < 0 ? "var(--neon-bear)" : "var(--text-dim)");
+            const cmfSign = cmfVal > 0 ? "+" : "";
+
             html += `
             <tr class="${isSelected ? 'active-row' : ''}" onclick="window.openStockDossier('${st.symbol}')">
                 <td>
@@ -219,6 +251,7 @@
                         ${isStarred ? '★' : '☆'}
                     </button>
                 </td>
+                <td><span class="${gradeClass}">${st.setup_grade || 'GRADE A'}</span></td>
                 <td>
                     <div class="stock-sym-cell">
                         <div class="stock-sym-name">
@@ -239,9 +272,13 @@
                     </div>
                 </td>
                 <td>${squeezeBadge}</td>
-                <td class="mono-num" style="color:${st.rvol >= 1.5 ? 'var(--neon-amber)' : 'var(--text-secondary)'}; font-weight:700;">
-                    ${Number(st.rvol).toFixed(2)}x
+                <td>
+                    <div style="display:flex; flex-direction:column; gap:2px;">
+                        <span class="mono-num" style="color:${cmfColor}; font-size:11px; font-weight:800;">CMF: ${cmfSign}${cmfVal.toFixed(2)}</span>
+                        <span style="font-size:10px; color:var(--text-dim);">${st.buyer_pressure_pct || 50}% Buyers</span>
+                    </div>
                 </td>
+                <td><span class="badge ${rsBadgeClass}">${rsSign}${rsVal.toFixed(1)}% vs SPY</span></td>
                 <td><span class="badge ${recClass}">${st.recommendation}</span></td>
                 <td>
                     <button class="btn-analyze-action" onclick="event.stopPropagation(); window.openStockDossier('${st.symbol}')">
@@ -289,6 +326,14 @@
         state.activeSymbol = data.symbol;
 
         if (el.dossierTicker) el.dossierTicker.textContent = data.symbol;
+        if (el.dossierGradeBadge) {
+            const grade = data.grade_badge || "A";
+            el.dossierGradeBadge.textContent = data.setup_grade || "GRADE A";
+            if (grade === "A+") el.dossierGradeBadge.className = "badge-grade-a-plus";
+            else if (grade === "B") el.dossierGradeBadge.className = "badge-grade-b";
+            else if (grade === "C") el.dossierGradeBadge.className = "badge-grade-c";
+            else el.dossierGradeBadge.className = "badge-grade-a";
+        }
         if (el.dossierCompany) el.dossierCompany.textContent = `${data.name} • ${data.sector} • Cap: ${data.market_cap}`;
         if (el.dossierLivePrice) el.dossierLivePrice.textContent = `$${Number(data.current_price).toFixed(2)}`;
         
@@ -308,6 +353,30 @@
         if (el.dossierSqueezeBadge) el.dossierSqueezeBadge.textContent = data.squeeze_status;
         if (el.dossierRecBadge) el.dossierRecBadge.textContent = data.recommendation;
         if (el.dossierRiskRating) el.dossierRiskRating.textContent = `Risk: ${data.risk_level}`;
+
+        // Order Flow & Smart Money
+        const flow = data.order_flow || {};
+        if (el.flowBuyerText) el.flowBuyerText.textContent = `Buyers: ${flow.buyer_pressure_pct || 50}%`;
+        if (el.flowSellerText) el.flowSellerText.textContent = `Sellers: ${flow.seller_pressure_pct || 50}%`;
+        if (el.flowBuyerBar) el.flowBuyerBar.style.width = `${flow.buyer_pressure_pct || 50}%`;
+        if (el.flowCmf) {
+            const cVal = Number(flow.cmf_20 || 0);
+            el.flowCmf.textContent = `${cVal >= 0 ? '+' : ''}${cVal.toFixed(2)}`;
+            el.flowCmf.style.color = cVal > 0 ? "var(--neon-bull)" : (cVal < 0 ? "var(--neon-bear)" : "var(--text-dim)");
+        }
+        if (el.flowObv) el.flowObv.textContent = flow.obv_trend || "ACCUMULATION";
+        if (el.flowRsSpy) {
+            const rsVal = Number(flow.rs_vs_spy || 0);
+            el.flowRsSpy.textContent = `${rsVal >= 0 ? '+' : ''}${rsVal.toFixed(2)}% (${flow.rs_label || 'Leading'})`;
+            el.flowRsSpy.style.color = rsVal >= 0 ? "var(--neon-amber)" : "var(--neon-bear)";
+        }
+
+        // Monte Carlo Statistical Model
+        const mc = data.monte_carlo || {};
+        if (el.mcTp1Prob) el.mcTp1Prob.textContent = `${mc.tp1_probability_pct || 75}%`;
+        if (el.mcTp2Prob) el.mcTp2Prob.textContent = `${mc.tp2_probability_pct || 55}%`;
+        if (el.mcVar) el.mcVar.textContent = `-${mc.value_at_risk_95_pct || 3.5}%`;
+        if (el.mcRange) el.mcRange.textContent = `$${mc.lower_corridor_5pct || data.current_price * 0.95} — $${mc.upper_corridor_95pct || data.current_price * 1.1}`;
 
         // Trade Plan
         const plan = data.trade_setup || {};

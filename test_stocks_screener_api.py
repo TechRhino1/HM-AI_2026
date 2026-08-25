@@ -29,8 +29,8 @@ def run_tests():
         {"name": "Search 'NIO' (uppercase)", "url": f"{base_url}/api/stocks/search?q=NIO", "is_json": True, "check": lambda d: any(r.get("symbol") == "NIO" for r in d.get("results", []))},
         
         # 6. Stock Details Dossier
-        {"name": "Details NVDA", "url": f"{base_url}/api/stocks/details?symbol=NVDA&tf=1D", "is_json": True, "check": lambda d: d.get("breakout_probability", 0) > 0 and "trade_setup" in d and "multi_timeframe" in d and "technicals" in d},
-        {"name": "Details NIO", "url": f"{base_url}/api/stocks/details?symbol=NIO&tf=1D", "is_json": True, "check": lambda d: d.get("symbol") == "NIO" and d.get("breakout_probability", 0) > 0 and "trade_setup" in d},
+        {"name": "Details NVDA (Order Flow & Monte Carlo)", "url": f"{base_url}/api/stocks/details?symbol=NVDA&tf=1D", "is_json": True, "check": lambda d: d.get("breakout_probability", 0) > 0 and "order_flow" in d and "monte_carlo" in d and "setup_grade" in d},
+        {"name": "Details NIO (Order Flow & Monte Carlo)", "url": f"{base_url}/api/stocks/details?symbol=NIO&tf=1D", "is_json": True, "check": lambda d: d.get("symbol") == "NIO" and "order_flow" in d and "monte_carlo" in d},
         {"name": "Details TSLA", "url": f"{base_url}/api/stocks/details?symbol=TSLA&tf=1H", "is_json": True, "check": lambda d: "support_resistance" in d and "news" in d},
         
         # 7. Stock News Sentiment

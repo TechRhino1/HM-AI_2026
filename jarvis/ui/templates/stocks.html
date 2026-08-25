@@ -140,13 +140,15 @@
                         <thead>
                             <tr>
                                 <th style="width:30px;">★</th>
+                                <th onclick="window.sortTableBy('setup_grade')">Setup Grade ⬍</th>
                                 <th onclick="window.sortTableBy('symbol')">Stock Ticker ⬍</th>
                                 <th onclick="window.sortTableBy('sector')">Sector ⬍</th>
                                 <th onclick="window.sortTableBy('price')">Last Price ⬍</th>
                                 <th onclick="window.sortTableBy('change_pct')">Change % ⬍</th>
                                 <th onclick="window.sortTableBy('probability')">Breakout Probability ⬍</th>
                                 <th>Squeeze Status</th>
-                                <th onclick="window.sortTableBy('rvol')">RVOL ⬍</th>
+                                <th>Order Flow / CMF</th>
+                                <th>RS vs SPY</th>
                                 <th>AI Recommendation</th>
                                 <th style="text-align:right;">Action</th>
                             </tr>
@@ -154,7 +156,7 @@
                         <tbody id="screener-table-tbody">
                             <!-- Dynamic Table Rows populated by JS -->
                             <tr>
-                                <td colspan="10" style="text-align:center; padding:30px; color:var(--text-dim);">
+                                <td colspan="12" style="text-align:center; padding:30px; color:var(--text-dim);">
                                     Scanning equity universe and calculating multi-factor breakout scores...
                                 </td>
                             </tr>
@@ -175,7 +177,10 @@
             <div class="dossier-header">
                 <div class="dossier-title-left">
                     <div>
-                        <span id="dossier-ticker" class="dossier-ticker">NVDA</span>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span id="dossier-ticker" class="dossier-ticker">NVDA</span>
+                            <span id="dossier-grade-badge" class="badge-grade-a-plus">A+ PRIME</span>
+                        </div>
                         <div id="dossier-company" class="dossier-company">NVIDIA Corporation • Technology • Cap: $3.12T</div>
                     </div>
                     <div style="margin-left:18px;">
@@ -188,7 +193,7 @@
 
             <!-- Modal Content Grid -->
             <div class="dossier-body-grid">
-                <!-- Left Column: Chart & Multi-TF -->
+                <!-- Left Column: Chart, Multi-TF, Order Flow -->
                 <div style="display:flex; flex-direction:column; gap:16px;">
                     <!-- Chart Card -->
                     <div class="dossier-chart-card">
@@ -213,39 +218,39 @@
                         </div>
                     </div>
 
-                    <!-- Technical Indicators Panel -->
-                    <div style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:8px; padding:14px;">
-                        <span style="font-weight:800; font-size:12px; color:var(--text-secondary); margin-bottom:8px; display:block;">📊 Momentum &amp; Volatility Indicators</span>
-                        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;">
+                    <!-- Institutional Order Flow & Benchmark Relative Strength -->
+                    <div style="background:var(--bg-card); border:1px solid var(--border-subtle); border-radius:8px; padding:14px; display:flex; flex-direction:column; gap:10px;">
+                        <span style="font-weight:800; font-size:12px; color:var(--text-secondary);">🌊 Institutional Order Flow &amp; Benchmark RS</span>
+                        
+                        <!-- Buyer vs Seller Pressure Bar -->
+                        <div style="display:flex; flex-direction:column; gap:4px;">
+                            <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:700;">
+                                <span id="flow-buyer-text" style="color:var(--neon-bull);">Buyers: 68%</span>
+                                <span id="flow-seller-text" style="color:var(--neon-bear);">Sellers: 32%</span>
+                            </div>
+                            <div style="height:8px; background:rgba(255,59,92,0.4); border-radius:4px; overflow:hidden; display:flex;">
+                                <div id="flow-buyer-bar" style="width:68%; background:var(--neon-bull); height:100%; transition:width 0.4s ease;"></div>
+                            </div>
+                        </div>
+
+                        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-top:4px;">
                             <div class="plan-item">
-                                <span class="plan-label">RSI (14)</span>
-                                <span id="tech-rsi" class="plan-value" style="color:var(--accent-cyan);">--</span>
+                                <span class="plan-label">Chaikin Money Flow (CMF)</span>
+                                <span id="flow-cmf" class="plan-value" style="color:var(--neon-bull);">+0.18</span>
                             </div>
                             <div class="plan-item">
-                                <span class="plan-label">MACD Histogram</span>
-                                <span id="tech-macd" class="plan-value" style="color:var(--neon-bull);">--</span>
+                                <span class="plan-label">OBV Trend Structure</span>
+                                <span id="flow-obv" class="plan-value" style="font-size:12px; color:var(--accent-cyan);">ACCUMULATION</span>
                             </div>
                             <div class="plan-item">
-                                <span class="plan-label">ADX Trend Strength</span>
-                                <span id="tech-adx" class="plan-value">--</span>
-                            </div>
-                            <div class="plan-item">
-                                <span class="plan-label">ATR Volatility</span>
-                                <span id="tech-atr" class="plan-value">--</span>
-                            </div>
-                            <div class="plan-item">
-                                <span class="plan-label">Relative Volume (RVOL)</span>
-                                <span id="tech-rvol" class="plan-value" style="color:var(--neon-amber);">--</span>
-                            </div>
-                            <div class="plan-item">
-                                <span class="plan-label">BB Band Width %</span>
-                                <span id="tech-bb-width" class="plan-value">--</span>
+                                <span class="plan-label">RS vs S&amp;P 500 (SPY)</span>
+                                <span id="flow-rs-spy" class="plan-value" style="color:var(--neon-amber);">+5.42% (Leading)</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Right Column: AI Setup Plan, S/R Levels, News Sentiment -->
+                <!-- Right Column: AI Setup Plan, Monte Carlo, S/R Levels, News Sentiment -->
                 <div style="display:flex; flex-direction:column; gap:16px;">
                     <!-- AI Institutional Trade Setup Plan -->
                     <div class="trade-plan-card">
@@ -292,6 +297,31 @@
                                 <span class="plan-label">Risk : Reward Ratio</span>
                                 <span id="plan-rr" class="plan-value" style="color:var(--neon-gold);">1:2.85</span>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Monte Carlo 1,000-Path Statistical Model -->
+                    <div style="background:var(--bg-card); border:1px solid rgba(168, 85, 247, 0.35); border-radius:8px; padding:14px; display:flex; flex-direction:column; gap:10px;">
+                        <div style="display:flex; align-items:center; justify-content:space-between;">
+                            <span style="font-weight:800; font-size:12px; color:var(--neon-purple);">🎲 Monte Carlo Forecast (1,000 Sim Paths)</span>
+                            <span style="font-size:10px; color:var(--text-dim);">10-Day Horizon</span>
+                        </div>
+                        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:8px;">
+                            <div class="plan-item">
+                                <span class="plan-label">TP1 Hit Probability</span>
+                                <span id="mc-tp1-prob" class="plan-value" style="color:var(--neon-bull);">76.4%</span>
+                            </div>
+                            <div class="plan-item">
+                                <span class="plan-label">TP2 Hit Probability</span>
+                                <span id="mc-tp2-prob" class="plan-value" style="color:var(--accent-cyan);">58.2%</span>
+                            </div>
+                            <div class="plan-item">
+                                <span class="plan-label">95% Value at Risk (VaR)</span>
+                                <span id="mc-var" class="plan-value" style="color:var(--neon-bear);">-3.8%</span>
+                            </div>
+                        </div>
+                        <div style="font-size:11px; color:var(--text-secondary); background:rgba(24,34,53,0.5); padding:6px 10px; border-radius:4px;">
+                            Expected 10-Day Range (5th–95th %ile): <b id="mc-range" style="color:#ffffff;">$122.40 — $142.60</b>
                         </div>
                     </div>
 
