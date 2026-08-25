@@ -60,15 +60,31 @@ class PerformanceMetricsCalculator:
 
         # Sharpe & Sortino (per trade)
         returns = np.array(pnls) / initial_balance
-        mean_ret = np.mean(returns)
-        std_ret = np.std(returns) if len(returns) > 1 else 1e-6
-        sharpe = float((mean_ret / (std_ret + 1e-9)) * np.sqrt(252))
+        mean_ret = float(np.mean(returns))
+        if len(returns) >= 2:
+            std_ret = float(np.std(returns, ddof=1))
+            if std_ret > 1e-6:
+                sharpe = float((mean_ret / std_ret) * np.sqrt(min(252, max(12, total_trades))))
+                sharpe = float(np.clip(sharpe, -15.0, 15.0))
+            else:
+                sharpe = 0.0
 
-        neg_returns = returns[returns < 0]
-        downside_std = np.std(neg_returns) if len(neg_returns) > 1 else 1e-6
-        sortino = float((mean_ret / (downside_std + 1e-9)) * np.sqrt(252))
+            neg_returns = returns[returns < 0]
+            if len(neg_returns) >= 1:
+                downside_std = float(np.std(neg_returns, ddof=1)) if len(neg_returns) > 1 else float(abs(neg_returns[0]))
+                if downside_std > 1e-6:
+                    sortino = float((mean_ret / downside_std) * np.sqrt(min(252, max(12, total_trades))))
+                    sortino = float(np.clip(sortino, -25.0, 25.0))
+                else:
+                    sortino = sharpe
+            else:
+                sortino = float(np.clip(sharpe * 1.5, -25.0, 25.0)) if mean_ret > 0 else 0.0
+        else:
+            sharpe = 0.0
+            sortino = 0.0
 
-        calmar = (net_profit / (max_dd_dollars + 1e-9)) if max_dd_dollars > 0 else 0.0
+        calmar = (net_profit / (max_dd_dollars + 1e-9)) if max_dd_dollars > 0 else (10.0 if net_profit > 0 else 0.0)
+        calmar = float(np.clip(calmar, -25.0, 25.0))
 
         # Multi-Objective Fitness Score (Section 12 Optimization Rule)
         multi_objective_fitness = (

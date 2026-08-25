@@ -143,7 +143,13 @@ class BacktestEngine:
                         login=1, server="Backtest", balance=balance, equity=balance, margin=0, free_margin=balance, margin_level=0, leverage=100
                     )
                     spec = resolve_symbol(symbol)
-                    sym_info = {"trade_contract_size": spec.contract_size, "volume_min": 0.01, "volume_max": 100.0, "volume_step": 0.01}
+                    sym_info = {
+                        "name": symbol,
+                        "trade_contract_size": spec.contract_size,
+                        "volume_min": 0.01,
+                        "volume_max": 100.0,
+                        "volume_step": 0.01
+                    }
                     auth_res = self.risk_engine.authorize_execution(decision, account_snap, [], sym_info, spread_pips)
 
                     if auth_res["authorized"]:
@@ -166,6 +172,35 @@ class BacktestEngine:
                             "mae": 0.0
                         }
 
+        # Mark-to-market close of any remaining open position on final bar
+        if open_trade is not None:
+            final_bar = df_h1.iloc[-1]
+            exit_price = float(final_bar["close"])
+            spec = resolve_symbol(symbol)
+            pips = ((exit_price - open_trade["entry"]) if open_trade["type"] == "BUY" else (open_trade["entry"] - exit_price)) / spec.pip_size
+            pnl_raw = pips * spec.pip_value_per_lot * open_trade["lots"]
+            comm = open_trade["lots"] * self.commission_per_lot
+            pnl_net = pnl_raw - comm
+            balance += pnl_net
+
+            trades.append({
+                "symbol": symbol,
+                "type": open_trade["type"],
+                "entry": open_trade["entry"],
+                "exit": exit_price,
+                "sl": open_trade["sl"],
+                "tp": open_trade["tp"],
+                "lots": open_trade["lots"],
+                "pnl": round(pnl_net, 2),
+                "result": "CLOSE_AT_END",
+                "strategy": open_trade["strategy"],
+                "regime": open_trade["regime"],
+                "score": open_trade["score"],
+                "mfe": round(open_trade["mfe"], 4),
+                "mae": round(open_trade["mae"], 4),
+                "is_win": pnl_net > 0
+            })
+            open_trade = None
 
         metrics = PerformanceMetricsCalculator.calculate_metrics(trades, self.initial_balance)
         return {

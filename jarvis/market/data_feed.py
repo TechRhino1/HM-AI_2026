@@ -45,7 +45,9 @@ class DataFeedEngine:
 
         def _fetch():
             if not MT5_AVAILABLE or self.mt5_client is None or getattr(self.mt5_client, "mode", "dry_run") == "dry_run":
-                return self._generate_realistic_rates(symbol, timeframe, num_bars)
+                df = self._generate_realistic_rates(symbol, timeframe, num_bars)
+                df.attrs["data_source"] = "SYNTHETIC_FALLBACK"
+                return df
 
             resolved_sym = self.mt5_client.resolve_symbol_name(symbol) if hasattr(self.mt5_client, "resolve_symbol_name") else symbol
             mt5_tf = TF_MAP.get(timeframe, 16385)
@@ -55,20 +57,33 @@ class DataFeedEngine:
                 # Fallback to pos 0 if pos 1 returns empty
                 rates = mt5.copy_rates_from_pos(resolved_sym, mt5_tf, 0, num_bars)
             if rates is None or len(rates) == 0:
-                return self._generate_realistic_rates(symbol, timeframe, num_bars)
+                logger.warning(f"MT5 returned 0 rates for {symbol} ({timeframe}). Falling back to synthetic rates.")
+                df = self._generate_realistic_rates(symbol, timeframe, num_bars)
+                df.attrs["data_source"] = "SYNTHETIC_FALLBACK"
+                return df
 
             df = pd.DataFrame(rates)
             df["time"] = pd.to_datetime(df["time"], unit="s")
             df.rename(columns={"tick_volume": "volume"}, inplace=True)
-            return df[["time", "open", "high", "low", "close", "volume"]]
+            res_df = df[["time", "open", "high", "low", "close", "volume"]].copy()
+            res_df.attrs["data_source"] = "LIVE_MT5"
+            return res_df
 
+
+        def _fallback_gen():
+            df = self._generate_realistic_rates(symbol, timeframe, num_bars)
+            df.attrs["data_source"] = "SYNTHETIC_FALLBACK"
+            return df
 
         df_result = TimeoutGuard.run_sync(
             _fetch,
             timeout_sec=self.timeout_sec,
-            default=lambda: self._generate_realistic_rates(symbol, timeframe, num_bars),
+            default=_fallback_gen,
             task_name=f"DataFeed_fetch_{symbol}_{timeframe}"
         )
+
+        if "data_source" not in df_result.attrs:
+            df_result.attrs["data_source"] = "SYNTHETIC_FALLBACK"
 
         self._cache[cache_key] = {"df": df_result, "timestamp": now}
         return df_result

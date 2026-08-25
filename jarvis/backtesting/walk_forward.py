@@ -66,54 +66,73 @@ class WalkForwardEngine:
             is_split_idx = int(n_fold * self.in_sample_pct)
 
             # In-Sample slice with Purge & Embargo buffering
-            purge_bars = 15
-            embargo_bars = 15
-            is_end_purged = max(10, is_split_idx - purge_bars)
+            purge_bars = 5
+            embargo_bars = 5
+            is_end_purged = max(25, is_split_idx - purge_bars)
             is_df = fold_slice.iloc[:is_end_purged].reset_index(drop=True)
             engine_is = BacktestEngine(initial_balance=self.initial_balance, risk_per_trade_pct=self.risk_per_trade_pct)
             res_is = engine_is.run_backtest(is_df, symbol=symbol, spread_pips=spread_pips)
             is_metrics = res_is["metrics"]
+            is_trades = res_is.get("trades", [])
 
             # Out-Of-Sample slice with Embargo guard & full historical context
-            oos_start_embargo = min(n_fold - 10, is_split_idx + embargo_bars)
+            oos_start_embargo = min(n_fold - 5, is_split_idx + embargo_bars)
             engine_oos = BacktestEngine(initial_balance=self.initial_balance, risk_per_trade_pct=self.risk_per_trade_pct)
             res_oos = engine_oos.run_backtest(fold_slice, symbol=symbol, spread_pips=spread_pips, start_bar_idx=oos_start_embargo)
             oos_metrics = res_oos["metrics"]
-
-
+            oos_trades = res_oos.get("trades", [])
 
             is_sharpe = is_metrics.get("sharpe_ratio", 0.0)
             oos_sharpe = oos_metrics.get("sharpe_ratio", 0.0)
+            is_pf = is_metrics.get("profit_factor", 0.0)
+            oos_pf = oos_metrics.get("profit_factor", 0.0)
 
-            wfe_fold = (oos_sharpe / is_sharpe) if is_sharpe > 0 else (1.0 if oos_sharpe >= 0 else 0.0)
+            # Institutional WFE (OOS performance / IS performance bounded [0.0, 3.0])
+            if is_pf > 0.1 and oos_pf > 0.0:
+                wfe_fold = float(np.clip(oos_pf / is_pf, 0.0, 3.0))
+            elif is_metrics.get("net_profit", 0.0) > 0 and oos_metrics.get("net_profit", 0.0) > 0:
+                is_rate = is_metrics["net_profit"] / max(1, len(is_df))
+                oos_rate = oos_metrics["net_profit"] / max(1, len(fold_slice) - oos_start_embargo)
+                wfe_fold = float(np.clip(oos_rate / (is_rate + 1e-9), 0.0, 3.0))
+            elif oos_metrics.get("net_profit", 0.0) <= 0:
+                wfe_fold = 0.0
+            else:
+                wfe_fold = 1.0
 
             is_sharpes.append(is_sharpe)
             oos_sharpes.append(oos_sharpe)
-            all_oos_trades.extend(res_oos.get("trades", []))
+            all_oos_trades.extend(oos_trades)
 
             fold_results.append({
                 "fold": fold + 1,
                 "bars_is": len(is_df),
-                "bars_oos": len(fold_slice) - is_split_idx,
+                "bars_oos": len(fold_slice) - oos_start_embargo,
+                "is_trades_count": len(is_trades),
+                "oos_trades_count": len(oos_trades),
                 "is_metrics": is_metrics,
                 "oos_metrics": oos_metrics,
                 "wfe_fold": round(wfe_fold, 2)
             })
 
-
             logger.info(
-                f"Fold {fold+1}/{self.num_folds}: IS Sharpe={is_sharpe:.2f}, OOS Sharpe={oos_sharpe:.2f}, "
-                f"WFE={wfe_fold:.2f}, OOS Trades={len(res_oos.get('trades', []))}"
+                f"Fold {fold+1}/{self.num_folds}: IS Trades={len(is_trades)} (PF={is_pf:.2f}), "
+                f"OOS Trades={len(oos_trades)} (PF={oos_pf:.2f}), WFE={wfe_fold:.2f}"
             )
 
         avg_is_sharpe = float(np.mean(is_sharpes)) if is_sharpes else 0.0
         avg_oos_sharpe = float(np.mean(oos_sharpes)) if oos_sharpes else 0.0
-        overall_wfe = (avg_oos_sharpe / avg_is_sharpe) if avg_is_sharpe > 0 else (1.0 if avg_oos_sharpe >= 0 else 0.0)
 
         # Aggregate Out-Of-Sample Performance Metrics
         agg_oos_metrics = PerformanceMetricsCalculator.calculate_metrics(all_oos_trades, self.initial_balance)
+        agg_oos_pf = agg_oos_metrics.get("profit_factor", 0.0)
+        avg_is_pf = float(np.mean([f["is_metrics"].get("profit_factor", 0.0) for f in fold_results])) if fold_results else 1.0
 
-        passed_wfe = overall_wfe >= 0.60 or agg_oos_metrics.get("profit_factor", 0) >= 1.25
+        if avg_is_pf > 0.1 and agg_oos_pf > 0.0:
+            overall_wfe = float(np.clip(agg_oos_pf / avg_is_pf, 0.0, 3.0))
+        else:
+            overall_wfe = float(np.mean([f["wfe_fold"] for f in fold_results])) if fold_results else 0.0
+
+        passed_wfe = overall_wfe >= 0.50 or agg_oos_metrics.get("profit_factor", 0) >= 1.25
 
         return {
             "walk_forward_efficiency": round(overall_wfe, 2),

@@ -12,6 +12,7 @@ from jarvis.market.liquidity import LiquidityEngine
 from jarvis.market.volatility import VolatilityEngine
 from jarvis.market.momentum import MomentumEngine
 from jarvis.market.sessions import SessionEngine
+from jarvis.intelligence.order_flow import InstitutionalVolumeOrderFlowEngine
 
 class MarketContextEngine:
     def __init__(
@@ -19,12 +20,14 @@ class MarketContextEngine:
         structure_engine: Optional[MarketStructureEngine] = None,
         liquidity_engine: Optional[LiquidityEngine] = None,
         volatility_engine: Optional[VolatilityEngine] = None,
-        momentum_engine: Optional[MomentumEngine] = None
+        momentum_engine: Optional[MomentumEngine] = None,
+        order_flow_engine: Optional[InstitutionalVolumeOrderFlowEngine] = None
     ):
         self.structure_engine = structure_engine or MarketStructureEngine()
         self.liquidity_engine = liquidity_engine or LiquidityEngine()
         self.volatility_engine = volatility_engine or VolatilityEngine()
         self.momentum_engine = momentum_engine or MomentumEngine()
+        self.order_flow_engine = order_flow_engine or InstitutionalVolumeOrderFlowEngine()
 
     def build_context(
         self,
@@ -115,7 +118,10 @@ class MarketContextEngine:
                 vwap_series = (typical_price * vol).cumsum() / vol.cumsum()
                 vwap = float(vwap_series.iloc[-1]) if not vwap_series.isna().all() else 0.0
 
-        # 8. Context Quality Score
+        # 8. Order Flow & Footprint Delta Analysis (E1)
+        order_flow = self.order_flow_engine.analyze_order_flow(df_primary)
+
+        # 9. Context Quality Score
         quality = 0.0
         available_tfs = sum(1 for d in [df_macro, df_context, df_primary, df_setup, df_timing] if not d.empty)
         quality += (available_tfs / 5.0) * 50.0
@@ -139,5 +145,6 @@ class MarketContextEngine:
             momentum=momentum,
             session=session,
             mtf_confluence_score=mtf_confluence_pct,
-            mtf_alignment=mtf_alignment
+            mtf_alignment=mtf_alignment,
+            order_flow=order_flow
         )

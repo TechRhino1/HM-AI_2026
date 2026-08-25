@@ -19,7 +19,8 @@ class PositionSizer:
         model_confidence: float = 0.60,
         pattern_sample_size: int = 0,
         portfolio_heat_multiplier: float = 1.0,
-        is_second_trade: bool = False
+        is_second_trade: bool = False,
+        target_rr: float = 2.0
     ) -> float:
         risk_distance = abs(entry_price - sl_price)
         if risk_distance <= 0 or account_balance <= 0:
@@ -44,9 +45,9 @@ class PositionSizer:
         # Portfolio heat scaling (e.g. 1.0x Normal, 0.75x Moderate, 0.50x High)
         risk_pct *= max(0.25, min(1.0, portfolio_heat_multiplier))
 
-        # Conviction scaling & Dynamic Fractional Kelly Criterion Edge Calculation
+        # Conviction scaling & Dynamic Fractional Kelly Criterion Edge Calculation (E4)
         p = max(0.20, min(0.95, model_confidence))
-        R = 2.0  # Baseline institutional target R:R
+        R = max(1.20, min(5.0, float(target_rr)))  # Regime-adaptive payoff ratio
         full_kelly = (p * R - (1.0 - p)) / R
         quarter_kelly_pct = max(0.15, min(1.50, (full_kelly / 4.0) * 100.0)) if full_kelly > 0 else 0.15
 

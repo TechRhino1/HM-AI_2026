@@ -92,6 +92,8 @@ class PositionMonitorEngine:
         self._last_action: Dict[int, str] = {}
         # Per-ticket tracking for partial closes (§B-2 / §B-3)
         self._partially_closed_tickets: Set[int] = set()
+        # Per-ticket live MFE high-water mark tracking (E2)
+        self._peak_favorable_price: Dict[int, float] = {}
 
     # ─── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -150,6 +152,7 @@ class PositionMonitorEngine:
         active_tickets = {p.ticket for p in positions}
         self._partially_closed_tickets = {t for t in self._partially_closed_tickets if t in active_tickets}
         self._last_action = {t: act for t, act in self._last_action.items() if t in active_tickets}
+        self._peak_favorable_price = {t: pr for t, pr in self._peak_favorable_price.items() if t in active_tickets}
 
         # ── Per-position management ─────────────────────────────────────────
         for pos in positions:
@@ -249,6 +252,36 @@ class PositionMonitorEngine:
             new_sl, sl_actions = self._trail_sl(pos, ctx, c_price, atr, new_sl, equity)
             actions.extend(sl_actions)
 
+            # ── 3.5 Live MFE Scale-Out & Retracement Protection (E2) ───────────
+            if pos.type == "BUY":
+                prev_peak = self._peak_favorable_price.get(pos.ticket, pos.open_price)
+                peak_price = max(prev_peak, c_price)
+                self._peak_favorable_price[pos.ticket] = peak_price
+                peak_mfe = peak_price - pos.open_price
+
+                if peak_mfe >= (atr * 1.5):
+                    current_gain = c_price - pos.open_price
+                    giveback_pct = (peak_mfe - current_gain) / (peak_mfe + 1e-9)
+                    if giveback_pct >= 0.40:
+                        mfe_locked_sl = pos.open_price + (peak_mfe * 0.50)
+                        if mfe_locked_sl > new_sl and mfe_locked_sl < c_price:
+                            new_sl = mfe_locked_sl
+                            actions.append(f"MFE_RETRACE_50%_LOCK@{new_sl:.4f}")
+            elif pos.type == "SELL":
+                prev_trough = self._peak_favorable_price.get(pos.ticket, pos.open_price)
+                trough_price = min(prev_trough, c_price)
+                self._peak_favorable_price[pos.ticket] = trough_price
+                peak_mfe = pos.open_price - trough_price
+
+                if peak_mfe >= (atr * 1.5):
+                    current_gain = pos.open_price - c_price
+                    giveback_pct = (peak_mfe - current_gain) / (peak_mfe + 1e-9)
+                    if giveback_pct >= 0.40:
+                        mfe_locked_sl = pos.open_price - (peak_mfe * 0.50)
+                        if (new_sl == 0 or mfe_locked_sl < new_sl) and mfe_locked_sl > c_price:
+                            new_sl = mfe_locked_sl
+                            actions.append(f"MFE_RETRACE_50%_LOCK@{new_sl:.4f}")
+
             # ── 4. VWAP cross awareness ────────────────────────────────────
             new_sl, act = self._check_vwap_cross(pos, ctx, c_price, atr, new_sl)
             if act:
@@ -259,17 +292,42 @@ class PositionMonitorEngine:
             if act:
                 actions.append(act)
 
-            # ── 6. Time-Decay Stale Trade Exit (Close 48h idle consolidation trades) ──
+            # ── 6. Regime-Adaptive Time-Decay Stale Trade Exit (E2) ────────────
             if hasattr(pos, "open_time") and pos.open_time:
                 try:
                     open_dt = datetime.strptime(pos.open_time, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
                     open_dur_sec = (datetime.now(timezone.utc) - open_dt).total_seconds()
-                    if open_dur_sec >= 172800.0:  # 48 hours
+                    
+                    regime_str = getattr(regime, "primary_regime", None)
+                    r_name = getattr(regime_str, "value", str(regime_str or "DEFAULT")).upper()
+                    if "TREND" in r_name:
+                        max_stall_sec = 43200.0  # 12 hours for trending setups
+                    elif "RANGE" in r_name or "LOW_VOLATILITY" in r_name:
+                        max_stall_sec = 28800.0  # 8 hours for range mean-reversion
+                    elif "BREAKOUT" in r_name:
+                        max_stall_sec = 21600.0  # 6 hours for breakout follow-through
+                    else:
+                        max_stall_sec = 86400.0  # 24 hours standard
+                    
+                    if open_dur_sec >= max_stall_sec:
                         trend_score = getattr(ctx.momentum, "trend_score", 0.0)
-                        if abs(trend_score) < 15.0 and abs(pos.profit / (balance + 1e-9)) < 0.005:
-                            logger.info(f"⏳ TIME-DECAY STALE EXIT: Closing position #{pos.ticket} ({symbol}) after 48h idle consolidation (PnL: ${pos.profit:.2f}).")
+                        profit_ratio = abs(pos.profit / (balance + 1e-9))
+                        if profit_ratio < 0.005 and abs(trend_score) < 20.0:
+                            logger.info(
+                                f"⏳ REGIME TIME-DECAY EXIT: Closing position #{pos.ticket} ({symbol}) after "
+                                f"{open_dur_sec/3600:.1f}h stall in {r_name} regime (PnL: ${pos.profit:.2f})."
+                            )
                             self.mt5_client.close_position(pos.ticket)
                             return
+                        elif profit_ratio >= 0.005:
+                            # If slightly in profit after max stall, ratchet SL to breakeven + buffer to protect capital
+                            be_cand = (pos.open_price + (atr * STAGE1_BE_BUFFER)) if pos.type == "BUY" else (pos.open_price - (atr * STAGE1_BE_BUFFER))
+                            if pos.type == "BUY" and be_cand > new_sl and be_cand < c_price:
+                                new_sl = be_cand
+                                actions.append(f"TIME_DECAY_BE@{new_sl:.4f}")
+                            elif pos.type == "SELL" and (new_sl == 0 or be_cand < new_sl) and be_cand > c_price:
+                                new_sl = be_cand
+                                actions.append(f"TIME_DECAY_BE@{new_sl:.4f}")
                 except Exception:
                     pass
 

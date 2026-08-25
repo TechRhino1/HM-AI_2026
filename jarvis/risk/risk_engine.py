@@ -341,7 +341,8 @@ class RiskEngine:
                 model_confidence=decision.model_confidence,
                 pattern_sample_size=sample_size,
                 portfolio_heat_multiplier=heat_res.risk_multiplier,
-                is_second_trade=is_second_trade
+                is_second_trade=is_second_trade,
+                target_rr=decision.risk_reward_ratio
             )
 
             if lots <= 0.0:

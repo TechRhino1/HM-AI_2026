@@ -137,6 +137,7 @@ class MarketContext:
     strategy: str = ""
     mtf_confluence_score: float = 0.0
     mtf_alignment: Dict[str, str] = field(default_factory=dict)
+    order_flow: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass
 class RegimeOutput:

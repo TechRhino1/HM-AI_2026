@@ -234,5 +234,66 @@ class TestAdaptiveSameSymbolRisk(unittest.TestCase):
         self.risk_engine.commit_risk("XAUUSD")
         self.assertEqual(self.risk_engine.get_total_reserved_risk_usd(), 0.0)
 
+    def test_08_low_probability_rejection(self):
+        """Test Gate 1: Rejection when calibrated probability is below 60% for 2nd trade."""
+        existing_pos = [
+            PositionSnapshot(ticket=1001, symbol="XAUUSD", type="BUY", volume=0.05, open_price=2400.0, current_price=2415.0, sl=2402.0, tp=2450.0, profit=75.0, swap=0, commission=0, open_time=datetime.now(), magic=888999)
+        ]
+        low_p_decision = DecisionObject(
+            symbol="XAUUSD", timestamp=datetime.now(timezone.utc), regime=self.decision.regime,
+            bias="BUY", probabilities={"buy": 0.50}, strategy="TREND_PULLBACK",
+            entry_price=2420.0, stop_loss=2410.0, take_profit=2440.0, risk_reward_ratio=2.0,
+            calculated_risk_percent=0.5, expected_value=20.0, model_confidence=0.52, # < 0.60
+            adversarial_penalty=5.0, invalidation_levels=[], bull_case=[], bear_case=[], risk_factors=[],
+            quality_gate=TradeQualityGateResult(passed=True, checks={}), decision="EXECUTE", execution_authorized=True
+        )
+        res = self.risk_engine.authorize_execution(
+            low_p_decision, self.account, existing_pos, self.sym_info,
+            current_spread_pips=1.5, max_allowed_spread_pips=35.0, context=self.context
+        )
+        self.assertFalse(res["authorized"])
+        self.assertTrue(any("ADAPTIVE_GATE_1" in r for r in res["reasons"]))
+
+    def test_09_negative_ev_rejection(self):
+        """Test Gate 2: Rejection when expected value is non-positive."""
+        existing_pos = [
+            PositionSnapshot(ticket=1001, symbol="XAUUSD", type="BUY", volume=0.05, open_price=2400.0, current_price=2415.0, sl=2402.0, tp=2450.0, profit=75.0, swap=0, commission=0, open_time=datetime.now(), magic=888999)
+        ]
+        neg_ev_decision = DecisionObject(
+            symbol="XAUUSD", timestamp=datetime.now(timezone.utc), regime=self.decision.regime,
+            bias="BUY", probabilities={"buy": 0.85}, strategy="TREND_PULLBACK",
+            entry_price=2420.0, stop_loss=2410.0, take_profit=2440.0, risk_reward_ratio=2.0,
+            calculated_risk_percent=0.5, expected_value=-5.0, # <= 0.0
+            model_confidence=0.85, adversarial_penalty=5.0, invalidation_levels=[], bull_case=[], bear_case=[], risk_factors=[],
+            quality_gate=TradeQualityGateResult(passed=True, checks={}), decision="EXECUTE", execution_authorized=True
+        )
+        res = self.risk_engine.authorize_execution(
+            neg_ev_decision, self.account, existing_pos, self.sym_info,
+            current_spread_pips=1.5, max_allowed_spread_pips=35.0, context=self.context
+        )
+        self.assertFalse(res["authorized"])
+        self.assertTrue(any("ADAPTIVE_GATE_2" in r for r in res["reasons"]))
+
+    def test_10_entry_geometry_rejection(self):
+        """Test Gate 15: Rejection when new entry price is too close to existing entry price."""
+        existing_pos = [
+            PositionSnapshot(ticket=1001, symbol="XAUUSD", type="BUY", volume=0.05, open_price=2400.0, current_price=2401.0, sl=2390.0, tp=2430.0, profit=10.0, swap=0, commission=0, open_time=datetime.now(), magic=888999)
+        ]
+        close_entry_decision = DecisionObject(
+            symbol="XAUUSD", timestamp=datetime.now(timezone.utc), regime=self.decision.regime,
+            bias="BUY", probabilities={"buy": 0.85}, strategy="TREND_PULLBACK",
+            entry_price=2400.5, # Only 0.5 points from 2400.0 (risk_dist is 10.0, requires >= 2.5)
+            stop_loss=2390.5, take_profit=2430.0, risk_reward_ratio=2.0, calculated_risk_percent=0.5,
+            expected_value=45.0, model_confidence=0.85, adversarial_penalty=5.0, invalidation_levels=[],
+            bull_case=[], bear_case=[], risk_factors=[], quality_gate=TradeQualityGateResult(passed=True, checks={}),
+            decision="EXECUTE", execution_authorized=True
+        )
+        res = self.risk_engine.authorize_execution(
+            close_entry_decision, self.account, existing_pos, self.sym_info,
+            current_spread_pips=1.5, max_allowed_spread_pips=35.0, context=self.context
+        )
+        self.assertFalse(res["authorized"])
+        self.assertTrue(any("ADAPTIVE_GATE_15" in r for r in res["reasons"]))
+
 if __name__ == "__main__":
     unittest.main()

@@ -99,6 +99,28 @@ class DevilAdvocateAnalyst:
                 penalty_score += 6.0
                 traps.append(f"Severe liquidity pool imbalance ({ratio:.1f}x opposing volume resting in order book).")
 
+        # ── 2.5 Institutional Footprint Order Flow & Absorption Traps (E1) ──────────
+        of_data = getattr(context, "order_flow", {})
+        if isinstance(of_data, dict) and of_data:
+            trap = of_data.get("absorption_trap")
+            delta_score = float(of_data.get("delta_score", 0.0))
+
+            if is_buy and trap == "SELLER_ABSORPTION_TRAP":
+                penalty_score += 15.0
+                threats.append("SELLER_ABSORPTION_TRAP detected: Institutional sellers quietly absorbing buyer flow at highs.")
+            elif (not is_buy) and trap == "BUYER_ABSORPTION_TRAP":
+                penalty_score += 15.0
+                threats.append("BUYER_ABSORPTION_TRAP detected: Institutional buyers quietly absorbing seller flow at lows.")
+
+            if is_buy and delta_score <= -35.0:
+                opposing_penalty = round(min(15.0, abs(delta_score) * 0.15), 1)
+                penalty_score += opposing_penalty
+                threats.append(f"Strong adverse volume delta ({delta_score:.1f}) indicates institutional selling pressure opposing BUY setup.")
+            elif (not is_buy) and delta_score >= 35.0:
+                opposing_penalty = round(min(15.0, delta_score * 0.15), 1)
+                penalty_score += opposing_penalty
+                threats.append(f"Strong adverse volume delta (+{delta_score:.1f}) indicates institutional buying pressure opposing SELL setup.")
+
         # ── 3. Volatility, Spread & Session Timing Risk ─────────────────────────────
         spec = resolve_symbol(context.symbol)
         if vol.is_excessive_spread:

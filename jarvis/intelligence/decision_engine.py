@@ -270,6 +270,20 @@ class DecisionEngine:
         raw_prob = hypotheses.primary_probability if tentative_bias in ["BUY", "SELL"] else 0.33
         calibrated_win_p = self.calibrator.calibrate_probability(raw_prob)
 
+        # Order flow volume delta continuous calibration (E1)
+        of_data = getattr(context, "order_flow", {})
+        delta_score = float(of_data.get("delta_score", 0.0)) if isinstance(of_data, dict) else 0.0
+        if tentative_bias == "BUY":
+            if delta_score > 20.0:
+                calibrated_win_p = min(0.95, calibrated_win_p + (delta_score / 100.0) * 0.06)
+            elif delta_score < -20.0:
+                calibrated_win_p = max(0.05, calibrated_win_p - (abs(delta_score) / 100.0) * 0.08)
+        elif tentative_bias == "SELL":
+            if delta_score < -20.0:
+                calibrated_win_p = min(0.95, calibrated_win_p + (abs(delta_score) / 100.0) * 0.06)
+            elif delta_score > 20.0:
+                calibrated_win_p = max(0.05, calibrated_win_p - (delta_score / 100.0) * 0.08)
+
         ml_features = self.ml_predictor.extract_feature_vector(
             context=context,
             regime=regime,
@@ -495,6 +509,20 @@ class DecisionEngine:
                 ai_score = min(100.0, ai_score + (abs(mtf_score) / 20.0))
             elif mtf_score >= 30.0:
                 ai_score = max(0.0, ai_score - (mtf_score / 10.0))
+
+        # 3.5. Apply Order Flow Volume Delta Score (E1-WIRING)
+        of_data = getattr(context, "order_flow", {})
+        delta_score = float(of_data.get("delta_score", 0.0)) if isinstance(of_data, dict) else 0.0
+        if tentative_bias == "BUY":
+            if delta_score >= 35.0:
+                ai_score = min(100.0, ai_score + 5.0)
+            elif delta_score <= -35.0:
+                ai_score = max(0.0, ai_score - 8.0)
+        elif tentative_bias == "SELL":
+            if delta_score <= -35.0:
+                ai_score = min(100.0, ai_score + 5.0)
+            elif delta_score >= 35.0:
+                ai_score = max(0.0, ai_score - 8.0)
 
         # 4. Standard Regime Multiplier
         if regime:
