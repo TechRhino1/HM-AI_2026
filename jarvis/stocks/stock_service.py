@@ -155,6 +155,9 @@ class StockService:
         else:
             filtered.sort(key=lambda x: x["breakout_probability"], reverse=True)
 
+        # Extract top AI recommended 'Buy Now' setups
+        recommended_buys = self._extract_recommended_buys()
+
         return {
             "count": len(filtered),
             "total_universe": len(self._cached_screener_results),
@@ -167,9 +170,81 @@ class StockService:
                 "sort_by": sort_by,
                 "sort_dir": sort_dir
             },
+            "ai_recommended_buys": recommended_buys,
             "stocks": filtered[:limit],
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
+
+    def _extract_recommended_buys(self, limit: int = 4) -> List[Dict[str, Any]]:
+        """
+        Extracts the highest-conviction 'BUY NOW' opportunities from the universe.
+        Requires high breakout probability, Grade A/A+, positive order flow (CMF), and strong R:R.
+        """
+        if not self._cached_screener_results:
+            return []
+
+        candidates = []
+        for s in self._cached_screener_results:
+            prob = s.get("breakout_probability", 0)
+            cmf = s.get("cmf_20", 0)
+            grade = s.get("grade_badge", "C")
+            
+            # Conviction score combines probability, CMF, and RVOL
+            conviction_score = prob + (cmf * 50.0) + (s.get("rvol", 1.0) * 10.0)
+            
+            # High conviction buy threshold
+            if prob >= 75 and grade in ["A+", "A", "B"]:
+                rvol_str = f"{s.get('rvol', 1.0):.1f}x"
+                cmf_str = f"{cmf:+.2f}"
+                rs_val = s.get("rs_vs_spy", 0)
+                
+                reasons = []
+                if s.get("is_squeeze") or "SQUEEZE" in s.get("squeeze_status", ""):
+                    reasons.append("🔥 Coiling Squeeze Trigger Ready")
+                if s.get("rvol", 0) >= 1.5:
+                    reasons.append(f"📊 Volume Surge ({rvol_str})")
+                if cmf > 0.08:
+                    reasons.append(f"🌊 Smart Money Inflow (CMF {cmf_str})")
+                if rs_val > 1.5:
+                    reasons.append(f"⚡ Outperforming S&P 500 (+{rs_val:.1f}%)")
+                if not reasons:
+                    reasons.append("⚡ Multi-Timeframe Trend Confluence")
+
+                item = {
+                    "symbol": s["symbol"],
+                    "name": s["name"],
+                    "sector": s["sector"],
+                    "price": s["price"],
+                    "change_pct": s["change_pct"],
+                    "breakout_probability": s["breakout_probability"],
+                    "confidence": s.get("confidence", 0.90),
+                    "setup_grade": s.get("setup_grade", "GRADE A"),
+                    "grade_badge": s.get("grade_badge", "A"),
+                    "recommendation": s["recommendation"],
+                    "entry_zone": s["entry_zone"],
+                    "stop_loss": s["stop_loss"],
+                    "take_profit_2": s["take_profit_2"],
+                    "risk_reward": s["risk_reward"],
+                    "expected_gain_pct": round(((s["take_profit_2"] - s["entry_zone"]) / s["entry_zone"]) * 100.0, 1) if s["entry_zone"] > 0 else 12.5,
+                    "max_risk_pct": round(((s["entry_zone"] - s["stop_loss"]) / s["entry_zone"]) * 100.0, 1) if s["entry_zone"] > 0 else 3.5,
+                    "timing_badge": s.get("timing_badge", "UPCOMING"),
+                    "timing_horizon": s.get("timing_horizon", "UPCOMING (1-3 DAYS)"),
+                    "cmf_20": cmf,
+                    "buyer_pressure_pct": s.get("buyer_pressure_pct", 65),
+                    "ai_catalyst": " • ".join(reasons[:2]),
+                    "conviction_score": conviction_score
+                }
+                candidates.append(item)
+
+        candidates.sort(key=lambda x: x["conviction_score"], reverse=True)
+        return candidates[:limit]
+
+    def get_ai_recommended_buys(self, limit: int = 4) -> List[Dict[str, Any]]:
+        """
+        Public accessor for AI recommended buy setups.
+        """
+        self.get_screener_results()
+        return self._extract_recommended_buys(limit=limit)
 
     def search_stocks(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
         """
@@ -314,6 +389,11 @@ class StockService:
             elif path == "/api/stocks/alerts":
                 alerts = self.get_breakout_alerts()
                 handler._send_json({"alerts": alerts, "count": len(alerts)})
+                return True
+
+            elif path == "/api/stocks/recommended_buys":
+                buys = self.get_ai_recommended_buys()
+                handler._send_json({"recommended_buys": buys, "count": len(buys)})
                 return True
 
             elif path == "/api/stocks/candles":

@@ -190,14 +190,14 @@ class StockIntelligenceEngine:
         lows = df["low"].values
         volumes = df["volume"].values
 
-        current_price = float(closes[-1])
-        prev_close = float(closes[-2]) if len(closes) > 1 else current_price
-        day_open = float(df["open"].iloc[-1])
-        day_high = float(df["high"].iloc[-1])
-        day_low = float(df["low"].iloc[-1])
+        current_price = round(float(closes[-1]), 2)
+        prev_close = round(float(closes[-2]), 2) if len(closes) > 1 else current_price
+        day_open = round(float(df["open"].iloc[-1]), 2)
+        day_high = round(float(df["high"].iloc[-1]), 2)
+        day_low = round(float(df["low"].iloc[-1]), 2)
 
-        change_val = current_price - prev_close
-        change_pct = (change_val / prev_close) * 100.0 if prev_close > 0 else 0.0
+        change_val = round(current_price - prev_close, 2)
+        change_pct = round((change_val / prev_close) * 100.0, 2) if prev_close > 0 else 0.0
 
         # -------------------------------------------------------------
         # 1. Technical & Quantitative Indicators Calculation

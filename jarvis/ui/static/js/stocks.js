@@ -98,7 +98,10 @@
         // Multi-TF Grid
         multiTfGrid: document.getElementById("multi-tf-grid"),
         newsContainer: document.getElementById("dossier-news-list"),
-        chartContainer: document.getElementById("dossier-tv-chart")
+        chartContainer: document.getElementById("dossier-tv-chart"),
+        
+        // AI Recommended Buy Now Grid
+        aiBuyNowGrid: document.getElementById("ai-buy-now-grid")
     };
 
     /* ==========================================================================
@@ -123,6 +126,9 @@
                 state.stocks = data.stocks;
                 renderScreenerTableDOM();
                 updateQuickStats();
+                if (data.ai_recommended_buys && el.aiBuyNowGrid) {
+                    renderAiBuyNowDOM(data.ai_recommended_buys);
+                }
             }
         } catch (err) {
             console.error("Screener fetch error:", err);
@@ -156,6 +162,71 @@
     /* ==========================================================================
        2. DOM RENDERING PIPELINE
        ========================================================================== */
+
+    function renderAiBuyNowDOM(buys) {
+        if (!el.aiBuyNowGrid || !buys || buys.length === 0) return;
+
+        let html = "";
+        buys.forEach(b => {
+            const grade = b.grade_badge || "A";
+            let gradeClass = "badge-grade-a";
+            if (grade === "A+") gradeClass = "badge-grade-a-plus";
+            else if (grade === "B") gradeClass = "badge-grade-b";
+
+            const changeSign = b.change_pct >= 0 ? "+" : "";
+
+            html += `
+            <div class="buy-now-card" onclick="window.openStockDossier('${b.symbol}')">
+                <div class="buy-now-card-top">
+                    <div>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span class="buy-now-sym">${b.symbol}</span>
+                            <span class="${gradeClass}">${b.setup_grade}</span>
+                        </div>
+                        <div class="buy-now-comp">${b.name}</div>
+                    </div>
+                    <div class="buy-now-price-box">
+                        <div class="buy-now-price">$${Number(b.price).toFixed(2)}</div>
+                        <span class="buy-now-gain-tag">${changeSign}${Number(b.change_pct).toFixed(2)}%</span>
+                    </div>
+                </div>
+
+                <div style="display:flex; align-items:center; justify-content:space-between; font-size:11px;">
+                    <span style="font-weight:800; color:var(--accent-cyan); font-family:var(--font-mono);">
+                        🔥 ${b.breakout_probability}% AI Prob
+                    </span>
+                    <span style="font-weight:700; color:var(--neon-bull); font-family:var(--font-mono);">
+                        Est. Gain: +${b.expected_gain_pct}%
+                    </span>
+                </div>
+
+                <div class="buy-now-plan-grid">
+                    <div class="buy-now-plan-item">
+                        <span class="buy-now-plan-lbl">Entry Zone</span>
+                        <span class="buy-now-plan-val" style="color:var(--accent-cyan);">$${Number(b.entry_zone).toFixed(2)}</span>
+                    </div>
+                    <div class="buy-now-plan-item">
+                        <span class="buy-now-plan-lbl">Target (TP)</span>
+                        <span class="buy-now-plan-val" style="color:var(--neon-bull);">$${Number(b.take_profit_2).toFixed(2)}</span>
+                    </div>
+                    <div class="buy-now-plan-item">
+                        <span class="buy-now-plan-lbl">Stop Loss</span>
+                        <span class="buy-now-plan-val" style="color:var(--neon-bear);">$${Number(b.stop_loss).toFixed(2)}</span>
+                    </div>
+                </div>
+
+                <div class="buy-now-catalyst-text">
+                    ${b.ai_catalyst}
+                </div>
+
+                <button class="btn-buy-now-cta" onclick="event.stopPropagation(); window.openStockDossier('${b.symbol}')">
+                    <span>⚡</span> Buy Now Setup Dossier ➔
+                </button>
+            </div>`;
+        });
+
+        el.aiBuyNowGrid.innerHTML = html;
+    }
 
     function renderScreenerTableDOM() {
         if (!el.screenerTableBody) return;

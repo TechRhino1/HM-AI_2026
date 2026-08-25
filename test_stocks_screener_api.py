@@ -13,8 +13,9 @@ def run_tests():
         # 1. UI Page
         {"name": "UI Page /stocks", "url": f"{base_url}/stocks", "is_json": False},
         
-        # 2. Screener API Default
-        {"name": "Screener Default", "url": f"{base_url}/api/stocks/screener", "is_json": True, "check": lambda d: d.get("count", 0) > 20},
+        # 2. Screener API Default & AI Recommended Buys
+        {"name": "Screener Default & AI Recommended Buys", "url": f"{base_url}/api/stocks/screener", "is_json": True, "check": lambda d: d.get("count", 0) > 20 and len(d.get("ai_recommended_buys", [])) > 0},
+        {"name": "Recommended Buys Endpoint", "url": f"{base_url}/api/stocks/recommended_buys", "is_json": True, "check": lambda d: len(d.get("recommended_buys", [])) > 0 and "entry_zone" in d["recommended_buys"][0]},
         
         # 3. Screener Filtered by Sector & Min Prob
         {"name": "Screener Tech Filter (>70% prob)", "url": f"{base_url}/api/stocks/screener?sector=Technology&min_prob=70", "is_json": True, "check": lambda d: len(d.get("stocks", [])) > 0},
