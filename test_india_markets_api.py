@@ -1,7 +1,8 @@
 """
-Comprehensive Automated Test Suite for India Markets (NSE/BSE & F&O Intelligence Terminal)
-Validates all endpoints, Option Chains, Greeks, Max Pain, PCR, AI Spreads, CPR Levels,
-SEBI Margins, Lot Sizes, and ensures complete backward compatibility.
+Comprehensive Automated Test Suite for India Markets (NSE/BSE Equities & F&O Options Suite)
+Validates both separated windows (/india for Cash Stocks and /options for F&O Options),
+Option Chains, Greeks, Max Pain, PCR, Multi-Leg Payoff Curves, Strike OI Bars,
+ATM Straddle Premium, SEBI Margins, and regression safety.
 """
 import urllib.request
 import urllib.error
@@ -15,14 +16,14 @@ BASE_URL = "http://127.0.0.1:8501"
 def test_endpoint(name: str, url_path: str, validator=None):
     url = f"{BASE_URL}{url_path}"
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "JarvisIndiaTestRunner/1.0"})
+        req = urllib.request.Request(url, headers={"User-Agent": "JarvisIndiaTestRunner/2.0"})
         with urllib.request.urlopen(req, timeout=10) as res:
             status = res.status
             content_type = res.headers.get("Content-Type", "")
             raw_data = res.read()
 
             if status != 200:
-                print(f"[FAIL] {name:<45} -> HTTP {status}")
+                print(f"[FAIL] {name:<50} -> HTTP {status}")
                 return False
 
             if "application/json" in content_type:
@@ -30,43 +31,45 @@ def test_endpoint(name: str, url_path: str, validator=None):
                 if validator:
                     val_res, val_msg = validator(data)
                     if not val_res:
-                        print(f"[FAIL] {name:<45} -> JSON Validation Failed: {val_msg}")
+                        print(f"[FAIL] {name:<50} -> JSON Validation Failed: {val_msg}")
                         return False
-                print(f"[PASS] {name:<45} -> HTTP 200 OK | JSON Validated")
+                print(f"[PASS] {name:<50} -> HTTP 200 OK | JSON Validated")
                 return True
             elif "text/html" in content_type:
                 html_str = raw_data.decode("utf-8")
-                if "India Markets" in html_str and "NSE" in html_str:
-                    print(f"[PASS] {name:<45} -> HTTP 200 OK | HTML Rendered ({len(raw_data)} bytes)")
+                if ("India" in html_str or "Options" in html_str) and "NSE" in html_str:
+                    print(f"[PASS] {name:<50} -> HTTP 200 OK | HTML Rendered ({len(raw_data)} bytes)")
                     return True
                 else:
-                    print(f"[FAIL] {name:<45} -> HTML missing key elements")
+                    print(f"[FAIL] {name:<50} -> HTML missing key elements")
                     return False
             elif "text/csv" in content_type:
                 csv_str = raw_data.decode("utf-8")
                 if "Symbol" in csv_str and "CPR" in csv_str:
-                    print(f"[PASS] {name:<45} -> HTTP 200 OK | CSV Stream Validated ({len(raw_data)} bytes)")
+                    print(f"[PASS] {name:<50} -> HTTP 200 OK | CSV Stream Validated ({len(raw_data)} bytes)")
                     return True
                 else:
-                    print(f"[FAIL] {name:<45} -> CSV missing header columns")
+                    print(f"[FAIL] {name:<50} -> CSV missing header columns")
                     return False
             else:
-                print(f"[PASS] {name:<45} -> HTTP 200 OK | Content-Type: {content_type}")
+                print(f"[PASS] {name:<50} -> HTTP 200 OK | Content-Type: {content_type}")
                 return True
 
     except Exception as e:
-        print(f"[FAIL] {name:<45} -> Exception: {e}")
+        print(f"[FAIL] {name:<50} -> Exception: {e}")
         return False
 
 
 def run_all_india_tests():
-    print("=" * 70)
-    print("RUNNING INSTITUTIONAL INDIA MARKETS (NSE/BSE & F&O) TEST SUITE")
-    print("=" * 70)
+    print("=" * 75)
+    print("RUNNING INSTITUTIONAL INDIA MARKETS (STOCKS & OPTIONS DUAL-TERMINAL) TEST SUITE")
+    print("=" * 75)
 
     tests = [
-        # UI Pages
-        ("India Terminal UI /india", "/india", None),
+        # UI Windows (Separated)
+        ("Window 1: India Stocks Screener UI /india", "/india", None),
+        ("Window 2: India Options Terminal UI /options", "/options", None),
+        ("Window 2 Alias: /india/options", "/india/options", None),
 
         # Indices & FII/DII Telemetry
         ("Indices Snapshot Telemetry", "/api/india/indices", lambda d: (
@@ -78,7 +81,7 @@ def run_all_india_tests():
             "Missing FII cash or PCR metrics"
         )),
 
-        # Market Scanner & Filters
+        # Cash Market Scanner & Filters
         ("NSE/BSE Default Market Scanner", "/api/india/scanner", lambda d: (
             d.get("count", 0) >= 15 and len(d.get("ai_recommended_buys", [])) > 0,
             "Scanner count too low or missing AI buy now setups"
@@ -106,30 +109,52 @@ def run_all_india_tests():
             "Missing Monte Carlo in HDFCBANK dossier"
         )),
 
-        # Option Chain Analytics (CE/PE, Greeks, Max Pain, PCR)
-        ("NIFTY Option Chain & Max Pain", "/api/india/option_chain?symbol=NIFTY", lambda d: (
+        # F&O Options Suite (Chain, Max Pain, PCR, Straddle, OI Distribution, Greeks)
+        ("NIFTY Option Chain & Max Pain", "/api/india/options/chain?symbol=NIFTY", lambda d: (
             len(d.get("chain", [])) >= 15 and d.get("max_pain_strike", 0) > 0 and "pcr" in d,
             "Option chain too short or missing Max Pain / PCR"
         )),
-        ("BANKNIFTY Option Chain", "/api/india/option_chain?symbol=BANKNIFTY", lambda d: (
+        ("BANKNIFTY Option Chain", "/api/india/options/chain?symbol=BANKNIFTY", lambda d: (
             len(d.get("chain", [])) >= 15 and d.get("lot_size") == 15,
             "BANKNIFTY lot size mismatch or short chain"
         )),
-        ("Equity Stock Option Chain (RELIANCE)", "/api/india/option_chain?symbol=RELIANCE", lambda d: (
+        ("Equity Stock Option Chain (RELIANCE)", "/api/india/options/chain?symbol=RELIANCE", lambda d: (
             len(d.get("chain", [])) >= 10 and d.get("lot_size") == 250,
             "RELIANCE lot size mismatch in option chain"
         )),
+        ("Strike-wise OI Distribution (NIFTY)", "/api/india/options/oi_distribution?symbol=NIFTY", lambda d: (
+            len(d.get("distribution", [])) >= 15 and "call_oi" in d["distribution"][0],
+            "OI distribution data invalid"
+        )),
+        ("ATM Straddle Premium & Breakevens", "/api/india/options/straddle?symbol=NIFTY", lambda d: (
+            d.get("combined_premium", 0) > 0 and "upper_breakeven" in d,
+            "ATM straddle payload invalid"
+        )),
 
-        # AI Defined-Risk Strategy Builder
-        ("AI Bull Call Spread (NIFTY)", "/api/india/options_ai?symbol=NIFTY&bias=BULLISH", lambda d: (
+        # Multi-Leg Interactive Payoff Curves
+        ("Multi-Leg Payoff Curve (Bull Call Spread)", "/api/india/options/payoff?symbol=NIFTY&days_to_target=0", lambda d: (
+            len(d.get("curve_expiry", [])) >= 100 and "portfolio_greeks" in d and len(d.get("broker_basket", [])) >= 2,
+            "Payoff calculation failed or missing portfolio Greeks"
+        )),
+        ("Multi-Leg Payoff Curve (Target Date T=2d)", "/api/india/options/payoff?symbol=NIFTY&days_to_target=2", lambda d: (
+            len(d.get("curve_target", [])) >= 100,
+            "Target date payoff curve missing"
+        )),
+
+        # AI Strategy Presets
+        ("AI Bull Call Spread (NIFTY)", "/api/india/options/strategies?symbol=NIFTY&bias=BULLISH", lambda d: (
             d.get("strategy_name") == "BULL CALL VERTICAL SPREAD" and len(d.get("legs", [])) == 2 and d.get("max_profit_inr", 0) > 0,
             "Invalid Bull Call Spread payload"
         )),
-        ("AI Bear Put Spread (BANKNIFTY)", "/api/india/options_ai?symbol=BANKNIFTY&bias=BEARISH", lambda d: (
+        ("AI Bear Put Spread (BANKNIFTY)", "/api/india/options/strategies?symbol=BANKNIFTY&bias=BEARISH", lambda d: (
             d.get("strategy_name") == "BEAR PUT VERTICAL SPREAD" and len(d.get("legs", [])) == 2,
             "Invalid Bear Put Spread payload"
         )),
-        ("AI Iron Condor (NIFTY)", "/api/india/options_ai?symbol=NIFTY&bias=NEUTRAL", lambda d: (
+        ("AI Short Straddle (NIFTY)", "/api/india/options/strategies?symbol=NIFTY&bias=SHORT_STRADDLE", lambda d: (
+            "STRADDLE" in d.get("strategy_name", "") and len(d.get("legs", [])) == 2,
+            "Invalid Short Straddle payload"
+        )),
+        ("AI Iron Condor (NIFTY)", "/api/india/options/strategies?symbol=NIFTY&bias=NEUTRAL", lambda d: (
             d.get("strategy_name") == "DEFINED-RISK IRON CONDOR" and len(d.get("legs", [])) == 4,
             "Invalid Iron Condor 4-leg payload"
         )),
@@ -184,9 +209,9 @@ def run_all_india_tests():
         else:
             failed += 1
 
-    print("=" * 70)
+    print("=" * 75)
     print(f"TEST RESULTS: {passed} PASSED | {failed} FAILED")
-    print("=" * 70)
+    print("=" * 75)
     return failed == 0
 
 

@@ -254,18 +254,44 @@ class IndiaMarketsService:
                 self._send_json(handler, analysis)
                 return True
 
-            elif path == "/api/india/option_chain":
+            elif path in ["/api/india/option_chain", "/api/india/options/chain"]:
                 sym = query.get("symbol", ["NIFTY"])[0].upper().strip()
                 exp = query.get("expiry", [None])[0]
                 res = INDIA_OPTIONS.generate_option_chain(sym, expiry=exp)
                 self._send_json(handler, res)
                 return True
 
-            elif path == "/api/india/options_ai":
+            elif path in ["/api/india/options_ai", "/api/india/options/strategies"]:
                 sym = query.get("symbol", ["NIFTY"])[0].upper().strip()
                 bias = query.get("bias", ["BULLISH"])[0].upper().strip()
                 res = INDIA_OPTIONS.generate_ai_options_strategy(sym, bias=bias)
                 self._send_json(handler, res)
+                return True
+
+            elif path == "/api/india/options/payoff":
+                sym = query.get("symbol", ["NIFTY"])[0].upper().strip()
+                days_tgt = float(query.get("days_to_target", [0.0])[0])
+                legs_raw = query.get("legs", [None])[0]
+                legs = None
+                if legs_raw:
+                    try:
+                        legs = json.loads(legs_raw)
+                    except Exception:
+                        pass
+                res = INDIA_OPTIONS.calculate_multi_leg_payoff(sym, legs=legs, days_to_target=days_tgt)
+                self._send_json(handler, res)
+                return True
+
+            elif path == "/api/india/options/oi_distribution":
+                sym = query.get("symbol", ["NIFTY"])[0].upper().strip()
+                res = INDIA_OPTIONS.get_oi_distribution(sym)
+                self._send_json(handler, res)
+                return True
+
+            elif path == "/api/india/options/straddle":
+                sym = query.get("symbol", ["NIFTY"])[0].upper().strip()
+                chain = INDIA_OPTIONS.generate_option_chain(sym)
+                self._send_json(handler, chain["atm_straddle"])
                 return True
 
             elif path == "/api/india/fii_dii":

@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HM AI 4.0 — India F&O Options & Derivatives Intelligence Terminal</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Chart.js for Payoff Diagram & OI Bar Charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- India Options Stylesheet -->
+    <link rel="stylesheet" href="/static/css/india_options.css?v=1.0">
+</head>
+<body>
+
+    <!-- ==========================================================================
+         TOP INSTITUTIONAL HUD HEADER
+         ========================================================================== -->
+    <header class="opt-hud">
+        <div class="brand-wrapper">
+            <div class="brand-logo">
+                <div class="brand-flag-icon">🇮🇳</div>
+                <div class="brand-text">HM <span>AI 4.0</span> • Options & Derivatives Terminal</div>
+            </div>
+            <div class="badge badge-nse-live">
+                <span class="pulse-dot"></span> NSE F&O SUITE ACTIVE
+            </div>
+        </div>
+
+        <!-- 4-Way Cross-Market Navigation -->
+        <div class="nav-links-wrapper">
+            <a href="/" class="btn-nav-switch">
+                <span>⚡ Forex / Crypto</span>
+            </a>
+            <a href="/stocks" class="btn-nav-switch">
+                <span>🇺🇸 US Stocks</span>
+            </a>
+            <a href="/india" class="btn-nav-switch">
+                <span>🇮🇳 India Stocks</span>
+            </a>
+            <a href="/options" class="btn-nav-switch active">
+                <span>📊 India Options (F&O)</span>
+            </a>
+        </div>
+
+        <!-- Search Box -->
+        <div class="search-container">
+            <div class="search-input-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="opt-search-input" placeholder="Search F&O Underlying (NIFTY, BANKNIFTY, RELIANCE)..." autocomplete="off">
+            </div>
+            <div id="opt-search-autocomplete" class="autocomplete-dropdown" style="display:none;"></div>
+        </div>
+    </header>
+
+    <!-- ==========================================================================
+         UNDERLYING SELECTOR & REAL-TIME SPOT TELEMETRY BAR
+         ========================================================================== -->
+    <div class="underlying-selector-bar">
+        <div class="underlying-pills-scroll">
+            <button class="und-pill active" onclick="window.selectUnderlying('NIFTY', this)">NIFTY 50</button>
+            <button class="und-pill" onclick="window.selectUnderlying('BANKNIFTY', this)">BANK NIFTY</button>
+            <button class="und-pill" onclick="window.selectUnderlying('FINNIFTY', this)">FIN NIFTY</button>
+            <button class="und-pill" onclick="window.selectUnderlying('MIDCPNIFTY', this)">MIDCAP NIFTY</button>
+            <button class="und-pill" onclick="window.selectUnderlying('SENSEX', this)">SENSEX</button>
+            <button class="und-pill" onclick="window.selectUnderlying('RELIANCE', this)">RELIANCE</button>
+            <button class="und-pill" onclick="window.selectUnderlying('HDFCBANK', this)">HDFC BANK</button>
+            <button class="und-pill" onclick="window.selectUnderlying('TCS', this)">TCS</button>
+            <button class="und-pill" onclick="window.selectUnderlying('INFY', this)">INFOSYS</button>
+            <button class="und-pill" onclick="window.selectUnderlying('TATAMOTORS', this)">TATA MOTORS</button>
+            <button class="und-pill" onclick="window.selectUnderlying('ZOMATO', this)">ZOMATO</button>
+            <button class="und-pill" onclick="window.selectUnderlying('BAJFINANCE', this)">BAJAJ FINANCE</button>
+        </div>
+
+        <div class="expiry-selector-wrap">
+            <span class="ctrl-label">Expiry:</span>
+            <select id="opt-expiry-select" onchange="window.onExpiryChange(this.value)">
+                <option value="CURRENT">Current Weekly</option>
+                <option value="NEXT">Next Weekly</option>
+                <option value="MONTHLY">Monthly Expiry</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- ==========================================================================
+         SPOT KPI SUMMARY RIBBON
+         ========================================================================== -->
+    <div class="opt-kpi-ribbon">
+        <div class="kpi-box">
+            <span class="kpi-lbl">Underlying Spot</span>
+            <div id="spot-price-val" class="kpi-val text-white">₹24,850.00</div>
+        </div>
+        <div class="kpi-box">
+            <span class="kpi-lbl">ATM Strike</span>
+            <div id="atm-strike-val" class="kpi-val text-gold">24,850</div>
+        </div>
+        <div class="kpi-box">
+            <span class="kpi-lbl">Max Pain Strike</span>
+            <div id="max-pain-val" class="kpi-val text-cyan">24,850</div>
+        </div>
+        <div class="kpi-box">
+            <span class="kpi-lbl">Put-Call Ratio (PCR)</span>
+            <div id="pcr-val" class="kpi-val text-bull">1.22 (Bullish)</div>
+        </div>
+        <div class="kpi-box">
+            <span class="kpi-lbl">ATM Straddle Premium</span>
+            <div id="straddle-prem-val" class="kpi-val text-white">₹385.00 (±1.5%)</div>
+        </div>
+        <div class="kpi-box">
+            <span class="kpi-lbl">IV Rank / Skew</span>
+            <div id="iv-rank-val" class="kpi-val text-gold">48.5 (Neutral IV)</div>
+        </div>
+        <div class="kpi-box">
+            <span class="kpi-lbl">NSE Lot Size</span>
+            <div id="lot-size-val" class="kpi-val text-white">25 Qty</div>
+        </div>
+    </div>
+
+    <!-- ==========================================================================
+         MAIN OPTIONS WORKSPACE (2-COLUMN ARCHITECTURE)
+         ========================================================================== -->
+    <div class="opt-workspace-grid">
+
+        <!-- ======================================================================
+             LEFT PANE: INTERACTIVE MULTI-LEG PAYOFF & STRATEGY BUILDER
+             ====================================================================== -->
+        <div class="opt-left-pane">
+            
+            <!-- Payoff Diagram Card -->
+            <div class="pane-card payoff-card">
+                <div class="pane-header-row">
+                    <div class="pane-title">
+                        <span>📈 Interactive Strategy Payoff Diagram (P&L at Expiry vs Target Date)</span>
+                    </div>
+                    <div class="payoff-legend">
+                        <span class="legend-item"><span class="legend-color legend-exp"></span> Expiry P&L</span>
+                        <span class="legend-item"><span class="legend-color legend-tgt"></span> Target Date P&L</span>
+                    </div>
+                </div>
+
+                <!-- Canvas Payoff Chart -->
+                <div class="payoff-chart-container">
+                    <canvas id="payoff-canvas"></canvas>
+                </div>
+
+                <!-- Interactive Simulation Sliders -->
+                <div class="payoff-sliders-grid">
+                    <div class="slider-field">
+                        <div class="slider-header">
+                            <span class="slider-lbl">Days to Target Date:</span>
+                            <span id="slider-days-val" class="slider-num text-cyan">0 Days (Expiry)</span>
+                        </div>
+                        <input type="range" id="slider-days" min="0" max="15" value="0" step="1" oninput="window.onPayoffDaysSlider(this.value)">
+                    </div>
+
+                    <div class="slider-field">
+                        <div class="slider-header">
+                            <span class="slider-lbl">Simulated Spot Price:</span>
+                            <span id="slider-spot-val" class="slider-num text-gold">₹24,850.00</span>
+                        </div>
+                        <input type="range" id="slider-spot" min="22000" max="27000" value="24850" step="10" oninput="window.onPayoffSpotSlider(this.value)">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Strategy Presets & Custom Multi-Leg Builder -->
+            <div class="pane-card">
+                <div class="pane-header-row">
+                    <div class="pane-title">
+                        <span>🧠 Strategy Architect & Legs</span>
+                    </div>
+                    <div class="preset-buttons-wrap">
+                        <button class="preset-btn active" onclick="window.applyPresetStrategy('BULLISH')">Bull Call Spread</button>
+                        <button class="preset-btn" onclick="window.applyPresetStrategy('BEARISH')">Bear Put Spread</button>
+                        <button class="preset-btn" onclick="window.applyPresetStrategy('SHORT_STRADDLE')">Short Straddle</button>
+                        <button class="preset-btn" onclick="window.applyPresetStrategy('IRON_CONDOR')">Iron Condor</button>
+                        <button class="preset-btn" onclick="window.addNewLeg()">➕ Add Leg</button>
+                    </div>
+                </div>
+
+                <!-- Legs List Table -->
+                <div class="legs-table-wrap">
+                    <table class="legs-table">
+                        <thead>
+                            <tr>
+                                <th>Action</th>
+                                <th>Type</th>
+                                <th>Strike</th>
+                                <th>Premium (₹)</th>
+                                <th>Lots</th>
+                                <th>Delta</th>
+                                <th>Theta/Day</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="legs-tbody">
+                            <!-- Populated dynamically by JS -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Strategy Outcome KPI Matrix -->
+                <div class="strategy-kpi-matrix">
+                    <div class="strat-kpi-item">
+                        <span class="strat-kpi-lbl">Max Profit</span>
+                        <span id="strat-max-profit" class="strat-kpi-val text-bull">+₹7,500.00</span>
+                    </div>
+                    <div class="strat-kpi-item">
+                        <span class="strat-kpi-lbl">Max Loss</span>
+                        <span id="strat-max-loss" class="strat-kpi-val text-bear">-₹2,500.00</span>
+                    </div>
+                    <div class="strat-kpi-item">
+                        <span class="strat-kpi-lbl">Breakeven(s)</span>
+                        <span id="strat-breakeven" class="strat-kpi-val text-gold">24,950</span>
+                    </div>
+                    <div class="strat-kpi-item">
+                        <span class="strat-kpi-lbl">Prob of Profit (POP)</span>
+                        <span id="strat-pop" class="strat-kpi-val text-cyan">64.5%</span>
+                    </div>
+                    <div class="strat-kpi-item">
+                        <span class="strat-kpi-lbl">Net Debit / Credit</span>
+                        <span id="strat-net-cost" class="strat-kpi-val text-white">Debit ₹2,500</span>
+                    </div>
+                    <div class="strat-kpi-item">
+                        <span class="strat-kpi-lbl">Est. SEBI Margin</span>
+                        <span id="strat-margin" class="strat-kpi-val text-white">₹4,000</span>
+                    </div>
+                </div>
+
+                <!-- Portfolio Greeks Sum -->
+                <div class="portfolio-greeks-row">
+                    <div class="greeks-pill">Net Delta: <b id="port-delta" class="text-cyan">+12.5</b></div>
+                    <div class="greeks-pill">Net Gamma: <b id="port-gamma" class="text-white">+0.004</b></div>
+                    <div class="greeks-pill">Daily Theta: <b id="port-theta" class="text-bull">+₹480/day</b></div>
+                    <div class="greeks-pill">Net Vega: <b id="port-vega" class="text-gold">-₹150</b></div>
+                </div>
+
+                <!-- Copy Broker Basket Order -->
+                <button class="btn-copy-basket" onclick="window.copyBrokerBasket()">
+                    <span>📋</span> Copy Multi-Leg Broker Basket (Zerodha Kite / Upstox)
+                </button>
+            </div>
+
+            <!-- Strike-wise Open Interest (OI) Bar Chart -->
+            <div class="pane-card">
+                <div class="pane-header-row">
+                    <div class="pane-title">
+                        <span>📊 Strike-wise Open Interest (Call OI vs Put OI)</span>
+                    </div>
+                    <div style="font-size:11px; color:var(--text-dim);">
+                        <span style="color:var(--neon-bear);">■ Call OI (Resistance)</span> | <span style="color:var(--neon-bull);">■ Put OI (Support)</span>
+                    </div>
+                </div>
+                <div class="oi-chart-container">
+                    <canvas id="oi-bar-canvas"></canvas>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ======================================================================
+             RIGHT PANE: FULL INTERACTIVE OPTION CHAIN (CE / PE MATRIX)
+             ====================================================================== -->
+        <div class="opt-right-pane">
+            <div class="pane-card chain-card">
+                <div class="pane-header-row">
+                    <div class="pane-title">
+                        <span>⚡ Live Option Chain Matrix (<span id="chain-und-tag">NIFTY</span>)</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span class="badge badge-nse">Greeks & IV Skew</span>
+                    </div>
+                </div>
+
+                <div class="chain-table-container">
+                    <table class="opt-chain-table">
+                        <thead>
+                            <tr>
+                                <th colspan="6" class="th-calls">CALLS (CE)</th>
+                                <th class="th-strike">STRIKE</th>
+                                <th colspan="6" class="th-puts">PUTS (PE)</th>
+                            </tr>
+                            <tr class="sub-th-row">
+                                <th>Add</th>
+                                <th>Delta</th>
+                                <th>IV %</th>
+                                <th>OI Chg</th>
+                                <th>OI (Qty)</th>
+                                <th>LTP (₹)</th>
+                                <th class="strike-col-th">Strike</th>
+                                <th>LTP (₹)</th>
+                                <th>OI (Qty)</th>
+                                <th>OI Chg</th>
+                                <th>IV %</th>
+                                <th>Delta</th>
+                                <th>Add</th>
+                            </tr>
+                        </thead>
+                        <tbody id="full-chain-tbody">
+                            <!-- Populated dynamically by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Options Terminal Controller Script -->
+    <script src="/static/js/india_options.js?v=1.0"></script>
+</body>
+</html>
