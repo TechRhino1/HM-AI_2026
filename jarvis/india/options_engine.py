@@ -428,5 +428,42 @@ class IndiaOptionsEngine:
         payoff_analysis["rationale"] = rationale
         return payoff_analysis
 
+    def get_ai_recommended_options_trades(self) -> List[Dict[str, Any]]:
+        """
+        Generates top 4 AI Recommended Options Setups across Indices and Liquid Equities.
+        """
+        recs = []
+        preset_configs = [
+            {"symbol": "NIFTY", "bias": "BULLISH", "badge": "PRIME INDEX BREAKOUT"},
+            {"symbol": "BANKNIFTY", "bias": "SHORT_STRADDLE", "badge": "THETA HARVEST"},
+            {"symbol": "RELIANCE", "bias": "BULLISH", "badge": "EQUITY MOMENTUM"},
+            {"symbol": "HDFCBANK", "bias": "NEUTRAL", "badge": "DELTA-NEUTRAL SPREAD"}
+        ]
+
+        for cfg in preset_configs:
+            try:
+                strat = self.generate_ai_options_strategy(cfg["symbol"], bias=cfg["bias"])
+                legs_desc = " + ".join([f"{l['action']} {int(l['strike'])}{l['type']}" for l in strat.get("legs", [])])
+                recs.append({
+                    "symbol": cfg["symbol"],
+                    "strategy_name": strat.get("strategy_name", "SPREAD"),
+                    "badge": cfg["badge"],
+                    "bias": cfg["bias"],
+                    "rationale": strat.get("rationale", ""),
+                    "spot_price": strat.get("spot_price", 0),
+                    "legs_desc": legs_desc,
+                    "legs": strat.get("legs", []),
+                    "max_profit_inr": strat.get("max_profit_inr", 0),
+                    "max_loss_inr": strat.get("max_loss_inr", 0),
+                    "breakevens": strat.get("breakevens", []),
+                    "pop_pct": strat.get("probability_of_profit_pct", 65.0),
+                    "estimated_margin_inr": strat.get("estimated_margin_inr", 5000.0),
+                    "net_debit_credit_inr": strat.get("net_debit_or_credit_inr", 0.0)
+                })
+            except Exception as e:
+                pass
+
+        return recs
+
 
 INDIA_OPTIONS = IndiaOptionsEngine()

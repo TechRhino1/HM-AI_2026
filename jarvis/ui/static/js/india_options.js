@@ -69,12 +69,108 @@
         portVega: document.getElementById("port-vega"),
 
         // Option Chain Table
-        fullChainTbody: document.getElementById("full-chain-tbody")
+        fullChainTbody: document.getElementById("full-chain-tbody"),
+
+        // AI Recommendations Grid
+        aiOptRecGrid: document.getElementById("ai-opt-rec-grid")
     };
 
     /* ==========================================================================
        1. DATA FETCHING & API INTERACTION
        ========================================================================== */
+
+    async function fetchOptionRecommendations() {
+        if (!el.aiOptRecGrid) return;
+        try {
+            const res = await fetch('/api/india/options/recommendations');
+            const data = await res.json();
+            if (data && data.recommendations && data.recommendations.length > 0) {
+                renderOptionRecommendationsDOM(data.recommendations);
+            }
+        } catch (err) {
+            console.error("Option recommendations fetch error:", err);
+        }
+    }
+
+    function renderOptionRecommendationsDOM(recs) {
+        if (!el.aiOptRecGrid || !recs || recs.length === 0) return;
+
+        let html = "";
+        recs.forEach((r, idx) => {
+            const isBull = r.bias === "BULLISH";
+            const isBear = r.bias === "BEARISH";
+            const dirColor = isBull ? "var(--neon-bull)" : (isBear ? "var(--neon-bear)" : "var(--neon-gold)");
+            const dirText = isBull ? "🟢 Bullish" : (isBear ? "🔴 Bearish" : "⚖️ Delta-Neutral");
+
+            html += `
+            <div class="opt-rec-card" onclick="window.loadRecommendedStrategyByIndex(${idx})">
+                <div class="opt-rec-top-row">
+                    <div>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span class="opt-rec-sym">${r.symbol}</span>
+                            <span class="badge badge-nse">${r.badge}</span>
+                        </div>
+                        <div class="opt-rec-strat-name">${r.strategy_name}</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <span style="font-size:10px; font-weight:800; color:${dirColor};">${dirText}</span>
+                        <div style="font-size:10px; color:var(--text-dim);">₹${Number(r.spot_price).toLocaleString()}</div>
+                    </div>
+                </div>
+
+                <div class="opt-rec-legs-text">
+                    ⚡ ${r.legs_desc}
+                </div>
+
+                <div class="opt-rec-kpis">
+                    <div>
+                        <div class="opt-rec-kpi-lbl">Max Profit</div>
+                        <div class="opt-rec-kpi-val text-bull">+₹${Number(r.max_profit_inr).toLocaleString()}</div>
+                    </div>
+                    <div>
+                        <div class="opt-rec-kpi-lbl">Max Loss</div>
+                        <div class="opt-rec-kpi-val text-bear">-₹${Math.abs(Number(r.max_loss_inr)).toLocaleString()}</div>
+                    </div>
+                    <div>
+                        <div class="opt-rec-kpi-lbl">Win Prob (POP)</div>
+                        <div class="opt-rec-kpi-val text-cyan">${r.pop_pct}%</div>
+                    </div>
+                </div>
+
+                <button class="btn-load-opt-strat" onclick="event.stopPropagation(); window.loadRecommendedStrategyByIndex(${idx})">
+                    ⚡ Load Strategy in Payoff & Option Chain
+                </button>
+            </div>`;
+        });
+
+        el.aiOptRecGrid.innerHTML = html;
+        state.cachedOptionRecs = recs;
+    }
+
+    window.loadRecommendedStrategyByIndex = function (idx) {
+        if (!state.cachedOptionRecs || !state.cachedOptionRecs[idx]) return;
+        const rec = state.cachedOptionRecs[idx];
+        
+        // Switch underlying
+        state.symbol = rec.symbol;
+        document.querySelectorAll(".und-pill").forEach(p => {
+            if (p.textContent.trim().toUpperCase().includes(rec.symbol)) {
+                p.classList.add("active");
+            } else {
+                p.classList.remove("active");
+            }
+        });
+
+        state.legs = rec.legs.map(l => ({
+            action: l.action,
+            type: l.type,
+            strike: l.strike,
+            price: l.price,
+            lots: l.lots || 1
+        }));
+
+        fetchOptionChain(rec.symbol);
+    };
 
     async function fetchOptionChain(symbol) {
         try {
@@ -514,6 +610,7 @@
 
     document.addEventListener("DOMContentLoaded", () => {
         fetchOptionChain("NIFTY");
+        fetchOptionRecommendations();
     });
 
 })();

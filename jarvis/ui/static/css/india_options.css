@@ -636,3 +636,130 @@ body {
     font-size: 9px;
     font-weight: 800;
 }
+
+/* ==========================================================================
+   6. AI RECOMMENDED OPTIONS TRADES SECTION
+   ========================================================================== */
+
+.opt-recommendations-section {
+    padding: 12px 24px 0 24px;
+}
+
+.opt-rec-header-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.opt-rec-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.opt-rec-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 12px;
+}
+
+.opt-rec-card {
+    background: linear-gradient(135deg, rgba(17, 26, 46, 0.95), rgba(9, 14, 26, 0.95));
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.opt-rec-card:hover {
+    border-color: var(--accent-cyan);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(0, 212, 255, 0.15);
+}
+
+.opt-rec-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--neon-bull), var(--accent-cyan));
+}
+
+.opt-rec-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.opt-rec-sym {
+    font-size: 15px;
+    font-weight: 900;
+    color: #ffffff;
+}
+
+.opt-rec-strat-name {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--accent-cyan);
+}
+
+.opt-rec-legs-text {
+    font-size: 11px;
+    font-family: var(--font-mono);
+    color: var(--neon-gold);
+    background: rgba(0, 0, 0, 0.3);
+    padding: 4px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(51, 65, 85, 0.3);
+}
+
+.opt-rec-kpis {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 6px;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 6px;
+    border-radius: 4px;
+}
+
+.opt-rec-kpi-lbl {
+    font-size: 8px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+}
+
+.opt-rec-kpi-val {
+    font-size: 11px;
+    font-weight: 800;
+    font-family: var(--font-mono);
+}
+
+.btn-load-opt-strat {
+    background: rgba(0, 212, 255, 0.12);
+    border: 1px solid var(--accent-cyan);
+    color: var(--accent-cyan);
+    border-radius: 4px;
+    padding: 6px;
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s ease;
+}
+
+.btn-load-opt-strat:hover {
+    background: var(--accent-cyan);
+    color: #000000;
+}

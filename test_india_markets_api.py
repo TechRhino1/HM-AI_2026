@@ -140,6 +140,14 @@ def run_all_india_tests():
             d.get("combined_premium", 0) > 0 and "upper_breakeven" in d,
             "ATM straddle payload invalid"
         )),
+        ("AI Recommended Options Spreads (/api/india/options/recommendations)", "/api/india/options/recommendations", lambda d: (
+            len(d.get("recommendations", [])) >= 4 and "strategy_name" in d["recommendations"][0],
+            "Options recommendations count low or invalid"
+        )),
+        ("AI Recommended Stock Buys (/api/india/stocks/recommendations)", "/api/india/stocks/recommendations", lambda d: (
+            len(d.get("ai_recommended_buys", [])) >= 4 and not d["ai_recommended_buys"][0].get("is_index", False),
+            "Stock recommendations count low or contains index"
+        )),
 
         # Multi-Leg Payoff Curves & AI Strategies
         ("Multi-Leg Payoff Curve (Bull Call Spread)", "/api/india/options/payoff?symbol=NIFTY&days_to_target=0", lambda d: (

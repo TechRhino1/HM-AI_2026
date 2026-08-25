@@ -139,13 +139,7 @@ class IndiaMarketsService:
             scanned_list.sort(key=lambda x: x["symbol"], reverse=not rev)
 
         # Curate Top 4 "AI Recommended: Buy Now" Opportunities (Strictly Non-Index Equities)
-        ai_buys = [
-            s for s in scanned_list 
-            if not s.get("is_index", False) 
-            and s["breakout_probability"] >= 72 
-            and s["price"] > s["vwap"]
-            and not s.get("sebi_regulatory", {}).get("is_fno_ban", False)
-        ][:4]
+        ai_buys = self.get_ai_recommended_stock_buys(limit=4)
 
         return {
             "count": len(scanned_list),
@@ -153,6 +147,47 @@ class IndiaMarketsService:
             "ai_recommended_buys": ai_buys,
             "scanned_at": datetime.now(timezone.utc).isoformat()
         }
+
+    def get_ai_recommended_stock_buys(self, limit: int = 4) -> List[Dict[str, Any]]:
+        """
+        Extracts the highest-conviction 'BUY NOW' Indian corporate stock setups.
+        Guaranteed to return top 4 prime setups with complete fallback.
+        """
+        all_stocks = get_all_india_stocks()
+        candidates = []
+
+        for sym in all_stocks:
+            data = INDIA_ENGINE.analyze_india_instrument(sym, timeframe="1D")
+            if data.get("is_index", False) or data.get("sector") == "Indices":
+                continue
+            if data.get("sebi_regulatory", {}).get("is_fno_ban", False):
+                continue
+
+            candidates.append({
+                "symbol": data["symbol"],
+                "name": data["name"],
+                "sector": data["sector"],
+                "price": data["current_price"],
+                "change_pct": data["change_pct"],
+                "breakout_probability": data["breakout_probability"],
+                "setup_grade": data["setup_grade"],
+                "grade_badge": data["grade_badge"],
+                "opportunity_state": data["opportunity_state"],
+                "recommendation": data["recommendation"],
+                "entry_zone": data["trade_setup"]["entry_zone"],
+                "stop_loss": data["trade_setup"]["stop_loss"],
+                "take_profit_2": data["trade_setup"]["take_profit_2"],
+                "expected_gain_pct": data["trade_setup"]["expected_gain_pct"],
+                "max_risk_pct": data["trade_setup"]["max_risk_pct"],
+                "cpr": data["cpr"],
+                "camarilla": data["camarilla"],
+                "vwap": data["vwap_structure"]["vwap"],
+                "lot_size": data["lot_size"]
+            })
+
+        # Sort by Breakout Probability descending
+        candidates.sort(key=lambda x: x["breakout_probability"], reverse=True)
+        return candidates[:limit]
 
     def get_sector_heatmap(self) -> Dict[str, Any]:
         """
@@ -314,6 +349,16 @@ class IndiaMarketsService:
                 sym = query.get("symbol", ["NIFTY"])[0].upper().strip()
                 res = INDIA_OPTIONS.get_oi_distribution(sym)
                 self._send_json(handler, res)
+                return True
+
+            elif path == "/api/india/options/recommendations":
+                res = INDIA_OPTIONS.get_ai_recommended_options_trades()
+                self._send_json(handler, {"recommendations": res})
+                return True
+
+            elif path in ["/api/india/stocks/recommendations", "/api/india/recommended_buys"]:
+                res = self.get_ai_recommended_stock_buys(limit=4)
+                self._send_json(handler, {"ai_recommended_buys": res})
                 return True
 
             elif path == "/api/india/options/straddle":

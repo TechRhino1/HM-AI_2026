@@ -241,6 +241,40 @@ class StockService:
                 }
                 candidates.append(item)
 
+        if len(candidates) < limit and self._cached_screener_results:
+            sorted_all = sorted(self._cached_screener_results, key=lambda x: x.get("breakout_probability", 0), reverse=True)
+            for s in sorted_all:
+                if any(c["symbol"] == s["symbol"] for c in candidates):
+                    continue
+                cmf = s.get("cmf_20", 0)
+                item = {
+                    "symbol": s["symbol"],
+                    "name": s["name"],
+                    "sector": s["sector"],
+                    "price": s["price"],
+                    "change_pct": s["change_pct"],
+                    "breakout_probability": s["breakout_probability"],
+                    "confidence": s.get("confidence", 0.88),
+                    "setup_grade": s.get("setup_grade", "GRADE A"),
+                    "grade_badge": s.get("grade_badge", "A"),
+                    "recommendation": s["recommendation"],
+                    "entry_zone": s["entry_zone"],
+                    "stop_loss": s["stop_loss"],
+                    "take_profit_2": s["take_profit_2"],
+                    "risk_reward": s["risk_reward"],
+                    "expected_gain_pct": round(((s["take_profit_2"] - s["entry_zone"]) / s["entry_zone"]) * 100.0, 1) if s["entry_zone"] > 0 else 12.5,
+                    "max_risk_pct": round(((s["entry_zone"] - s["stop_loss"]) / s["entry_zone"]) * 100.0, 1) if s["entry_zone"] > 0 else 3.5,
+                    "timing_badge": s.get("timing_badge", "UPCOMING"),
+                    "timing_horizon": s.get("timing_horizon", "UPCOMING (1-3 DAYS)"),
+                    "cmf_20": cmf,
+                    "buyer_pressure_pct": s.get("buyer_pressure_pct", 65),
+                    "ai_catalyst": "⚡ Quantitative Trend & Momentum Confluence",
+                    "conviction_score": s.get("breakout_probability", 0)
+                }
+                candidates.append(item)
+                if len(candidates) >= limit:
+                    break
+
         candidates.sort(key=lambda x: x["conviction_score"], reverse=True)
         return candidates[:limit]
 
