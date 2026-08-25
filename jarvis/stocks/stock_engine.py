@@ -390,7 +390,27 @@ class StockIntelligenceEngine:
             grade_badge = "C"
 
         # -------------------------------------------------------------
-        # 6. Multi-Timeframe Trend Matrix (1M, 5M, 15M, 1H, 4H, 1D, 1W)
+        # 6. Breakout Timing Horizon Predictor (Upcoming vs This Week vs Active)
+        # -------------------------------------------------------------
+        if is_squeeze_on or (squeeze_bars_count >= 2 and dist_to_r1_pct <= 2.5):
+            timing_horizon = "UPCOMING (1-3 DAYS)"
+            timing_badge = "UPCOMING"
+            timing_desc = f"Coiling Squeeze ({squeeze_bars_count} bars) compressed at resistance trigger ${r1:.2f}."
+        elif timeframe.upper() == "1W" or (prob_score_rounded >= 75 and rs_vs_spy > 1.5):
+            timing_horizon = "BREAKOUT IN WEEK (5-10 DAYS)"
+            timing_badge = "THIS_WEEK"
+            timing_desc = f"Macro Weekly Swing Structure with positive relative strength vs SPY (+{rs_vs_spy:.1f}%)."
+        elif rvol >= 1.5 and change_pct > 0.8:
+            timing_horizon = "ACTIVE BREAKOUT (EXPANDING)"
+            timing_badge = "ACTIVE"
+            timing_desc = f"Volume expansion ({rvol:.1f}x) active today with directional follow-through."
+        else:
+            timing_horizon = "CONSOLIDATING / WATCH"
+            timing_badge = "WATCH"
+            timing_desc = "Range-bound consolidation awaiting momentum catalyst."
+
+        # -------------------------------------------------------------
+        # 7. Multi-Timeframe Trend Matrix (1M, 5M, 15M, 1H, 4H, 1D, 1W)
         # -------------------------------------------------------------
         multi_tf = {
             "1M": {"bias": "BULLISH" if change_pct > 0.2 else ("BEARISH" if change_pct < -0.2 else "NEUTRAL"), "strength": 82 if prob_score > 75 else 60},
@@ -490,6 +510,9 @@ class StockIntelligenceEngine:
             "confidence": confidence,
             "setup_grade": setup_grade,
             "grade_badge": grade_badge,
+            "timing_horizon": timing_horizon,
+            "timing_badge": timing_badge,
+            "timing_desc": timing_desc,
             "trend_bias": trend_bias,
             "squeeze_status": squeeze_state,
             "is_squeeze": is_squeeze_on,

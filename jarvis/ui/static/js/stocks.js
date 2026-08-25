@@ -244,6 +244,17 @@
             const cmfColor = cmfVal > 0 ? "var(--neon-bull)" : (cmfVal < 0 ? "var(--neon-bear)" : "var(--text-dim)");
             const cmfSign = cmfVal > 0 ? "+" : "";
 
+            // Timing Horizon Badge
+            const tBadge = st.timing_badge || "UPCOMING";
+            let timingBadgeHtml = '<span class="badge-timing-upcoming">⏳ Upcoming (1-3D)</span>';
+            if (tBadge === "THIS_WEEK") {
+                timingBadgeHtml = '<span class="badge-timing-weekly">📅 This Week (5-10D)</span>';
+            } else if (tBadge === "ACTIVE") {
+                timingBadgeHtml = '<span class="badge-timing-active">⚡ Active Today</span>';
+            } else if (tBadge === "WATCH") {
+                timingBadgeHtml = '<span class="badge-timing-watch">Watch Base</span>';
+            }
+
             html += `
             <tr class="${isSelected ? 'active-row' : ''}" onclick="window.openStockDossier('${st.symbol}')">
                 <td>
@@ -260,7 +271,7 @@
                         </div>
                     </div>
                 </td>
-                <td style="color:var(--text-secondary); font-size:11px;">${st.sector}</td>
+                <td>${timingBadgeHtml}</td>
                 <td class="mono-num" style="color:#ffffff; font-size:13px;">$${Number(st.price).toFixed(2)}</td>
                 <td class="mono-num" style="color:${changeColor}; font-weight:800;">${changeSign}${Number(st.change_pct).toFixed(2)}%</td>
                 <td>

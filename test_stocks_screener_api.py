@@ -19,7 +19,9 @@ def run_tests():
         # 3. Screener Filtered by Sector & Min Prob
         {"name": "Screener Tech Filter (>70% prob)", "url": f"{base_url}/api/stocks/screener?sector=Technology&min_prob=70", "is_json": True, "check": lambda d: len(d.get("stocks", [])) > 0},
         
-        # 4. Screener Filtered by Squeeze
+        # 4. Screener Filtered by Horizon (Upcoming vs In Week)
+        {"name": "Screener Upcoming Breakouts Filter", "url": f"{base_url}/api/stocks/screener?type=upcoming", "is_json": True, "check": lambda d: len(d.get("stocks", [])) > 0 and "timing_horizon" in d["stocks"][0]},
+        {"name": "Screener Breakouts In Week (Weekly TF)", "url": f"{base_url}/api/stocks/screener?type=weekly&tf=1W", "is_json": True, "check": lambda d: len(d.get("stocks", [])) > 0},
         {"name": "Screener Squeeze Filter", "url": f"{base_url}/api/stocks/screener?type=squeeze", "is_json": True, "check": lambda d: isinstance(d.get("stocks"), list)},
         
         # 5. Search Autocomplete

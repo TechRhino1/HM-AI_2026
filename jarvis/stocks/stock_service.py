@@ -67,6 +67,9 @@ class StockService:
                         "confidence": analysis["confidence"],
                         "setup_grade": analysis.get("setup_grade", "GRADE A"),
                         "grade_badge": analysis.get("grade_badge", "A"),
+                        "timing_horizon": analysis.get("timing_horizon", "UPCOMING (1-3 DAYS)"),
+                        "timing_badge": analysis.get("timing_badge", "UPCOMING"),
+                        "timing_desc": analysis.get("timing_desc", ""),
                         "trend_bias": analysis["trend_bias"],
                         "squeeze_status": analysis["squeeze_status"],
                         "is_squeeze": analysis["is_squeeze"],
@@ -108,15 +111,36 @@ class StockService:
         if min_probability > 0:
             filtered = [s for s in filtered if s["breakout_probability"] >= min_probability]
 
-        # 4. Breakout Type Filter
+        # 4. Breakout Type / Horizon Filter (Upcoming vs In Week vs Fired)
         if breakout_type and breakout_type.lower() != "all":
             bt = breakout_type.lower()
-            if bt == "squeeze":
-                filtered = [s for s in filtered if s["is_squeeze"] or "SQUEEZE" in s["squeeze_status"]]
+            if bt in ["upcoming", "upcoming_breakout", "squeeze"]:
+                filtered = [
+                    s for s in filtered 
+                    if s.get("is_squeeze") 
+                    or s.get("timing_badge") == "UPCOMING" 
+                    or "UPCOMING" in s.get("timing_horizon", "").upper()
+                    or "SQUEEZE" in s.get("squeeze_status", "").upper()
+                    or s.get("breakout_probability", 0) >= 68
+                ]
+            elif bt in ["weekly", "breakout_in_week", "this_week"]:
+                filtered = [
+                    s for s in filtered 
+                    if s.get("timing_badge") == "THIS_WEEK" 
+                    or "WEEK" in s.get("timing_horizon", "").upper() 
+                    or s.get("breakout_probability", 0) >= 72
+                    or s.get("timeframe") == "1W"
+                ]
+            elif bt in ["fired", "fired_breakout", "active"]:
+                filtered = [
+                    s for s in filtered 
+                    if s.get("timing_badge") == "ACTIVE" 
+                    or "FIRED" in s.get("squeeze_status", "").upper() 
+                    or s.get("rvol", 0) >= 1.4
+                    or s.get("breakout_probability", 0) >= 80
+                ]
             elif bt == "vol_surge":
-                filtered = [s for s in filtered if s["rvol"] >= 1.5]
-            elif bt == "fired_breakout":
-                filtered = [s for s in filtered if "FIRED" in s["squeeze_status"] or "BREAKOUT" in s["recommendation"]]
+                filtered = [s for s in filtered if s.get("rvol", 0) >= 1.5]
 
         # Sort Results
         reverse = (sort_dir.lower() == "desc")

@@ -86,15 +86,22 @@
 
             <!-- Filter Pills Row -->
             <div class="filter-pills-row">
+                <span class="filter-group-label" style="color:var(--neon-amber);">Breakout Horizon:</span>
+                <button class="filter-pill type-pill active" onclick="window.setTypeFilter('all', this)">🔥 All Setups</button>
+                <button class="filter-pill type-pill" style="border-color:var(--neon-amber);" onclick="window.setTypeFilter('upcoming', this)">⏳ Upcoming Breakout (1-3 Days)</button>
+                <button class="filter-pill type-pill" style="border-color:var(--neon-purple);" onclick="window.setTypeFilter('weekly', this)">📅 Breakout in Week (5-10 Days)</button>
+                <button class="filter-pill type-pill" style="border-color:var(--neon-bull);" onclick="window.setTypeFilter('fired', this)">⚡ Active Fired Breakouts</button>
+
+                <div style="width:1px; height:18px; background:var(--border-subtle); margin:0 4px;"></div>
+
                 <span class="filter-group-label">Sector:</span>
                 <button class="filter-pill sector-pill active" onclick="window.setSectorFilter('all', this)">All Sectors</button>
-                <button class="filter-pill sector-pill" onclick="window.setSectorFilter('Technology', this)">Technology &amp; AI</button>
-                <button class="filter-pill sector-pill" onclick="window.setSectorFilter('Semiconductors', this)">Semiconductors</button>
+                <button class="filter-pill sector-pill" onclick="window.setSectorFilter('Technology', this)">Tech &amp; AI</button>
+                <button class="filter-pill sector-pill" onclick="window.setSectorFilter('Semiconductors', this)">Semis</button>
                 <button class="filter-pill sector-pill" onclick="window.setSectorFilter('Healthcare', this)">Healthcare</button>
                 <button class="filter-pill sector-pill" onclick="window.setSectorFilter('Financial Services', this)">Financials</button>
                 <button class="filter-pill sector-pill" onclick="window.setSectorFilter('Energy', this)">Energy</button>
-                <button class="filter-pill sector-pill" onclick="window.setSectorFilter('Consumer', this)">Consumer</button>
-                <button class="filter-pill sector-pill" onclick="window.setSectorFilter('Industrials', this)">Industrials</button>
+                <button class="filter-pill sector-pill" onclick="window.setSectorFilter('Consumer', this)">Consumer &amp; EV</button>
 
                 <div style="width:1px; height:18px; background:var(--border-subtle); margin:0 4px;"></div>
 
@@ -103,14 +110,7 @@
                 <button class="filter-pill tf-pill" onclick="window.setTimeframeFilter('1H', this)">1H</button>
                 <button class="filter-pill tf-pill" onclick="window.setTimeframeFilter('4H', this)">4H</button>
                 <button class="filter-pill tf-pill active" onclick="window.setTimeframeFilter('1D', this)">1D (Daily)</button>
-
-                <div style="width:1px; height:18px; background:var(--border-subtle); margin:0 4px;"></div>
-
-                <span class="filter-group-label">AI Signal:</span>
-                <button class="filter-pill type-pill active" onclick="window.setTypeFilter('all', this)">All Signals</button>
-                <button class="filter-pill type-pill" onclick="window.setTypeFilter('squeeze', this)">🔥 Volatility Squeeze</button>
-                <button class="filter-pill type-pill" onclick="window.setTypeFilter('vol_surge', this)">📊 Volume Surge (&gt;1.5x)</button>
-                <button class="filter-pill type-pill" onclick="window.setTypeFilter('fired_breakout', this)">⚡ Fired Breakouts</button>
+                <button class="filter-pill tf-pill" onclick="window.setTimeframeFilter('1W', this)">1W (Weekly)</button>
 
                 <div style="width:1px; height:18px; background:var(--border-subtle); margin:0 4px;"></div>
 
@@ -142,7 +142,7 @@
                                 <th style="width:30px;">★</th>
                                 <th onclick="window.sortTableBy('setup_grade')">Setup Grade ⬍</th>
                                 <th onclick="window.sortTableBy('symbol')">Stock Ticker ⬍</th>
-                                <th onclick="window.sortTableBy('sector')">Sector ⬍</th>
+                                <th>Breakout Horizon</th>
                                 <th onclick="window.sortTableBy('price')">Last Price ⬍</th>
                                 <th onclick="window.sortTableBy('change_pct')">Change % ⬍</th>
                                 <th onclick="window.sortTableBy('probability')">Breakout Probability ⬍</th>
