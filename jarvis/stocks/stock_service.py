@@ -158,13 +158,43 @@ class StockService:
             ]
 
         matches = []
+        exact_matches = []
+        prefix_matches = []
+        contains_matches = []
+
         for sym, prof in STOCK_UNIVERSE.items():
-            if q == sym or sym.startswith(q) or q in sym or q in prof["name"].upper():
-                matches.append({
+            if q == sym:
+                exact_matches.append({
                     "symbol": sym,
                     "name": prof["name"],
                     "sector": prof["sector"],
                     "market_cap": prof["market_cap"]
+                })
+            elif sym.startswith(q) or prof["name"].upper().startswith(q):
+                prefix_matches.append({
+                    "symbol": sym,
+                    "name": prof["name"],
+                    "sector": prof["sector"],
+                    "market_cap": prof["market_cap"]
+                })
+            elif q in sym or q in prof["name"].upper():
+                contains_matches.append({
+                    "symbol": sym,
+                    "name": prof["name"],
+                    "sector": prof["sector"],
+                    "market_cap": prof["market_cap"]
+                })
+
+        matches = exact_matches + prefix_matches + contains_matches
+
+        # If user searched a ticker format not yet in predefined universe, dynamically allow 1-click analysis
+        if len(q) >= 1 and len(q) <= 6 and q.isalnum():
+            if not any(m["symbol"] == q for m in matches):
+                matches.insert(0, {
+                    "symbol": q,
+                    "name": f"{q} (Global / US Equity)",
+                    "sector": "Equities",
+                    "market_cap": "AI Analyzed"
                 })
 
         return matches[:limit]

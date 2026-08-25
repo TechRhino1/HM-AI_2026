@@ -25,13 +25,17 @@ def run_tests():
         # 5. Search Autocomplete
         {"name": "Search 'NVDA'", "url": f"{base_url}/api/stocks/search?q=NVDA", "is_json": True, "check": lambda d: any(r.get("symbol") == "NVDA" for r in d.get("results", []))},
         {"name": "Search 'Apple'", "url": f"{base_url}/api/stocks/search?q=apple", "is_json": True, "check": lambda d: any(r.get("symbol") == "AAPL" for r in d.get("results", []))},
+        {"name": "Search 'nio' (lowercase)", "url": f"{base_url}/api/stocks/search?q=nio", "is_json": True, "check": lambda d: any(r.get("symbol") == "NIO" for r in d.get("results", []))},
+        {"name": "Search 'NIO' (uppercase)", "url": f"{base_url}/api/stocks/search?q=NIO", "is_json": True, "check": lambda d: any(r.get("symbol") == "NIO" for r in d.get("results", []))},
         
         # 6. Stock Details Dossier
         {"name": "Details NVDA", "url": f"{base_url}/api/stocks/details?symbol=NVDA&tf=1D", "is_json": True, "check": lambda d: d.get("breakout_probability", 0) > 0 and "trade_setup" in d and "multi_timeframe" in d and "technicals" in d},
+        {"name": "Details NIO", "url": f"{base_url}/api/stocks/details?symbol=NIO&tf=1D", "is_json": True, "check": lambda d: d.get("symbol") == "NIO" and d.get("breakout_probability", 0) > 0 and "trade_setup" in d},
         {"name": "Details TSLA", "url": f"{base_url}/api/stocks/details?symbol=TSLA&tf=1H", "is_json": True, "check": lambda d: "support_resistance" in d and "news" in d},
         
         # 7. Stock News Sentiment
         {"name": "News NVDA", "url": f"{base_url}/api/stocks/news?symbol=NVDA", "is_json": True, "check": lambda d: len(d.get("news", [])) > 0 and "sentiment" in d["news"][0]},
+        {"name": "News NIO", "url": f"{base_url}/api/stocks/news?symbol=NIO", "is_json": True, "check": lambda d: len(d.get("news", [])) > 0 and any(n.get("symbol") == "NIO" for n in d["news"])},
         
         # 8. Breakout Alerts
         {"name": "Breakout Alerts", "url": f"{base_url}/api/stocks/alerts", "is_json": True, "check": lambda d: d.get("count", 0) > 0},

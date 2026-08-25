@@ -124,6 +124,32 @@ class StockNewsAnalyzer:
                 "impact": "HIGH_CATALYST",
                 "summary": "Custodial assets under management and institutional trading desk revenues surge on spot market liquidity."
             }
+        ],
+        "NIO": [
+            {
+                "headline": "NIO Monthly EV Deliveries Surge 38% YoY Driven by ONVO Sub-Brand Order Volume",
+                "source": "CnEVPost",
+                "sentiment": "BULLISH",
+                "sentiment_score": 0.91,
+                "impact": "DELIVERY_BEAT",
+                "summary": "Mass-market ONVO L60 crossover ramping production with over 50,000 reservation backlog across Tier-1 Chinese cities."
+            },
+            {
+                "headline": "NIO Power Inks Strategic Battery Swap 4.0 Grid Energy Storage Partnership",
+                "source": "Bloomberg Green",
+                "sentiment": "BULLISH",
+                "sentiment_score": 0.86,
+                "impact": "INFRASTRUCTURE_EXPANSION",
+                "summary": "Over 2,500 active Power Swap Stations integrated into national virtual power plant peak shaving network."
+            },
+            {
+                "headline": "European Market Expansion Accelerates with Direct EL8 and ET5 Touring Showroom Openings",
+                "source": "Reuters Autos",
+                "sentiment": "BULLISH",
+                "sentiment_score": 0.79,
+                "impact": "GLOBAL_EXPANSION",
+                "summary": "Subscription fleet models gain traction across Germany, Norway, and the Netherlands."
+            }
         ]
     }
 

@@ -162,12 +162,29 @@
         if (el.tableCountBadge) el.tableCountBadge.textContent = `${list.length} Stocks`;
 
         if (list.length === 0) {
-            el.screenerTableBody.innerHTML = `
-                <tr>
-                    <td colspan="10" style="text-align:center; padding:30px; color:var(--text-dim);">
-                        No stocks matched the active breakout filters. Try broadening your criteria.
-                    </td>
-                </tr>`;
+            if (q) {
+                el.screenerTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="10" style="text-align:center; padding:35px 20px; color:var(--text-secondary);">
+                            <div style="font-size:14px; font-weight:800; margin-bottom:6px; color:#ffffff;">
+                                No pre-scanned stocks matching "<span style="color:var(--accent-cyan);">${q.toUpperCase()}</span>" in current filter.
+                            </div>
+                            <div style="font-size:12px; color:var(--text-dim); margin-bottom:14px;">
+                                You can launch immediate real-time AI quantitative analysis, multi-timeframe trends, and interactive chart for <b>${q.toUpperCase()}</b>:
+                            </div>
+                            <button class="btn-analyze-action" style="padding:8px 20px; font-size:12px; display:inline-flex; align-items:center; gap:6px;" onclick="window.selectSearchResult('${q.toUpperCase()}')">
+                                <span>⚡</span> Run AI Intelligence Dossier on [${q.toUpperCase()}] ➔
+                            </button>
+                        </td>
+                    </tr>`;
+            } else {
+                el.screenerTableBody.innerHTML = `
+                    <tr>
+                        <td colspan="10" style="text-align:center; padding:30px; color:var(--text-dim);">
+                            No stocks matched the active breakout filters. Try broadening your criteria.
+                        </td>
+                    </tr>`;
+            }
             return;
         }
 
@@ -570,25 +587,51 @@
         if (!el.searchInput) return;
 
         let debounceTimer = null;
+        
+        async function doSearch(query) {
+            if (query.trim().length > 0) {
+                try {
+                    const res = await fetch(`/api/stocks/search?q=${encodeURIComponent(query)}`);
+                    const data = await res.json();
+                    if (data && data.results && el.autocompleteDropdown) {
+                        renderAutocompleteDOM(data.results);
+                    }
+                } catch (err) {}
+            } else if (el.autocompleteDropdown) {
+                el.autocompleteDropdown.style.display = "none";
+            }
+        }
+
         el.searchInput.addEventListener("input", (e) => {
             const query = e.target.value;
             state.filters.searchQuery = query;
             renderScreenerTableDOM();
 
             clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(async () => {
-                if (query.trim().length > 0) {
-                    try {
-                        const res = await fetch(`/api/stocks/search?q=${encodeURIComponent(query)}`);
-                        const data = await res.json();
-                        if (data && data.results && el.autocompleteDropdown) {
-                            renderAutocompleteDOM(data.results);
-                        }
-                    } catch (err) {}
-                } else if (el.autocompleteDropdown) {
-                    el.autocompleteDropdown.style.display = "none";
+            debounceTimer = setTimeout(() => doSearch(query), 120);
+        });
+
+        el.searchInput.addEventListener("focus", (e) => {
+            if (e.target.value.trim().length > 0) {
+                doSearch(e.target.value);
+            }
+        });
+
+        el.searchInput.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+                const query = e.target.value.trim().toUpperCase();
+                if (query.length > 0) {
+                    if (el.autocompleteDropdown && el.autocompleteDropdown.children.length > 0) {
+                        const firstItem = el.autocompleteDropdown.children[0];
+                        const sym = firstItem.getAttribute("data-symbol") || query;
+                        window.selectSearchResult(sym);
+                    } else {
+                        window.selectSearchResult(query);
+                    }
                 }
-            }, 180);
+            } else if (e.key === "Escape") {
+                if (el.autocompleteDropdown) el.autocompleteDropdown.style.display = "none";
+            }
         });
 
         document.addEventListener("click", (e) => {
@@ -608,7 +651,7 @@
         let html = "";
         results.forEach(r => {
             html += `
-            <div class="autocomplete-item" onclick="window.selectSearchResult('${r.symbol}')">
+            <div class="autocomplete-item" data-symbol="${r.symbol}" onclick="window.selectSearchResult('${r.symbol}')">
                 <div style="display:flex; align-items:center;">
                     <span class="autocomplete-sym">${r.symbol}</span>
                     <span class="autocomplete-name">${r.name}</span>
