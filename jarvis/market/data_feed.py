@@ -35,8 +35,8 @@ class DataFeedEngine:
         self._cache: Dict[str, Dict[str, Any]] = {}
         self._cache_ttl_sec = 2.0
 
-    def fetch_rates(self, symbol: str, timeframe: str = "H1", num_bars: int = 300) -> pd.DataFrame:
-        cache_key = f"{symbol}_{timeframe}_{num_bars}"
+    def fetch_rates(self, symbol: str, timeframe: str = "H1", num_bars: int = 300, include_current_bar: bool = False) -> pd.DataFrame:
+        cache_key = f"{symbol}_{timeframe}_{num_bars}_{include_current_bar}"
         now = time.time()
         if cache_key in self._cache:
             entry = self._cache[cache_key]
@@ -51,10 +51,10 @@ class DataFeedEngine:
 
             resolved_sym = self.mt5_client.resolve_symbol_name(symbol) if hasattr(self.mt5_client, "resolve_symbol_name") else symbol
             mt5_tf = TF_MAP.get(timeframe, 16385)
-            # Fetch from pos 1 to ensure indicators evaluate strictly on completed closed candles (prevents repainting bias)
-            rates = mt5.copy_rates_from_pos(resolved_sym, mt5_tf, 1, num_bars)
+            start_pos = 0 if include_current_bar else 1
+            rates = mt5.copy_rates_from_pos(resolved_sym, mt5_tf, start_pos, num_bars)
             if rates is None or len(rates) == 0:
-                # Fallback to pos 0 if pos 1 returns empty
+                # Fallback to pos 0 if start_pos returns empty
                 rates = mt5.copy_rates_from_pos(resolved_sym, mt5_tf, 0, num_bars)
             if rates is None or len(rates) == 0:
                 logger.warning(f"MT5 returned 0 rates for {symbol} ({timeframe}). Falling back to synthetic rates.")

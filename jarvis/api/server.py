@@ -226,7 +226,7 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
             elif path == "/api/candles":
                 sym = query.get("symbol", ["XAUUSD"])[0]
                 tf = query.get("tf", ["H1"])[0]
-                df = self.data_feed.fetch_rates(sym, timeframe=tf, num_bars=150)
+                df = self.data_feed.fetch_rates(sym, timeframe=tf, num_bars=150, include_current_bar=True)
                 spec = resolve_symbol(sym)
                 digits = getattr(spec, "digits", 2 if "XAU" in sym or "BTC" in sym else 5)
                 candles = []
