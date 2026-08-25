@@ -17,6 +17,7 @@ from jarvis.india.universe import (
 )
 from jarvis.india.india_engine import INDIA_ENGINE
 from jarvis.india.options_engine import INDIA_OPTIONS
+from jarvis.india.options_signal_engine import OPTION_SIGNALS
 from jarvis.india.nse_rules import NSE_RULES
 from jarvis.india.news_analyzer import INDIA_NEWS
 from jarvis.india.risk_engine import INDIA_RISK
@@ -349,6 +350,12 @@ class IndiaMarketsService:
                 sym = query.get("symbol", ["NIFTY"])[0].upper().strip()
                 res = INDIA_OPTIONS.get_oi_distribution(sym)
                 self._send_json(handler, res)
+                return True
+
+            elif path in ["/api/india/options/single_signals", "/api/india/options/signals"]:
+                limit = int(query.get("limit", [8])[0])
+                sigs = OPTION_SIGNALS.generate_single_option_signals(limit=limit)
+                self._send_json(handler, {"signals": sigs, "count": len(sigs)})
                 return True
 
             elif path == "/api/india/options/recommendations":

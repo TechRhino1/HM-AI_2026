@@ -140,6 +140,13 @@ def run_all_india_tests():
             d.get("combined_premium", 0) > 0 and "upper_breakeven" in d,
             "ATM straddle payload invalid"
         )),
+        ("AI Single Entry Option Buy Signals (/api/india/options/single_signals)", "/api/india/options/single_signals", lambda d: (
+            len(d.get("signals", [])) >= 6
+            and all("trade_plan" in s and s["trade_plan"]["target_1_premium"] > s["trade_plan"]["entry_premium"] > s["trade_plan"]["stop_loss_premium"] for s in d["signals"])
+            and any(s["option_type"] == "CE" for s in d["signals"])
+            and any(s["option_type"] == "PE" for s in d["signals"]),
+            "Single option signals invalid or missing CE/PE coverage"
+        )),
         ("AI Recommended Options Spreads (/api/india/options/recommendations)", "/api/india/options/recommendations", lambda d: (
             len(d.get("recommendations", [])) >= 4 and "strategy_name" in d["recommendations"][0],
             "Options recommendations count low or invalid"

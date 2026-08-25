@@ -71,13 +71,163 @@
         // Option Chain Table
         fullChainTbody: document.getElementById("full-chain-tbody"),
 
-        // AI Recommendations Grid
-        aiOptRecGrid: document.getElementById("ai-opt-rec-grid")
+        // AI Multi-Leg Spreads Grid
+        aiOptRecGrid: document.getElementById("ai-opt-rec-grid"),
+
+        // AI Single Entry Option Buying Signals Grid
+        aiSingleSignalsGrid: document.getElementById("ai-single-signals-grid")
     };
 
     /* ==========================================================================
        1. DATA FETCHING & API INTERACTION
        ========================================================================== */
+
+    async function fetchSingleOptionSignals() {
+        if (!el.aiSingleSignalsGrid) return;
+        try {
+            const res = await fetch('/api/india/options/single_signals?limit=12');
+            const data = await res.json();
+            if (data && data.signals && data.signals.length > 0) {
+                state.allSingleSignals = data.signals;
+                renderSingleSignalsDOM(data.signals);
+            }
+        } catch (err) {
+            console.error("Single option signals fetch error:", err);
+        }
+    }
+
+    function renderSingleSignalsDOM(signals) {
+        if (!el.aiSingleSignalsGrid || !signals || signals.length === 0) return;
+
+        let html = "";
+        signals.forEach((s, idx) => {
+            const isCall = s.option_type === "CE";
+            const cardClass = isCall ? "sig-call" : "sig-put";
+            const pillClass = isCall ? "ce" : "pe";
+            const tpGain = s.trade_plan.expected_gain_pct;
+            const slLoss = s.trade_plan.max_loss_pct;
+
+            html += `
+            <div class="single-sig-card ${cardClass}" onclick="window.loadSingleSignalByIndex(${idx})">
+                <div class="sig-card-top-row">
+                    <div>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <span class="sig-contract-name">${s.contract_symbol}</span>
+                            <span class="sig-type-pill ${pillClass}">🟢 ${s.action_label}</span>
+                        </div>
+                        <div style="font-size:10px; color:var(--text-dim); margin-top:2px;">
+                            ${s.name} • Expiry: ${s.expiry} • Lot: ${s.lot_size}
+                        </div>
+                    </div>
+                    <div style="text-align:right;">
+                        <span class="badge-grade-a-plus">🔥 ${s.conviction_score}% POP</span>
+                        <div style="font-size:10px; color:var(--text-dim); margin-top:2px;">Spot: ₹${Number(s.spot_price).toLocaleString()}</div>
+                    </div>
+                </div>
+
+                <div class="sig-plan-grid">
+                    <div>
+                        <div class="sig-plan-item-lbl">Entry Zone</div>
+                        <div class="sig-plan-item-val text-cyan">₹${s.trade_plan.entry_premium}</div>
+                    </div>
+                    <div>
+                        <div class="sig-plan-item-lbl">Target (TP1)</div>
+                        <div class="sig-plan-item-val text-bull">₹${s.trade_plan.target_1_premium} <span style="font-size:9px;">(+${tpGain}%)</span></div>
+                    </div>
+                    <div>
+                        <div class="sig-plan-item-lbl">Target (TP2)</div>
+                        <div class="sig-plan-item-val text-gold">₹${s.trade_plan.target_2_premium}</div>
+                    </div>
+                    <div>
+                        <div class="sig-plan-item-lbl">Stop Loss</div>
+                        <div class="sig-plan-item-val text-bear">₹${s.trade_plan.stop_loss_premium} <span style="font-size:9px;">(-${slLoss}%)</span></div>
+                    </div>
+                </div>
+
+                <div class="sig-capital-row">
+                    <span>Capital Required (1 Lot): <b class="text-white">₹${Number(s.trade_plan.capital_required_per_lot_inr).toLocaleString()}</b></span>
+                    <span>R:R: <b class="text-bull">${s.trade_plan.risk_reward}</b></span>
+                    <span>Delta: <b class="text-cyan">${s.greeks.delta}</b></span>
+                </div>
+
+                <div class="sig-rationale-box">
+                    ${s.rationale}
+                </div>
+
+                <div class="sig-card-actions">
+                    <button class="btn-sig-load" onclick="event.stopPropagation(); window.loadSingleSignalByIndex(${idx})">
+                        ⚡ Load into Payoff & Chart
+                    </button>
+                    <button class="btn-sig-order" onclick="event.stopPropagation(); window.copySingleOrderTicketByIndex(${idx})">
+                        📋 Copy Order Ticket
+                    </button>
+                </div>
+            </div>`;
+        });
+
+        el.aiSingleSignalsGrid.innerHTML = html;
+    }
+
+    window.filterSingleSignals = function (filterType, btn) {
+        document.querySelectorAll(".sig-filter-btn").forEach(b => b.classList.remove("active"));
+        if (btn) btn.classList.add("active");
+
+        if (!state.allSingleSignals) return;
+
+        let filtered = state.allSingleSignals;
+        if (filterType === "CE") {
+            filtered = state.allSingleSignals.filter(s => s.option_type === "CE");
+        } else if (filterType === "PE") {
+            filtered = state.allSingleSignals.filter(s => s.option_type === "PE");
+        } else if (filterType === "INDEX") {
+            filtered = state.allSingleSignals.filter(s => s.is_index);
+        } else if (filterType === "EQUITY") {
+            filtered = state.allSingleSignals.filter(s => !s.is_index);
+        }
+
+        renderSingleSignalsDOM(filtered);
+    };
+
+    window.loadSingleSignalByIndex = function (idx) {
+        if (!state.allSingleSignals || !state.allSingleSignals[idx]) return;
+        const sig = state.allSingleSignals[idx];
+
+        // Switch underlying
+        state.symbol = sig.symbol;
+        document.querySelectorAll(".und-pill").forEach(p => {
+            if (p.textContent.trim().toUpperCase().includes(sig.symbol)) {
+                p.classList.add("active");
+            } else {
+                p.classList.remove("active");
+            }
+        });
+
+        // Set single leg in strategy builder
+        state.legs = [{
+            action: "BUY",
+            type: sig.option_type,
+            strike: sig.strike,
+            price: sig.trade_plan.entry_premium,
+            lots: 1
+        }];
+
+        fetchOptionChain(sig.symbol);
+    };
+
+    window.copySingleOrderTicketByIndex = function (idx) {
+        if (!state.allSingleSignals || !state.allSingleSignals[idx]) return;
+        const sig = state.allSingleSignals[idx];
+        const ticket = sig.broker_order_ticket;
+        const ticketJson = JSON.stringify(ticket, null, 2);
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(ticketJson).then(() => {
+                alert(`📋 Copied Order Ticket for ${sig.contract_symbol} (Entry ₹${sig.trade_plan.entry_premium}, SL ₹${sig.trade_plan.stop_loss_premium}, TP ₹${sig.trade_plan.target_1_premium})!`);
+            });
+        } else {
+            prompt("Broker Order Ticket JSON:", ticketJson);
+        }
+    };
 
     async function fetchOptionRecommendations() {
         if (!el.aiOptRecGrid) return;
@@ -689,6 +839,7 @@
 
     document.addEventListener("DOMContentLoaded", () => {
         fetchOptionChain("NIFTY");
+        fetchSingleOptionSignals();
         fetchOptionRecommendations();
     });
 

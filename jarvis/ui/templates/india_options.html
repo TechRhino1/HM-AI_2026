@@ -119,19 +119,52 @@
     </div>
 
     <!-- ==========================================================================
-         AI RECOMMENDED OPTIONS TRADES & STRATEGIES SHOWCASE
+         AI HIGH-VELOCITY SINGLE ENTRY OPTION BUYING SIGNALS (CE / PE)
+         ========================================================================== -->
+    <div class="opt-single-signals-section">
+        <div class="single-signals-header-bar">
+            <div class="single-signals-title">
+                <span class="pulse-dot"></span>
+                <span style="font-weight:900; font-size:14px; letter-spacing:0.5px; background:linear-gradient(90deg, #00f59b, #ff9900); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">
+                    AI SINGLE ENTRY OPTION BUYING SIGNALS (BUY CE / BUY PE)
+                </span>
+                <span class="badge badge-nse">DELTA-OPTIMIZED ENTRY • TP • SL</span>
+            </div>
+            <!-- Signal Filter Pills -->
+            <div class="single-signal-filters">
+                <button class="sig-filter-btn active" onclick="window.filterSingleSignals('ALL', this)">All Signals</button>
+                <button class="sig-filter-btn" onclick="window.filterSingleSignals('CE', this)">🟢 Buy Calls (CE)</button>
+                <button class="sig-filter-btn" onclick="window.filterSingleSignals('PE', this)">🔴 Buy Puts (PE)</button>
+                <button class="sig-filter-btn" onclick="window.filterSingleSignals('INDEX', this)">⚡ Index Scalps</button>
+                <button class="sig-filter-btn" onclick="window.filterSingleSignals('EQUITY', this)">📊 Stock Momentum</button>
+            </div>
+        </div>
+        <div style="font-size:11px; color:var(--text-dim); margin-bottom:10px;">
+            High-conviction Single Option Contracts calculated using CPR Breakouts, PCR Trend, VWAP Volume, FII Flows & Taylor Series Greek Targets.
+        </div>
+
+        <div id="ai-single-signals-grid" class="single-signals-grid">
+            <!-- Dynamically populated by JS -->
+            <div style="grid-column:1 / -1; text-align:center; padding:16px; color:var(--text-dim); font-size:12px;">
+                Analyzing multi-timeframe order flow, Greeks, and momentum for Single Option Buy triggers...
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================================================
+         AI RECOMMENDED OPTIONS TRADES & STRATEGIES SHOWCASE (MULTI-LEG SPREADS)
          ========================================================================== -->
     <div class="opt-recommendations-section">
         <div class="opt-rec-header-bar">
             <div class="opt-rec-title">
                 <span class="pulse-dot"></span>
                 <span style="font-weight:900; font-size:13px; letter-spacing:0.5px; background:linear-gradient(90deg, #00f59b, #00d4ff); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">
-                    AI RECOMMENDED OPTIONS TRADES (HIGH-CONVICTION SPREADS)
+                    AI RECOMMENDED OPTIONS SPREADS (DEFINED-RISK MULTI-LEG)
                 </span>
-                <span class="badge badge-nse">DEFINED-RISK MULTI-LEG</span>
+                <span class="badge badge-nse">THETA & RANGE HARVEST</span>
             </div>
             <div style="font-size:11px; color:var(--text-dim);">
-                Top algorithmic options setups with positive theta decay, quantified POP %, and asymmetric risk:reward.
+                Top algorithmic options spreads with positive theta decay, quantified POP %, and asymmetric risk:reward.
             </div>
         </div>
 

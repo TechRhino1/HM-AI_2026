@@ -872,3 +872,230 @@ body {
     background: var(--accent-cyan);
     color: #000000;
 }
+
+/* ==========================================================================
+   7. AI HIGH-VELOCITY SINGLE ENTRY OPTION BUYING SIGNALS (CE / PE)
+   ========================================================================== */
+
+.opt-single-signals-section {
+    padding: 14px 24px 0 24px;
+}
+
+.single-signals-header-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.single-signals-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.single-signal-filters {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.sig-filter-btn {
+    background: rgba(30, 41, 59, 0.7);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    padding: 3px 8px;
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.sig-filter-btn:hover {
+    color: #ffffff;
+    border-color: var(--neon-saffron);
+}
+
+.sig-filter-btn.active {
+    background: rgba(255, 153, 0, 0.18);
+    border-color: var(--neon-saffron);
+    color: var(--neon-saffron);
+}
+
+.single-signals-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+    gap: 14px;
+    margin-bottom: 12px;
+}
+
+.single-sig-card {
+    background: linear-gradient(135deg, rgba(13, 20, 36, 0.95), rgba(7, 11, 20, 0.95));
+    border: 1px solid var(--border-subtle);
+    border-radius: 8px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.single-sig-card:hover {
+    border-color: var(--neon-saffron);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 22px rgba(255, 153, 0, 0.18);
+}
+
+.single-sig-card.sig-call::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--neon-bull), var(--accent-cyan));
+}
+
+.single-sig-card.sig-put::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--neon-bear), #ff0055);
+}
+
+.sig-card-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.sig-contract-name {
+    font-size: 16px;
+    font-weight: 900;
+    font-family: var(--font-mono);
+    color: #ffffff;
+}
+
+.sig-type-pill {
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 900;
+}
+
+.sig-type-pill.ce {
+    background: rgba(0, 245, 155, 0.15);
+    border: 1px solid var(--neon-bull);
+    color: var(--neon-bull);
+}
+
+.sig-type-pill.pe {
+    background: rgba(255, 71, 87, 0.15);
+    border: 1px solid var(--neon-bear);
+    color: var(--neon-bear);
+}
+
+.sig-score-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+}
+
+.sig-plan-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 4px;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 8px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(51, 65, 85, 0.3);
+    text-align: center;
+}
+
+.sig-plan-item-lbl {
+    font-size: 8px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+.sig-plan-item-val {
+    font-size: 11px;
+    font-weight: 800;
+    font-family: var(--font-mono);
+}
+
+.sig-capital-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+    color: var(--text-dim);
+    background: rgba(15, 23, 42, 0.5);
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+.sig-rationale-box {
+    font-size: 10px;
+    color: #cbd5e1;
+    line-height: 1.4;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 6px 8px;
+    border-radius: 4px;
+    border-left: 2px solid var(--neon-saffron);
+}
+
+.sig-card-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.btn-sig-load {
+    background: rgba(0, 212, 255, 0.12);
+    border: 1px solid var(--accent-cyan);
+    color: var(--accent-cyan);
+    border-radius: 4px;
+    padding: 6px;
+    font-size: 10px;
+    font-weight: 800;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s ease;
+}
+
+.btn-sig-load:hover {
+    background: var(--accent-cyan);
+    color: #000000;
+}
+
+.btn-sig-order {
+    background: rgba(255, 153, 0, 0.12);
+    border: 1px solid var(--neon-saffron);
+    color: var(--neon-saffron);
+    border-radius: 4px;
+    padding: 6px;
+    font-size: 10px;
+    font-weight: 800;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s ease;
+}
+
+.btn-sig-order:hover {
+    background: var(--neon-saffron);
+    color: #000000;
+}
