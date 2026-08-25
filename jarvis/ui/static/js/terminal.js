@@ -45,7 +45,8 @@
         tvCandleSeries: null,
         tvVolumeSeries: null,
         tvPriceLines: [],
-        tvActiveTradeLines: []
+        tvActiveTradeLines: [],
+        showOverlays: true
     };
 
     // DOM Elements Cache
@@ -375,33 +376,70 @@
 
         // Clear existing Price Lines
         if (state.tvPriceLines && state.tvPriceLines.length > 0) {
-            state.tvPriceLines.forEach(pl => state.tvCandleSeries.removePriceLine(pl));
+            state.tvPriceLines.forEach(pl => {
+                try {
+                    state.tvCandleSeries.removePriceLine(pl);
+                } catch (e) {}
+            });
             state.tvPriceLines = [];
         }
 
         const digits = state.candles[0].close > 100 ? 2 : 5;
 
-        // Draw Active Resistance Level Line
-        const r1Line = state.tvCandleSeries.createPriceLine({
-            price: state.supportResistance.r1,
-            color: '#ff3b5c',
-            lineWidth: 1.5,
-            lineStyle: LightweightCharts.LineStyle.Dashed,
-            axisLabelVisible: true,
-            title: `R1: ${state.supportResistance.r1.toFixed(digits)}`
-        });
+        // Draw Bold Support & Resistance Overlay Lines (if enabled)
+        if (state.showOverlays) {
+            // 1. Primary Resistance Level Line (Bold Neon Crimson)
+            if (state.supportResistance.r1 > 0) {
+                const r1Line = state.tvCandleSeries.createPriceLine({
+                    price: state.supportResistance.r1,
+                    color: '#ff2a5f',
+                    lineWidth: 2.5,
+                    lineStyle: LightweightCharts.LineStyle.Solid,
+                    axisLabelVisible: true,
+                    title: `🔴 RESISTANCE (R1): ${state.supportResistance.r1.toFixed(digits)}`
+                });
+                state.tvPriceLines.push(r1Line);
+            }
 
-        // Draw Active Support Level Line
-        const s1Line = state.tvCandleSeries.createPriceLine({
-            price: state.supportResistance.s1,
-            color: '#00f59b',
-            lineWidth: 1.5,
-            lineStyle: LightweightCharts.LineStyle.Dashed,
-            axisLabelVisible: true,
-            title: `S1: ${state.supportResistance.s1.toFixed(digits)}`
-        });
+            // Secondary Resistance Level Line (Dashed)
+            if (state.supportResistance.r2 > 0 && Math.abs(state.supportResistance.r2 - state.supportResistance.r1) > 1e-4) {
+                const r2Line = state.tvCandleSeries.createPriceLine({
+                    price: state.supportResistance.r2,
+                    color: '#f43f5e',
+                    lineWidth: 1.5,
+                    lineStyle: LightweightCharts.LineStyle.Dashed,
+                    axisLabelVisible: true,
+                    title: `🔴 MAJOR RESISTANCE (R2): ${state.supportResistance.r2.toFixed(digits)}`
+                });
+                state.tvPriceLines.push(r2Line);
+            }
 
-        state.tvPriceLines.push(r1Line, s1Line);
+            // 2. Primary Support Level Line (Bold Neon Mint Emerald)
+            if (state.supportResistance.s1 > 0) {
+                const s1Line = state.tvCandleSeries.createPriceLine({
+                    price: state.supportResistance.s1,
+                    color: '#00f59b',
+                    lineWidth: 2.5,
+                    lineStyle: LightweightCharts.LineStyle.Solid,
+                    axisLabelVisible: true,
+                    title: `🟢 SUPPORT (S1): ${state.supportResistance.s1.toFixed(digits)}`
+                });
+                state.tvPriceLines.push(s1Line);
+            }
+
+            // Secondary Support Level Line (Dashed)
+            if (state.supportResistance.s2 > 0 && Math.abs(state.supportResistance.s2 - state.supportResistance.s1) > 1e-4) {
+                const s2Line = state.tvCandleSeries.createPriceLine({
+                    price: state.supportResistance.s2,
+                    color: '#10b981',
+                    lineWidth: 1.5,
+                    lineStyle: LightweightCharts.LineStyle.Dashed,
+                    axisLabelVisible: true,
+                    title: `🟢 MAJOR SUPPORT (S2): ${state.supportResistance.s2.toFixed(digits)}`
+                });
+                state.tvPriceLines.push(s2Line);
+            }
+        }
 
         // Update Live Header Price
         const last = state.candles[state.candles.length - 1];
@@ -437,12 +475,6 @@
             state.tvActiveTradeLines = [];
         }
 
-        const sym = (state.symbol || "XAUUSD").toUpperCase();
-        const positions = (state.positions || []).filter(p => {
-            const pSym = (p.symbol || "").toUpperCase();
-            return pSym === sym || pSym.includes(sym) || sym.includes(pSym);
-        });
-
         const hudEl = document.getElementById("chart-active-trade-hud");
         const hudTicket = document.getElementById("chart-hud-ticket");
         const hudEntry = document.getElementById("chart-hud-entry");
@@ -450,8 +482,19 @@
         const hudTp = document.getElementById("chart-hud-tp");
         const hudPnl = document.getElementById("chart-hud-pnl");
 
+        if (!state.showOverlays) {
+            if (hudEl) hudEl.style.display = "none";
+            return;
+        }
+
+        const sym = (state.symbol || "XAUUSD").toUpperCase();
+        const positions = (state.positions || []).filter(p => {
+            const pSym = (p.symbol || "").toUpperCase();
+            return pSym === sym || pSym.includes(sym) || sym.includes(pSym);
+        });
+
         if (positions.length > 0) {
-            // Update Active Trade HUD Pill on Chart
+            // Update Active Trade Floating HUD on Chart
             const primaryPos = positions[0];
             if (hudEl) {
                 hudEl.style.display = "flex";
@@ -479,27 +522,27 @@
                 const pnl = Number(pos.profit || 0);
                 const pnlTag = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
 
-                // 1. Live Entry Price Line (Cyan / Blue Solid)
+                // 1. Live Entry Price Line (Cyan for BUY, Purple for SELL — Bold Width 2.5)
                 if (openPr > 0) {
                     const entryLine = state.tvCandleSeries.createPriceLine({
                         price: openPr,
-                        color: isBuy ? "#38bdf8" : "#f59e0b",
-                        lineWidth: 2,
+                        color: isBuy ? "#00d4ff" : "#c084fc",
+                        lineWidth: 2.5,
                         lineStyle: LightweightCharts.LineStyle.Solid,
                         axisLabelVisible: true,
-                        title: `OPEN #${pos.ticket} ${pos.type} ${lots}L @ ${formatPrice(openPr, pos.symbol)} [${pnlTag}]`
+                        title: `${isBuy ? '🔵 BUY' : '🟣 SELL'} #${pos.ticket} (${lots}L) @ ${formatPrice(openPr, pos.symbol)} [${pnlTag}]`
                     });
                     state.tvActiveTradeLines.push(entryLine);
                 }
 
-                // 2. Real-Time Trailing Stop Loss Line (Neon Red or Gold when locked)
+                // 2. Real-Time Trailing Stop Loss Line (Crimson Red when at risk, Golden Amber when locked)
                 if (slPr > 0) {
                     const isProfitLocked = isBuy ? (slPr >= openPr) : (slPr <= openPr);
-                    const lockStatus = isProfitLocked ? "🔒 LOCKED" : "TRAIL SL";
+                    const lockStatus = isProfitLocked ? "🔒 LOCKED" : "🛡️ TRAIL SL";
                     const slLine = state.tvCandleSeries.createPriceLine({
                         price: slPr,
-                        color: isProfitLocked ? "#f59e0b" : "#ff3b5c",
-                        lineWidth: 2,
+                        color: isProfitLocked ? "#fbbf24" : "#ff0055",
+                        lineWidth: 2.5,
                         lineStyle: LightweightCharts.LineStyle.Dashed,
                         axisLabelVisible: true,
                         title: `SL #${pos.ticket} (${lockStatus}) @ ${formatPrice(slPr, pos.symbol)}`
@@ -507,21 +550,21 @@
                     state.tvActiveTradeLines.push(slLine);
                 }
 
-                // 3. Real-Time Take Profit Line (Neon Green)
+                // 3. Real-Time Take Profit Line (Vivid Neon Emerald Green — Width 2)
                 if (tpPr > 0) {
                     const tpLine = state.tvCandleSeries.createPriceLine({
                         price: tpPr,
-                        color: "#00f59b",
+                        color: "#00ff88",
                         lineWidth: 2,
                         lineStyle: LightweightCharts.LineStyle.Dashed,
                         axisLabelVisible: true,
-                        title: `TP #${pos.ticket} @ ${formatPrice(tpPr, pos.symbol)}`
+                        title: `🎯 TP #${pos.ticket} @ ${formatPrice(tpPr, pos.symbol)}`
                     });
                     state.tvActiveTradeLines.push(tpLine);
                 }
             });
         } else {
-            // No active positions on this symbol: check if an AI Planned Setup exists
+            // No active positions on this symbol: render AI Planned Setup Bracket if available
             const activeDec = state.latestDecisions ? state.latestDecisions[state.symbol] : null;
             if (activeDec && activeDec.entry_price && activeDec.stop_loss && Math.abs(activeDec.entry_price - activeDec.stop_loss) > 1e-5) {
                 if (hudEl) {
@@ -540,37 +583,37 @@
                     }
                 }
 
-                // Draw Planned Entry (Dotted Cyan)
+                // Draw Planned Entry (Dotted Sky Blue)
                 const planEntryLine = state.tvCandleSeries.createPriceLine({
                     price: Number(activeDec.entry_price),
-                    color: "rgba(56, 189, 248, 0.75)",
+                    color: "rgba(56, 189, 248, 0.85)",
                     lineWidth: 1.5,
                     lineStyle: LightweightCharts.LineStyle.Dotted,
                     axisLabelVisible: true,
-                    title: `AI PLAN ${activeDec.bias || 'BUY'} @ ${formatPrice(activeDec.entry_price, state.symbol)}`
+                    title: `📋 AI SETUP ${activeDec.bias || 'BUY'} @ ${formatPrice(activeDec.entry_price, state.symbol)}`
                 });
                 state.tvActiveTradeLines.push(planEntryLine);
 
-                // Draw Planned SL (Dotted Red)
+                // Draw Planned SL (Dotted Coral Red)
                 const planSlLine = state.tvCandleSeries.createPriceLine({
                     price: Number(activeDec.stop_loss),
-                    color: "rgba(255, 59, 92, 0.75)",
+                    color: "rgba(255, 59, 92, 0.85)",
                     lineWidth: 1.5,
                     lineStyle: LightweightCharts.LineStyle.Dotted,
                     axisLabelVisible: true,
-                    title: `AI PLAN SL @ ${formatPrice(activeDec.stop_loss, state.symbol)}`
+                    title: `📋 AI SETUP SL @ ${formatPrice(activeDec.stop_loss, state.symbol)}`
                 });
                 state.tvActiveTradeLines.push(planSlLine);
 
-                // Draw Planned TP (Dotted Green)
+                // Draw Planned TP (Dotted Mint Green)
                 if (activeDec.take_profit && Number(activeDec.take_profit) > 0) {
                     const planTpLine = state.tvCandleSeries.createPriceLine({
                         price: Number(activeDec.take_profit),
-                        color: "rgba(0, 245, 155, 0.75)",
+                        color: "rgba(0, 255, 136, 0.85)",
                         lineWidth: 1.5,
                         lineStyle: LightweightCharts.LineStyle.Dotted,
                         axisLabelVisible: true,
-                        title: `AI PLAN TP @ ${formatPrice(activeDec.take_profit, state.symbol)}`
+                        title: `📋 AI SETUP TP (${Number(activeDec.risk_reward_ratio || 2.0).toFixed(1)}R) @ ${formatPrice(activeDec.take_profit, state.symbol)}`
                     });
                     state.tvActiveTradeLines.push(planTpLine);
                 }
@@ -579,6 +622,18 @@
             }
         }
     }
+
+    window.toggleChartOverlays = function () {
+        state.showOverlays = !state.showOverlays;
+        const btn = document.getElementById("btn-toggle-overlays");
+        if (btn) {
+            btn.textContent = state.showOverlays ? "📍 Levels: ON" : "📍 Levels: OFF";
+            btn.classList.toggle("active", state.showOverlays);
+            btn.classList.toggle("disabled", !state.showOverlays);
+        }
+        renderTradingViewChartData();
+        updateChartTradeOverlays();
+    };
 
     function initTradingViewAdvancedWidget() {
         if (!el.tvProContainer) return;
