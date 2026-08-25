@@ -568,6 +568,10 @@
         // Render TradingView Chart
         initDossierChart(data.candles, data.support_resistance);
 
+        // Store state & update live position sizing calculator
+        state.currentDossier = data;
+        window.updatePositionCalculator();
+
         // Display Modal
         if (el.dossierModal) {
             el.dossierModal.style.display = "flex";
@@ -685,20 +689,6 @@
         state.candleSeries = candleSeries;
         state.volumeSeries = volumeSeries;
     }
-
-    // Render TradingView Chart
-    initDossierChart(data.candles, data.support_resistance);
-
-    // Store state & update live position sizing calculator
-    state.currentDossier = data;
-    window.updatePositionCalculator();
-
-    // Display Modal
-    if (el.dossierModal) {
-        el.dossierModal.style.display = "flex";
-        state.dossierOpen = true;
-    }
-}
 
 /* ==========================================================================
    4. POSITION SIZE & RISK CALCULATOR
