@@ -344,6 +344,15 @@ class RiskEngine:
                 is_second_trade=is_second_trade
             )
 
+            if lots <= 0.0:
+                return {
+                    "authorized": False,
+                    "lots": 0.0,
+                    "reasons": ["Risk Ceiling Exceeded: Minimum tradeable lot size exceeds safe account risk limits."],
+                    "heat_score": heat_res.score,
+                    "heat_zone": heat_res.zone
+                }
+
             # Final backstop checks
             cb_final = self.circuit_breaker.check_status()
             if cb_final.get("active"):

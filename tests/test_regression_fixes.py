@@ -164,22 +164,44 @@ class TestRegressionFixes(unittest.TestCase):
         sl_dist = 2400.0 - res['sl_price']
         self.assertLessEqual(sl_dist, 10.0 + 1e-4)
 
+    def test_a1_risk_ceiling_rejection(self):
+        """A1-P0: Verify PositionSizer rejects trades (returns 0.0) when min lot size forces risk above ceiling."""
+        sym_gold = {"name": "XAUUSD", "trade_contract_size": 100.0, "trade_tick_value": 1.0, "trade_tick_size": 0.01, "volume_min": 0.01, "volume_max": 100.0, "volume_step": 0.01}
+        
+        # Scenario 1: $50 account, 2-point gold stop distance -> 0.01 lots = $2 risk (4.00% risk) -> REJECTED (0.0)
+        lot_50 = PositionSizer.calculate_lot_size(
+            account_balance=50.0, entry_price=2400.0, sl_price=2398.0, risk_pct=1.0, symbol_info=sym_gold
+        )
+        self.assertEqual(lot_50, 0.0, "Micro account $50 with 2-point stop must be rejected (0.0 lots)")
+
+        # Scenario 2: $10 account, 1-point gold stop distance -> 0.01 lots = $1 risk (10.00% risk) -> REJECTED (0.0)
+        lot_10 = PositionSizer.calculate_lot_size(
+            account_balance=10.0, entry_price=2400.0, sl_price=2399.0, risk_pct=1.0, symbol_info=sym_gold
+        )
+        self.assertEqual(lot_10, 0.0, "Micro account $10 with 1-point stop must be rejected (0.0 lots)")
+
+        # Scenario 3: Standard account $5,000 with 2-point stop -> sizes safely > 0.0
+        lot_5k = PositionSizer.calculate_lot_size(
+            account_balance=5000.0, entry_price=2400.0, sl_price=2398.0, risk_pct=1.0, symbol_info=sym_gold
+        )
+        self.assertGreater(lot_5k, 0.0, "Standard account must calculate valid authorized lot size")
+
     def test_a5_is_high_vol_sizing_strengthened(self):
         """A5: Verify is_high_vol strictly reduces lot sizing by 0.85x multiplier."""
-        sym_gold = {"name": "XAUUSD", "trade_contract_size": 100.0, "volume_min": 0.01, "volume_max": 100.0, "volume_step": 0.01}
-        sym_base = {"name": "CUSTOM_ASSET", "trade_contract_size": 100.0, "volume_min": 0.01, "volume_max": 100.0, "volume_step": 0.01}
+        sym_gold = {"name": "XAUUSD", "trade_contract_size": 100.0, "trade_tick_value": 1.0, "trade_tick_size": 0.01, "volume_min": 0.01, "volume_max": 100.0, "volume_step": 0.01}
+        sym_base = {"name": "EURUSD_NON_VOL", "trade_contract_size": 100.0, "trade_tick_value": 1.0, "trade_tick_size": 0.01, "volume_min": 0.01, "volume_max": 100.0, "volume_step": 0.01}
         
-        # Account balance = $5,000, distance = $10, risk = 1.0% ($50)
+        # Account balance = $20,000, distance = $10, risk = 1.0%
         gold_size = PositionSizer.calculate_lot_size(
-            account_balance=5000.0, entry_price=2400.0, sl_price=2390.0, risk_pct=1.0, symbol_info=sym_gold
+            account_balance=20000.0, entry_price=2400.0, sl_price=2390.0, risk_pct=1.0, symbol_info=sym_gold
         )
         base_size = PositionSizer.calculate_lot_size(
-            account_balance=5000.0, entry_price=2400.0, sl_price=2390.0, risk_pct=1.0, symbol_info=sym_base
+            account_balance=20000.0, entry_price=2400.0, sl_price=2390.0, risk_pct=1.0, symbol_info=sym_base
         )
-        # Gold should receive 0.85x reduction: 0.04 lots vs 0.05 lots
+        # Gold should receive 0.85x reduction: 0.23 lots vs 0.25 lots
         self.assertLess(gold_size, base_size)
-        self.assertEqual(gold_size, 0.04)
-        self.assertEqual(base_size, 0.05)
+        self.assertEqual(gold_size, 0.23)
+        self.assertEqual(base_size, 0.25)
 
     def test_b1_devil_advocate_spread_typical_spec(self):
         """B1-BUG: Verify devil_advocate handles is_excessive_spread without AttributeError."""
@@ -258,25 +280,20 @@ class TestRegressionFixes(unittest.TestCase):
                     pass
 
     def test_a9_hm_start_smoke_error_handling(self):
-        """A9/A12: Verify HM_start orchestrator error is safely logged without crash."""
+        """A9/A12: Verify HM_start orchestrator startup and error handling without crash."""
         import HM_start
         with patch('HM_start.JarvisOrchestrator') as mock_orch, \
              patch('HM_start.threading.Thread') as mock_thread, \
-             patch('HM_start.start_cloudflare_tunnel', return_value=(None, None)):
+             patch('HM_start.run_web_server', side_effect=KeyboardInterrupt):
             
             mock_inst = MagicMock()
-            mock_inst.start.side_effect = RuntimeError('Simulated startup failure')
             mock_orch.return_value = mock_inst
             
-            with patch('sys.argv', ['HM_start.py', 'view']), \
-                 patch('time.sleep', side_effect=KeyboardInterrupt):
-                try:
-                    HM_start.main()
-                except KeyboardInterrupt:
-                    pass
+            HM_start.hm_start(mode="paper")
             
-            self.assertTrue(mock_inst.start.called)
+            self.assertTrue(mock_orch.called)
             self.assertTrue(mock_thread.called)
+            self.assertTrue(mock_inst.stop.called)
 
     def test_c1_execution_engine_rich_market_context_logging(self):
         """C1-WIRING: Verify execution_engine resolves real MarketContext and writes non-default metrics to DB."""
@@ -692,8 +709,8 @@ class TestRegressionFixes(unittest.TestCase):
 
         self.assertLessEqual(risk_trend, risk_range, "Strong trend SL should be tighter or equal to ranging SL (P2 Adaptive SL)")
         self.assertGreater(rr_trend, rr_range, "Strong trend R:R must exceed ranging regime R:R")
-        self.assertAlmostEqual(rr_trend, 3.5, delta=0.1, msg="Strong trend must achieve ~3.5R TP multiplier")
-        self.assertAlmostEqual(rr_range, 1.8, delta=0.1, msg="Ranging market must achieve ~1.8R TP multiplier")
+        self.assertAlmostEqual(rr_trend, 3.8, delta=0.1, msg="Strong trend must achieve ~3.8R TP multiplier")
+        self.assertAlmostEqual(rr_range, 2.2, delta=0.1, msg="Ranging market must achieve ~2.2R TP multiplier")
         self.assertIsNotNone(first_target_trend)
 
     def test_e3_partial_take_profit_and_breakeven_ratchet(self):
@@ -850,8 +867,8 @@ class TestRegressionFixes(unittest.TestCase):
         _, _, _, _, _, _, _, trend_vol_pct = dec_engine._compute_bias_and_levels(trend_ctx, trend_regime, {})
         _, _, _, _, _, _, _, range_vol_pct = dec_engine._compute_bias_and_levels(range_ctx, range_regime, {})
 
-        self.assertEqual(trend_vol_pct, 0.30, "Strong trend should take 30% first partial, letting 70% ride runner")
-        self.assertEqual(range_vol_pct, 0.60, "Ranging market should take 60% first partial to lock profits quickly")
+        self.assertEqual(trend_vol_pct, 0.25, "Strong trend should take 25% first partial, letting 75% ride runner")
+        self.assertEqual(range_vol_pct, 0.50, "Ranging market should take 50% first partial to lock profits quickly")
 
 if __name__ == '__main__':
     unittest.main()

@@ -55,3 +55,6 @@ scratch/
 
 # AntiGravity system files
 .system_generated/
+jarvis_online_ml_weights.json
+scratch_*.json
+

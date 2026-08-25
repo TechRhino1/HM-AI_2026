@@ -48,6 +48,11 @@ def hm_start(mode: str = "live", port: int = 8501, host: str = "0.0.0.0"):
         orchestrator.stop()
         print("\n[SHUTDOWN] HM AI 4.0 stopped cleanly.")
 
+def main():
+    mode = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("-") else "live"
+    hm_start(mode=mode)
+
 if __name__ == "__main__":
-    hm_start(mode="live", port=8501, host="0.0.0.0")
+    main()
+
 

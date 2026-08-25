@@ -76,13 +76,13 @@ class TestJarvisCore(unittest.TestCase):
         self.assertTrue(jpy.is_jpy_quote)
 
     def test_position_sizer_floor(self):
-        """§8: Verify position sizing does not crash and calculates lots correctly."""
+        """§8: Verify position sizing does not crash and calculates lots correctly at floor."""
         lots = PositionSizer.calculate_lot_size(
-            account_balance=80.0,
+            account_balance=1000.0,
             entry_price=4350.0,
             sl_price=4340.0,
             risk_pct=0.5,
-            symbol_info={"trade_contract_size": 100.0, "volume_min": 0.01, "volume_max": 10.0, "volume_step": 0.01}
+            symbol_info={"name": "XAUUSD", "trade_contract_size": 100.0, "volume_min": 0.01, "volume_max": 10.0, "volume_step": 0.01}
         )
         self.assertGreaterEqual(lots, 0.01)
 

@@ -147,6 +147,25 @@ class MT5Client:
             except Exception as e:
                 logger.error(f"Failed to fetch live MT5 account snapshot: {e}")
 
+        if self.mode == "paper":
+            with self._lock:
+                paper_pnl = sum(getattr(p, "profit", 0.0) for p in self._paper_positions.values())
+            return AccountSnapshot(
+                login=999999,
+                server="JARVIS-PAPER",
+                balance=10000.0,
+                equity=10000.0 + paper_pnl,
+                margin=0.0,
+                free_margin=10000.0 + paper_pnl,
+                margin_level=0.0,
+                leverage=100,
+                profit=paper_pnl,
+                name="Paper Account",
+                company="JARVIS Simulator",
+                currency="USD",
+                trade_allowed=True
+            )
+
         # Dynamic Offline / Disconnected State (Zero Hardcoded Mock Data)
         return AccountSnapshot(
             login=0,

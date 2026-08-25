@@ -1,7 +1,7 @@
 import unittest
 from jarvis.backtesting.engine import BacktestEngine
 from jarvis.backtesting.monte_carlo import MonteCarloSimulator
-from jarvis.backtesting.walk_forward import WalkForwardValidator
+from jarvis.backtesting.walk_forward import WalkForwardEngine, WalkForwardValidator
 from jarvis.market.data_feed import DataFeedEngine
 
 class TestBacktestingLab(unittest.TestCase):
@@ -27,9 +27,11 @@ class TestBacktestingLab(unittest.TestCase):
         self.assertGreater(res["median_final_balance"], 0.0)
 
     def test_walk_forward(self):
-        wf = WalkForwardValidator(train_bars=100, test_bars=50)
-        res = wf.run_walk_forward(self.df, symbol="XAUUSD")
-        self.assertGreaterEqual(res["total_windows"], 1)
+        wf = WalkForwardEngine(num_folds=2, in_sample_pct=0.70, initial_balance=10000.0, risk_per_trade_pct=0.5)
+        res = wf.run_walk_forward_validation(self.df, symbol="XAUUSD")
+        self.assertIn("walk_forward_efficiency", res)
+        self.assertIn("fold_results", res)
+        self.assertGreaterEqual(len(res["fold_results"]), 1)
 
 if __name__ == "__main__":
     unittest.main()

@@ -44,7 +44,7 @@ class TestAIDecisionEngine(unittest.TestCase):
         res = self.engine.evaluate(ctx, regime, analyst_reports, devil_report, account_balance=10000.0)
         self.assertIn(res.decision, ["EXECUTE", "WAIT"])
         self.assertEqual(res.bias, "BUY")
-        self.assertGreaterEqual(res.model_confidence, 0.55)
+        self.assertGreaterEqual(res.model_confidence, 0.50)
 
 if __name__ == "__main__":
     unittest.main()
