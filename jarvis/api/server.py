@@ -36,7 +36,7 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     root_dir = os.path.dirname(base_dir)
 
-    def _check_auth(self) -> bool:
+    def _extract_token(self) -> str:
         auth_header = self.headers.get("Authorization", "")
         cookie_header = self.headers.get("Cookie", "")
         token = ""
@@ -58,10 +58,16 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             token = query.get("token", [""])[0]
 
-        if not token:
-            return False
+        return token
 
+    def _get_auth_user(self) -> Optional[Dict[str, Any]]:
+        token = self._extract_token()
+        if not token:
+            return None
         return RemoteAuthEngine.validate_token(token)
+
+    def _check_auth(self) -> bool:
+        return self._get_auth_user() is not None
 
 
     @classmethod
@@ -273,6 +279,12 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                 from jarvis.market.news import GLOBAL_NEWS_ENGINE
                 news_items = GLOBAL_NEWS_ENGINE.get_news_calendar()
                 self._send_json({"news": news_items, "timestamp": datetime.now(timezone.utc).isoformat()})
+            elif path in ["/api/auth/me", "/api/auth/verify"]:
+                user = self._get_auth_user()
+                if user:
+                    self._send_json({"status": "AUTHENTICATED", "valid": True, "user": user})
+                else:
+                    self._send_json({"status": "UNAUTHORIZED", "valid": False, "error": "Not authenticated"}, status_code=401)
             elif path == "/api/diagnostics":
                 snap = self.state_manager.get_state_snapshot()
                 self._send_json({
@@ -301,19 +313,39 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
 
             # Remote Access Authentication Endpoints
             if path == "/api/auth/login":
-                username = data.get("username", "")
-                password = data.get("password", "")
-                if RemoteAuthEngine.verify_credentials(username, password):
+                username = data.get("username", "").strip()
+                password = data.get("password", "").strip()
+                user_info = RemoteAuthEngine.verify_credentials(username, password)
+                if user_info:
                     session_info = RemoteAuthEngine.create_session_token(username)
                     self._send_json(session_info)
                 else:
-                    self._send_json({"status": "UNAUTHORIZED", "error": "Invalid remote access credentials"}, status_code=401)
+                    self._send_json({"status": "UNAUTHORIZED", "error": "Invalid username or password"}, status_code=401)
+                return
+            elif path == "/api/auth/logout":
+                token = self._extract_token()
+                RemoteAuthEngine.revoke_token(token)
+                self._send_json({"status": "LOGGED_OUT", "message": "Session terminated successfully"})
                 return
             elif path == "/api/auth/verify":
-                if self._check_auth():
-                    self._send_json({"status": "AUTHENTICATED", "valid": True})
+                user = self._get_auth_user()
+                if user:
+                    self._send_json({"status": "AUTHENTICATED", "valid": True, "user": user})
                 else:
-                    self._send_json({"status": "UNAUTHORIZED", "valid": False}, status_code=401)
+                    self._send_json({"status": "UNAUTHORIZED", "valid": False, "error": "Invalid or expired session"}, status_code=401)
+                return
+            elif path == "/api/auth/change_password":
+                user = self._get_auth_user()
+                if not user:
+                    self._send_json({"status": "UNAUTHORIZED", "error": "Authentication required"}, status_code=401)
+                    return
+                old_pwd = data.get("old_password", "")
+                new_pwd = data.get("new_password", "")
+                success, msg = RemoteAuthEngine.change_password(user["username"], old_pwd, new_pwd)
+                if success:
+                    self._send_json({"status": "SUCCESS", "message": msg})
+                else:
+                    self._send_json({"status": "FAILED", "error": msg}, status_code=400)
                 return
 
             # Protected Action Endpoints — Require Authentication
