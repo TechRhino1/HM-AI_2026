@@ -262,6 +262,21 @@
         state.tvCandleSeries = candleSeries;
         state.tvVolumeSeries = volumeSeries;
 
+        // Automatically resize chart whenever container dimensions change
+        if (window.ResizeObserver && el.tvLiveContainer) {
+            const ro = new ResizeObserver(entries => {
+                for (const entry of entries) {
+                    if (entry.contentRect && entry.contentRect.width > 0 && entry.contentRect.height > 0) {
+                        chart.applyOptions({
+                            width: entry.contentRect.width,
+                            height: entry.contentRect.height
+                        });
+                    }
+                }
+            });
+            ro.observe(el.tvLiveContainer);
+        }
+
         // Subscribe to crosshair move for Smart Tooltip
         chart.subscribeCrosshairMove(param => {
             if (!param.time || !param.seriesData || !param.point) {
@@ -369,6 +384,21 @@
         const sortedCandles = Array.from(candleMap.values()).sort((a, b) => a.time - b.time);
         if (sortedCandles.length === 0) return;
 
+        const firstClose = sortedCandles[0].close;
+        const digits = firstClose > 100 ? 2 : (firstClose > 10 ? 3 : 5);
+        const minMove = Math.pow(10, -digits);
+
+        // Dynamically adjust price precision for the active symbol (e.g. BTC/Gold 2 decimals vs Forex 5 decimals)
+        if (state.tvCandleSeries) {
+            state.tvCandleSeries.applyOptions({
+                priceFormat: {
+                    type: "price",
+                    precision: digits,
+                    minMove: minMove
+                }
+            });
+        }
+
         const formattedCandles = sortedCandles.map(c => ({
             time: c.time,
             open: c.open,
@@ -386,6 +416,11 @@
         state.tvCandleSeries.setData(formattedCandles);
         state.tvVolumeSeries.setData(formattedVolumes);
 
+        // Auto-scale viewport to newly loaded symbol data
+        if (state.tvChartInstance) {
+            state.tvChartInstance.timeScale().fitContent();
+        }
+
         calculateSupportResistance(sortedCandles);
 
         // Clear existing Price Lines
@@ -397,8 +432,6 @@
             });
             state.tvPriceLines = [];
         }
-
-        const digits = sortedCandles[0].close > 100 ? 2 : 5;
 
         // Draw Bold Support & Resistance Overlay Lines with Short Clean Names
         if (state.showOverlays) {
@@ -686,11 +719,16 @@
        2. REAL-TIME DATA FETCHING & TELEMETRY
        ========================================================================== */
 
+    let candleFetchSeq = 0;
     async function fetchCandles() {
+        const seq = ++candleFetchSeq;
+        const requestedSym = state.symbol || "XAUUSD";
+        const requestedTf = state.timeframe || "H1";
         try {
-            const res = await fetch(`/api/candles?symbol=${state.symbol}&tf=${state.timeframe}`);
+            const res = await fetch(`/api/candles?symbol=${requestedSym}&tf=${requestedTf}`);
             const data = await res.json();
-            if (data && data.candles) {
+            if (seq !== candleFetchSeq) return; // Discard out-of-order stale response
+            if (data && data.candles && Array.isArray(data.candles)) {
                 state.candles = data.candles;
                 if (state.chartMode === "tv_live") {
                     renderTradingViewChartData();
@@ -2099,6 +2137,7 @@
        ========================================================================== */
 
     window.selectSymbol = function (sym) {
+        if (!sym) return;
         state.symbol = sym;
         if (el.chartSymbol) el.chartSymbol.textContent = sym;
         if (el.deskActiveSymbol) el.deskActiveSymbol.textContent = sym;
@@ -2121,6 +2160,17 @@
 
         updateMarketStatusDisplay(sym);
         renderScannerRadarDOM(state.radarOpportunities);
+
+        if (state.chartMode === "tv_live") {
+            if (!state.tvChartInstance) {
+                initTradingViewLightweightChart();
+            } else if (el.tvLiveContainer) {
+                const w = el.tvLiveContainer.clientWidth || 600;
+                const h = el.tvLiveContainer.clientHeight || 340;
+                state.tvChartInstance.applyOptions({ width: w, height: h });
+            }
+        }
+
         fetchCandles();
         fetchTelemetry();
 
