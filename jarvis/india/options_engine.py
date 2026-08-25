@@ -1,8 +1,9 @@
 """
 JARVIS AI 3.0 — Institutional India Options Intelligence & Multi-Leg Derivatives Suite
-Computes live CE/PE Option Chains, analytical Greeks, Strike-wise OI Distribution,
-ATM Straddle & Strangle Premium Decay, Interactive Multi-Leg Payoff Curves (Sensibull/Opstra style),
-and 1-click multi-broker basket orders.
+Supports complete Option Buying (Long CE/PE), Option Selling/Writing (Short CE/PE),
+and 12 Institutional Defined-Risk Strategies (Bull Call, Bear Put, Bull Put Credit, Bear Call Credit,
+Short Straddle, Short Strangle, Iron Condor, Iron Butterfly, Long Straddle, Long Strangle).
+Includes SEBI hedge margin benefit math, portfolio Greeks, and smart-sequenced broker baskets.
 """
 import math
 import random
@@ -197,8 +198,7 @@ class IndiaOptionsEngine:
     ) -> Dict[str, Any]:
         """
         Computes analytical continuous Multi-Leg Options Payoff Curve across spot prices (Sensibull/Opstra algorithm).
-        - legs: list of dicts:
-            { "action": "BUY"|"SELL", "type": "CE"|"PE", "strike": float, "price": float, "lots": int }
+        Calculates SEBI SPAN + Exposure gross margin, hedge margin benefit, and net margin.
         """
         profile = get_india_profile(symbol)
         spot = float(profile.get("base_price", 1000.0))
@@ -231,7 +231,11 @@ class IndiaOptionsEngine:
         curve_target = []
 
         total_net_debit_inr = 0.0
-        total_margin_req = 0.0
+        upfront_premium_paid = 0.0
+        premium_received = 0.0
+        gross_short_margin = 0.0
+        has_short_legs = False
+        has_long_legs = False
 
         # Portfolio Greeks at Current Spot
         port_delta = 0.0
@@ -240,14 +244,25 @@ class IndiaOptionsEngine:
         port_vega = 0.0
 
         for leg in legs:
-            action_sign = 1.0 if leg["action"].upper() == "BUY" else -1.0
+            action = leg["action"].upper()
+            action_sign = 1.0 if action == "BUY" else -1.0
             lots = int(leg.get("lots", 1))
             total_qty = lots * lot_size
             k = float(leg["strike"])
             prem = float(leg["price"])
             is_call = (leg["type"].upper() == "CE")
 
-            total_net_debit_inr += (action_sign * prem * total_qty)
+            leg_cost = action_sign * prem * total_qty
+            total_net_debit_inr += leg_cost
+
+            if action == "BUY":
+                upfront_premium_paid += (prem * total_qty)
+                has_long_legs = True
+            else:
+                premium_received += (prem * total_qty)
+                has_short_legs = True
+                # SEBI SPAN + Exposure gross estimate per short lot (~13.5% of contract value)
+                gross_short_margin += (spot * total_qty * 0.135)
 
             # Greek contribution
             g = GREEKS_ENGINE.calculate_greeks(
@@ -262,12 +277,19 @@ class IndiaOptionsEngine:
             port_theta_day += (action_sign * g_item["theta"] * total_qty)
             port_vega += (action_sign * g_item["vega"] * total_qty)
 
-            # Margin rough estimate
-            if leg["action"].upper() == "SELL":
-                total_margin_req += (spot * total_qty * 0.14)
-
-        if total_margin_req == 0:
-            total_margin_req = max(1000.0, abs(total_net_debit_inr))
+        # SEBI Hedge Margin Benefit Calculation
+        if has_short_legs and has_long_legs:
+            # Hedged spread: SEBI provides up to 72% margin benefit
+            hedge_benefit_inr = round(gross_short_margin * 0.72, 2)
+            estimated_final_margin = max(upfront_premium_paid, round((gross_short_margin - hedge_benefit_inr) + max(0.0, total_net_debit_inr), 2))
+        elif has_short_legs:
+            # Naked short options: Full SPAN + Exposure required
+            hedge_benefit_inr = 0.0
+            estimated_final_margin = round(gross_short_margin, 2)
+        else:
+            # Pure Option Buying: Only upfront premium required
+            hedge_benefit_inr = 0.0
+            estimated_final_margin = round(upfront_premium_paid, 2)
 
         # Compute P&L across all spot prices in grid
         for test_s in spot_grid:
@@ -312,7 +334,6 @@ class IndiaOptionsEngine:
             p1 = curve_expiry[i]
             p2 = curve_expiry[i+1]
             if (p1 <= 0 and p2 >= 0) or (p1 >= 0 and p2 <= 0):
-                # Interpolate
                 s1, s2 = spot_grid[i], spot_grid[i+1]
                 be_s = round(s1 + (abs(p1) / max(0.001, abs(p1) + abs(p2))) * (s2 - s1), 2)
                 breakevens.append(be_s)
@@ -322,12 +343,13 @@ class IndiaOptionsEngine:
         pop_pct = round((profit_count / float(len(curve_expiry))) * 100.0, 1)
         pop_pct = max(15.0, min(88.0, pop_pct))
 
-        # Basket Order Ticket (Zerodha Kite Basket JSON + string)
+        # Smart-Sequenced Basket Order (BUY orders placed FIRST for SEBI margin benefit)
+        sorted_legs = sorted(legs, key=lambda l: 0 if l["action"].upper() == "BUY" else 1)
         basket_orders = []
-        for leg in legs:
+        for leg in sorted_legs:
             basket_orders.append({
                 "variety": "regular",
-                "tradingsymbol": f"{symbol}{expiry_info['current_expiry'][:2]}{expiry_info['current_expiry'][3:6].upper()}{int(leg['strike'])}{leg['type']}",
+                "tradingsymbol": f"{symbol}{expiry_info['current_expiry'][:2]}{expiry_info['current_expiry'][3:6].upper()}{int(leg['strike'])}{leg['type'].upper()}",
                 "exchange": "NFO",
                 "transaction_type": leg["action"].upper(),
                 "order_type": "LIMIT",
@@ -352,7 +374,13 @@ class IndiaOptionsEngine:
             "breakevens": breakevens,
             "probability_of_profit_pct": pop_pct,
             "net_debit_or_credit_inr": round(total_net_debit_inr, 2),
-            "estimated_margin_inr": round(total_margin_req, 2),
+            "margin_breakdown": {
+                "upfront_premium_inr": round(upfront_premium_paid, 2),
+                "gross_margin_inr": round(gross_short_margin, 2),
+                "hedge_benefit_inr": round(hedge_benefit_inr, 2),
+                "final_margin_required_inr": round(estimated_final_margin, 2)
+            },
+            "estimated_margin_inr": round(estimated_final_margin, 2),
             "portfolio_greeks": {
                 "net_delta": round(port_delta, 2),
                 "net_gamma": round(port_gamma, 4),
@@ -368,7 +396,7 @@ class IndiaOptionsEngine:
         bias: str = "BULLISH"
     ) -> Dict[str, Any]:
         """
-        Formulates high-conviction pre-packaged AI options strategy with full payoff matrix.
+        Formulates 12 Pre-Packaged Institutional Indian Options Strategies (Buying, Selling, Credit/Debit Spreads).
         """
         chain_data = self.generate_option_chain(symbol)
         spot = chain_data["spot_price"]
@@ -376,7 +404,10 @@ class IndiaOptionsEngine:
         step = chain_data["strike_step"]
         expiry = chain_data["expiry"]
 
-        if bias.upper() == "BULLISH":
+        strat_key = bias.upper().strip()
+
+        # 1. BULL CALL SPREAD (Debit)
+        if strat_key in ["BULLISH", "BULL_CALL_SPREAD"]:
             buy_strike = atm
             sell_strike = atm + (2 * step)
             buy_leg = next((r["call"] for r in chain_data["chain"] if r["strike"] == buy_strike), None)
@@ -385,10 +416,34 @@ class IndiaOptionsEngine:
                 {"action": "BUY", "type": "CE", "strike": buy_strike, "expiry": expiry, "price": buy_leg["ltp"] if buy_leg else round(spot * 0.02, 2), "lots": 1},
                 {"action": "SELL", "type": "CE", "strike": sell_strike, "expiry": expiry, "price": sell_leg["ltp"] if sell_leg else round(spot * 0.009, 2), "lots": 1}
             ]
-            strat_name = "BULL CALL VERTICAL SPREAD"
-            rationale = f"Capitalizes on upside breakout towards ₹{sell_strike} while capping volatility risk and theta decay."
+            strat_name = "BULL CALL VERTICAL SPREAD (DEBIT)"
+            rationale = f"Captures upside breakout towards ₹{sell_strike} while short leg caps theta decay and cost."
 
-        elif bias.upper() == "BEARISH":
+        # 2. BULL PUT SPREAD (Credit)
+        elif strat_key in ["BULL_PUT_SPREAD", "BULL_PUT_CREDIT"]:
+            sell_strike = atm - (1 * step)
+            buy_strike = atm - (3 * step)
+            sell_leg = next((r["put"] for r in chain_data["chain"] if r["strike"] == sell_strike), None)
+            buy_leg = next((r["put"] for r in chain_data["chain"] if r["strike"] == buy_strike), None)
+            legs = [
+                {"action": "BUY", "type": "PE", "strike": buy_strike, "expiry": expiry, "price": buy_leg["ltp"] if buy_leg else 18.0, "lots": 1},
+                {"action": "SELL", "type": "PE", "strike": sell_strike, "expiry": expiry, "price": sell_leg["ltp"] if sell_leg else 48.0, "lots": 1}
+            ]
+            strat_name = "BULL PUT CREDIT SPREAD (THETA + UPSIDE)"
+            rationale = f"Collects net credit above ₹{sell_strike} with SEBI margin benefit and capped downside."
+
+        # 3. LONG CALL (Option Buying)
+        elif strat_key in ["LONG_CALL", "BUY_CALL"]:
+            buy_strike = atm
+            buy_leg = next((r["call"] for r in chain_data["chain"] if r["strike"] == buy_strike), None)
+            legs = [
+                {"action": "BUY", "type": "CE", "strike": buy_strike, "expiry": expiry, "price": buy_leg["ltp"] if buy_leg else round(spot * 0.02, 2), "lots": 1}
+            ]
+            strat_name = "LONG CALL (NAKED CE BUY)"
+            rationale = f"Maximum upside explosive leverage on high-momentum breakout above ₹{atm}."
+
+        # 4. BEAR PUT SPREAD (Debit)
+        elif strat_key in ["BEARISH", "BEAR_PUT_SPREAD"]:
             buy_strike = atm
             sell_strike = atm - (2 * step)
             buy_leg = next((r["put"] for r in chain_data["chain"] if r["strike"] == buy_strike), None)
@@ -397,19 +452,92 @@ class IndiaOptionsEngine:
                 {"action": "BUY", "type": "PE", "strike": buy_strike, "expiry": expiry, "price": buy_leg["ltp"] if buy_leg else round(spot * 0.02, 2), "lots": 1},
                 {"action": "SELL", "type": "PE", "strike": sell_strike, "expiry": expiry, "price": sell_leg["ltp"] if sell_leg else round(spot * 0.009, 2), "lots": 1}
             ]
-            strat_name = "BEAR PUT VERTICAL SPREAD"
-            rationale = f"Captures downward breakdown below ₹{buy_strike} with strictly capped max downside risk."
+            strat_name = "BEAR PUT VERTICAL SPREAD (DEBIT)"
+            rationale = f"Captures downward breakdown below ₹{buy_strike} with strictly capped max loss."
 
-        elif bias.upper() == "SHORT_STRADDLE":
+        # 5. BEAR CALL SPREAD (Credit)
+        elif strat_key in ["BEAR_CALL_SPREAD", "BEAR_CALL_CREDIT"]:
+            sell_strike = atm + (1 * step)
+            buy_strike = atm + (3 * step)
+            sell_leg = next((r["call"] for r in chain_data["chain"] if r["strike"] == sell_strike), None)
+            buy_leg = next((r["call"] for r in chain_data["chain"] if r["strike"] == buy_strike), None)
+            legs = [
+                {"action": "SELL", "type": "CE", "strike": sell_strike, "expiry": expiry, "price": sell_leg["ltp"] if sell_leg else 50.0, "lots": 1},
+                {"action": "BUY", "type": "CE", "strike": buy_strike, "expiry": expiry, "price": buy_leg["ltp"] if buy_leg else 16.0, "lots": 1}
+            ]
+            strat_name = "BEAR CALL CREDIT SPREAD (THETA + RESISTANCE)"
+            rationale = f"Collects net credit below ₹{sell_strike} monetizing ceiling resistance."
+
+        # 6. LONG PUT (Option Buying)
+        elif strat_key in ["LONG_PUT", "BUY_PUT"]:
+            buy_strike = atm
+            buy_leg = next((r["put"] for r in chain_data["chain"] if r["strike"] == buy_strike), None)
+            legs = [
+                {"action": "BUY", "type": "PE", "strike": buy_strike, "expiry": expiry, "price": buy_leg["ltp"] if buy_leg else round(spot * 0.02, 2), "lots": 1}
+            ]
+            strat_name = "LONG PUT (NAKED PE BUY)"
+            rationale = f"Downside breakdown acceleration scalp with defined risk equal to premium paid."
+
+        # 7. SHORT ATM STRADDLE (Option Writing)
+        elif strat_key in ["SHORT_STRADDLE", "STRADDLE"]:
             atm_row = next((r for r in chain_data["chain"] if r["is_atm"]), chain_data["chain"][len(chain_data["chain"])//2])
             legs = [
                 {"action": "SELL", "type": "CE", "strike": atm, "expiry": expiry, "price": atm_row["call"]["ltp"], "lots": 1},
                 {"action": "SELL", "type": "PE", "strike": atm, "expiry": expiry, "price": atm_row["put"]["ltp"], "lots": 1}
             ]
-            strat_name = "SHORT ATM STRADDLE (THETA MONETIZATION)"
-            rationale = f"Harvests maximum time decay around ₹{atm} during rangebound / sideways market consolidation."
+            strat_name = "SHORT ATM STRADDLE (MAX THETA MONETIZATION)"
+            rationale = f"Harvests maximum time decay (₹{atm_row['call']['ltp'] + atm_row['put']['ltp']}) around ₹{atm}."
 
-        else: # IRON CONDOR
+        # 8. SHORT STRANGLE (Option Writing)
+        elif strat_key in ["SHORT_STRANGLE", "STRANGLE"]:
+            sell_call_k = atm + (2 * step)
+            sell_put_k = atm - (2 * step)
+            sell_call_leg = next((r["call"] for r in chain_data["chain"] if r["strike"] == sell_call_k), None)
+            sell_put_leg = next((r["put"] for r in chain_data["chain"] if r["strike"] == sell_put_k), None)
+            legs = [
+                {"action": "SELL", "type": "PE", "strike": sell_put_k, "expiry": expiry, "price": sell_put_leg["ltp"] if sell_put_leg else 35.0, "lots": 1},
+                {"action": "SELL", "type": "CE", "strike": sell_call_k, "expiry": expiry, "price": sell_call_leg["ltp"] if sell_call_leg else 38.0, "lots": 1}
+            ]
+            strat_name = "SHORT OTM STRANGLE (WIDE CORRIDOR HARVEST)"
+            rationale = f"Wide delta-neutral channel collecting premium between ₹{sell_put_k} and ₹{sell_call_k}."
+
+        # 9. IRON BUTTERFLY (Hedged Straddle)
+        elif strat_key in ["IRON_BUTTERFLY", "BUTTERFLY"]:
+            buy_call_k = atm + (3 * step)
+            buy_put_k = atm - (3 * step)
+            atm_row = next((r for r in chain_data["chain"] if r["is_atm"]), chain_data["chain"][len(chain_data["chain"])//2])
+            legs = [
+                {"action": "BUY", "type": "PE", "strike": buy_put_k, "expiry": expiry, "price": 18.0, "lots": 1},
+                {"action": "SELL", "type": "PE", "strike": atm, "expiry": expiry, "price": atm_row["put"]["ltp"], "lots": 1},
+                {"action": "SELL", "type": "CE", "strike": atm, "expiry": expiry, "price": atm_row["call"]["ltp"], "lots": 1},
+                {"action": "BUY", "type": "CE", "strike": buy_call_k, "expiry": expiry, "price": 19.0, "lots": 1}
+            ]
+            strat_name = "DEFINED-RISK IRON BUTTERFLY"
+            rationale = f"Hedged straddle monetizing ATM theta with wings capping tail risk."
+
+        # 10. LONG STRADDLE (Volatility Breakout)
+        elif strat_key in ["LONG_STRADDLE"]:
+            atm_row = next((r for r in chain_data["chain"] if r["is_atm"]), chain_data["chain"][len(chain_data["chain"])//2])
+            legs = [
+                {"action": "BUY", "type": "CE", "strike": atm, "expiry": expiry, "price": atm_row["call"]["ltp"], "lots": 1},
+                {"action": "BUY", "type": "PE", "strike": atm, "expiry": expiry, "price": atm_row["put"]["ltp"], "lots": 1}
+            ]
+            strat_name = "LONG STRADDLE (BIG MOVE BREAKOUT)"
+            rationale = f"Trades massive two-sided volatility expansion (RBI policy / election / earnings)."
+
+        # 11. LONG STRANGLE
+        elif strat_key in ["LONG_STRANGLE"]:
+            buy_call_k = atm + (2 * step)
+            buy_put_k = atm - (2 * step)
+            legs = [
+                {"action": "BUY", "type": "PE", "strike": buy_put_k, "expiry": expiry, "price": 32.0, "lots": 1},
+                {"action": "BUY", "type": "CE", "strike": buy_call_k, "expiry": expiry, "price": 35.0, "lots": 1}
+            ]
+            strat_name = "LONG STRANGLE (CHEAP WIDE VOLATILITY)"
+            rationale = f"Low-cost multi-strike breakout setup anticipating a large explosive move."
+
+        # 12. DEFAULT: IRON CONDOR
+        else:
             sell_call_k = atm + (2 * step)
             buy_call_k = atm + (4 * step)
             sell_put_k = atm - (2 * step)
@@ -434,10 +562,10 @@ class IndiaOptionsEngine:
         """
         recs = []
         preset_configs = [
-            {"symbol": "NIFTY", "bias": "BULLISH", "badge": "PRIME INDEX BREAKOUT"},
+            {"symbol": "NIFTY", "bias": "BULL_CALL_SPREAD", "badge": "PRIME INDEX BREAKOUT"},
             {"symbol": "BANKNIFTY", "bias": "SHORT_STRADDLE", "badge": "THETA HARVEST"},
-            {"symbol": "RELIANCE", "bias": "BULLISH", "badge": "EQUITY MOMENTUM"},
-            {"symbol": "HDFCBANK", "bias": "NEUTRAL", "badge": "DELTA-NEUTRAL SPREAD"}
+            {"symbol": "RELIANCE", "bias": "BULL_PUT_CREDIT", "badge": "CREDIT SPREAD"},
+            {"symbol": "HDFCBANK", "bias": "IRON_CONDOR", "badge": "DELTA-NEUTRAL"}
         ]
 
         for cfg in preset_configs:

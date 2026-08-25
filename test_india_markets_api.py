@@ -151,19 +151,39 @@ def run_all_india_tests():
 
         # Multi-Leg Payoff Curves & AI Strategies
         ("Multi-Leg Payoff Curve (Bull Call Spread)", "/api/india/options/payoff?symbol=NIFTY&days_to_target=0", lambda d: (
-            len(d.get("curve_expiry", [])) >= 100 and "portfolio_greeks" in d and len(d.get("broker_basket", [])) >= 2,
-            "Payoff calculation failed or missing portfolio Greeks"
+            len(d.get("curve_expiry", [])) >= 100 
+            and "portfolio_greeks" in d 
+            and "margin_breakdown" in d
+            and len(d.get("broker_basket", [])) >= 2,
+            "Payoff calculation failed or missing portfolio Greeks / margin breakdown"
         )),
-        ("AI Bull Call Spread (NIFTY)", "/api/india/options/strategies?symbol=NIFTY&bias=BULLISH", lambda d: (
-            d.get("strategy_name") == "BULL CALL VERTICAL SPREAD" and len(d.get("legs", [])) == 2 and d.get("max_profit_inr", 0) > 0,
+        ("SEBI Hedge Benefit & Smart Basket Sequencing", "/api/india/options/payoff?symbol=NIFTY&days_to_target=0", lambda d: (
+            d.get("margin_breakdown", {}).get("hedge_benefit_inr", 0) > 0
+            and d.get("broker_basket", [])[0]["transaction_type"] == "BUY",
+            "SEBI hedge benefit calculation or BUY priority order sequencing failed"
+        )),
+        ("AI Bull Call Spread (NIFTY)", "/api/india/options/strategies?symbol=NIFTY&bias=BULL_CALL_SPREAD", lambda d: (
+            "BULL CALL" in d.get("strategy_name", "") and len(d.get("legs", [])) == 2 and d.get("max_profit_inr", 0) > 0,
             "Invalid Bull Call Spread payload"
+        )),
+        ("AI Bull Put Credit Spread (NIFTY)", "/api/india/options/strategies?symbol=NIFTY&bias=BULL_PUT_SPREAD", lambda d: (
+            "BULL PUT" in d.get("strategy_name", "") and len(d.get("legs", [])) == 2,
+            "Invalid Bull Put Credit Spread payload"
         )),
         ("AI Short Straddle (NIFTY)", "/api/india/options/strategies?symbol=NIFTY&bias=SHORT_STRADDLE", lambda d: (
             "STRADDLE" in d.get("strategy_name", "") and len(d.get("legs", [])) == 2,
             "Invalid Short Straddle payload"
         )),
-        ("AI Iron Condor (NIFTY)", "/api/india/options/strategies?symbol=NIFTY&bias=NEUTRAL", lambda d: (
-            d.get("strategy_name") == "DEFINED-RISK IRON CONDOR" and len(d.get("legs", [])) == 4,
+        ("AI Iron Butterfly (NIFTY)", "/api/india/options/strategies?symbol=NIFTY&bias=IRON_BUTTERFLY", lambda d: (
+            "BUTTERFLY" in d.get("strategy_name", "") and len(d.get("legs", [])) == 4,
+            "Invalid Iron Butterfly payload"
+        )),
+        ("AI Long Straddle (NIFTY)", "/api/india/options/strategies?symbol=NIFTY&bias=LONG_STRADDLE", lambda d: (
+            "LONG STRADDLE" in d.get("strategy_name", "") and len(d.get("legs", [])) == 2,
+            "Invalid Long Straddle payload"
+        )),
+        ("AI Iron Condor (NIFTY)", "/api/india/options/strategies?symbol=NIFTY&bias=IRON_CONDOR", lambda d: (
+            "IRON CONDOR" in d.get("strategy_name", "") and len(d.get("legs", [])) == 4,
             "Invalid Iron Condor 4-leg payload"
         )),
 

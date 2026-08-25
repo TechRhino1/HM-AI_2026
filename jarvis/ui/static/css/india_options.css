@@ -392,11 +392,28 @@ body {
    4. STRATEGY LEGS TABLE & PRESETS
    ========================================================================== */
 
-.preset-buttons-wrap {
+.preset-categories-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 8px;
+    background: rgba(8, 12, 22, 0.6);
+    padding: 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border-subtle);
+}
+
+.preset-group {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
     flex-wrap: wrap;
+}
+
+.preset-group-lbl {
+    font-size: 10px;
+    font-weight: 800;
+    min-width: 100px;
 }
 
 .preset-btn {
@@ -417,10 +434,55 @@ body {
 }
 
 .preset-btn.active {
-    background: rgba(0, 212, 255, 0.15);
+    background: rgba(0, 212, 255, 0.18);
     border-color: var(--accent-cyan);
     color: var(--accent-cyan);
 }
+
+/* Quick Strike Action Bar */
+.quick-strike-action-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.quick-action-btn {
+    font-size: 10px;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-buy-ce {
+    background: rgba(0, 245, 155, 0.12);
+    border: 1px solid var(--neon-bull);
+    color: var(--neon-bull);
+}
+.btn-buy-ce:hover { background: var(--neon-bull); color: #000000; }
+
+.btn-sell-ce {
+    background: rgba(255, 71, 87, 0.12);
+    border: 1px solid var(--neon-bear);
+    color: var(--neon-bear);
+}
+.btn-sell-ce:hover { background: var(--neon-bear); color: #ffffff; }
+
+.btn-buy-pe {
+    background: rgba(0, 212, 255, 0.12);
+    border: 1px solid var(--accent-cyan);
+    color: var(--accent-cyan);
+}
+.btn-buy-pe:hover { background: var(--accent-cyan); color: #000000; }
+
+.btn-sell-pe {
+    background: rgba(251, 191, 36, 0.12);
+    border: 1px solid var(--neon-gold);
+    color: var(--neon-gold);
+}
+.btn-sell-pe:hover { background: var(--neon-gold); color: #000000; }
 
 .legs-table-wrap {
     overflow-x: auto;
@@ -605,19 +667,66 @@ body {
 .itm-call { background: var(--itm-call-bg); }
 .itm-put { background: var(--itm-put-bg); }
 
-.btn-add-leg-mini {
-    background: rgba(30, 41, 59, 0.8);
-    border: 1px solid var(--border-subtle);
-    border-radius: 3px;
-    padding: 1px 4px;
-    font-size: 9px;
-    color: var(--text-secondary);
-    cursor: pointer;
+.trade-btns-cell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 3px 4px !important;
 }
 
-.btn-add-leg-mini:hover {
-    background: var(--neon-saffron);
+.btn-opt-trade-b {
+    background: rgba(0, 245, 155, 0.15);
+    border: 1px solid var(--neon-bull);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 9px;
+    font-weight: 900;
+    color: var(--neon-bull);
+    cursor: pointer;
+    transition: all 0.12s ease;
+}
+
+.btn-opt-trade-b:hover {
+    background: var(--neon-bull);
     color: #000000;
+}
+
+.btn-opt-trade-s {
+    background: rgba(255, 71, 87, 0.15);
+    border: 1px solid var(--neon-bear);
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 9px;
+    font-weight: 900;
+    color: var(--neon-bear);
+    cursor: pointer;
+    transition: all 0.12s ease;
+}
+
+.btn-opt-trade-s:hover {
+    background: var(--neon-bear);
+    color: #ffffff;
+}
+
+.leg-action-btn-buy {
+    color: var(--neon-bull) !important;
+    font-weight: 800;
+}
+
+.leg-action-btn-sell {
+    color: var(--neon-bear) !important;
+    font-weight: 800;
+}
+
+.badge-benefit {
+    background: rgba(0, 245, 155, 0.15);
+    border: 1px solid var(--neon-bull);
+    color: var(--neon-bull);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 8px;
+    font-weight: 800;
 }
 
 /* Colors & Badges */

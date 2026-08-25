@@ -241,8 +241,9 @@
             html += `
             <tr class="${rowClass}">
                 <!-- CALLS -->
-                <td class="${callItm}" style="text-align:center;">
-                    <button class="btn-add-leg-mini" onclick="window.addLegFromChain('BUY', 'CE', ${row.strike}, ${call.ltp})">➕</button>
+                <td class="${callItm} trade-btns-cell">
+                    <button class="btn-opt-trade-b" title="Buy Call (Long CE)" onclick="window.addLegFromChain('BUY', 'CE', ${row.strike}, ${call.ltp})">B</button>
+                    <button class="btn-opt-trade-s" title="Sell / Write Call (Short CE)" onclick="window.addLegFromChain('SELL', 'CE', ${row.strike}, ${call.ltp})">S</button>
                 </td>
                 <td class="${callItm}">${call.delta}</td>
                 <td class="${callItm}">${call.iv}%</td>
@@ -259,8 +260,9 @@
                 <td class="${putItm}" style="color:${put.oi_change_pct >= 0 ? 'var(--neon-bull)' : 'var(--neon-bear)'};">${put.oi_change_pct >= 0 ? '+' : ''}${put.oi_change_pct}%</td>
                 <td class="${putItm}">${put.iv}%</td>
                 <td class="${putItm}">${put.delta}</td>
-                <td class="${putItm}" style="text-align:center;">
-                    <button class="btn-add-leg-mini" onclick="window.addLegFromChain('BUY', 'PE', ${row.strike}, ${put.ltp})">➕</button>
+                <td class="${putItm} trade-btns-cell">
+                    <button class="btn-opt-trade-b" title="Buy Put (Long PE)" onclick="window.addLegFromChain('BUY', 'PE', ${row.strike}, ${put.ltp})">B</button>
+                    <button class="btn-opt-trade-s" title="Sell / Write Put (Short PE)" onclick="window.addLegFromChain('SELL', 'PE', ${row.strike}, ${put.ltp})">S</button>
                 </td>
             </tr>`;
         });
@@ -341,7 +343,13 @@
             const cost = data.net_debit_or_credit_inr;
             el.stratNetCost.textContent = `${cost >= 0 ? 'Debit' : 'Credit'} ₹${Math.abs(cost).toLocaleString(undefined, {minimumFractionDigits:2})}`;
         }
-        if (el.stratMargin) el.stratMargin.textContent = `₹${Number(data.estimated_margin_inr).toLocaleString(undefined, {minimumFractionDigits:2})}`;
+        if (el.stratMargin) {
+            let marginHtml = `₹${Number(data.estimated_margin_inr).toLocaleString(undefined, {minimumFractionDigits:2})}`;
+            if (data.margin_breakdown && data.margin_breakdown.hedge_benefit_inr > 0) {
+                marginHtml += ` <span class="badge-benefit" title="SEBI Margin Relief for Hedged Positions">Save ₹${Number(data.margin_breakdown.hedge_benefit_inr).toLocaleString()}</span>`;
+            }
+            el.stratMargin.innerHTML = marginHtml;
+        }
 
         if (data.portfolio_greeks) {
             const g = data.portfolio_greeks;
@@ -493,19 +501,76 @@
         fetchOptionChain(sym);
     };
 
-    window.applyPresetStrategy = function (presetType) {
-        document.querySelectorAll(".preset-btn").forEach(b => b.classList.remove("active"));
-        
+    window.applyPresetStrategy = async function (presetType) {
+        document.querySelectorAll(".preset-btn").forEach(btn => {
+            const oc = btn.getAttribute("onclick") || "";
+            if (oc.includes(presetType)) {
+                btn.classList.add("active");
+            } else {
+                btn.classList.remove("active");
+            }
+        });
+
+        try {
+            const res = await fetch(`/api/india/options_ai?symbol=${state.symbol}&bias=${presetType}`);
+            const data = await res.json();
+            if (data && data.legs && data.legs.length > 0) {
+                state.legs = data.legs.map(l => ({
+                    action: l.action.toUpperCase(),
+                    type: l.type.toUpperCase(),
+                    strike: parseFloat(l.strike),
+                    price: parseFloat(l.price),
+                    lots: parseInt(l.lots || 1, 10)
+                }));
+                recalculatePayoff();
+                return;
+            }
+        } catch (err) {
+            console.error("Preset strategy fetch error:", err);
+        }
+
+        // Local algorithmic fallback
         const spot = state.spotPrice;
         const step = state.strikeStep;
         const atm = state.atmStrike;
 
-        if (presetType === "BULLISH") {
+        if (presetType === "BUY_CALL") {
+            state.legs = [{ action: "BUY", type: "CE", strike: atm, price: roundTo50(spot * 0.018), lots: 1 }];
+        } else if (presetType === "BUY_PUT") {
+            state.legs = [{ action: "BUY", type: "PE", strike: atm, price: roundTo50(spot * 0.018), lots: 1 }];
+        } else if (presetType === "BULL_PUT_SPREAD") {
+            state.legs = [
+                { action: "BUY", type: "PE", strike: atm - (3 * step), price: 18.0, lots: 1 },
+                { action: "SELL", type: "PE", strike: atm - (1 * step), price: 48.0, lots: 1 }
+            ];
+        } else if (presetType === "BEAR_CALL_SPREAD") {
+            state.legs = [
+                { action: "SELL", type: "CE", strike: atm + (1 * step), price: 50.0, lots: 1 },
+                { action: "BUY", type: "CE", strike: atm + (3 * step), price: 16.0, lots: 1 }
+            ];
+        } else if (presetType === "SHORT_STRANGLE") {
+            state.legs = [
+                { action: "SELL", type: "PE", strike: atm - (2 * step), price: 35.0, lots: 1 },
+                { action: "SELL", type: "CE", strike: atm + (2 * step), price: 38.0, lots: 1 }
+            ];
+        } else if (presetType === "IRON_BUTTERFLY") {
+            state.legs = [
+                { action: "BUY", type: "PE", strike: atm - (3 * step), price: 18.0, lots: 1 },
+                { action: "SELL", type: "PE", strike: atm, price: roundTo50(spot * 0.018), lots: 1 },
+                { action: "SELL", type: "CE", strike: atm, price: roundTo50(spot * 0.018), lots: 1 },
+                { action: "BUY", type: "CE", strike: atm + (3 * step), price: 19.0, lots: 1 }
+            ];
+        } else if (presetType === "LONG_STRADDLE") {
+            state.legs = [
+                { action: "BUY", type: "CE", strike: atm, price: roundTo50(spot * 0.018), lots: 1 },
+                { action: "BUY", type: "PE", strike: atm, price: roundTo50(spot * 0.018), lots: 1 }
+            ];
+        } else if (presetType === "BULL_CALL_SPREAD" || presetType === "BULLISH") {
             state.legs = [
                 { action: "BUY", type: "CE", strike: atm, price: roundTo50(spot * 0.018), lots: 1 },
                 { action: "SELL", type: "CE", strike: atm + (2 * step), price: roundTo50(spot * 0.008), lots: 1 }
             ];
-        } else if (presetType === "BEARISH") {
+        } else if (presetType === "BEAR_PUT_SPREAD" || presetType === "BEARISH") {
             state.legs = [
                 { action: "BUY", type: "PE", strike: atm, price: roundTo50(spot * 0.018), lots: 1 },
                 { action: "SELL", type: "PE", strike: atm - (2 * step), price: roundTo50(spot * 0.008), lots: 1 }
@@ -515,7 +580,7 @@
                 { action: "SELL", type: "CE", strike: atm, price: roundTo50(spot * 0.018), lots: 1 },
                 { action: "SELL", type: "PE", strike: atm, price: roundTo50(spot * 0.018), lots: 1 }
             ];
-        } else if (presetType === "IRON_CONDOR") {
+        } else {
             state.legs = [
                 { action: "BUY", type: "PE", strike: atm - (4 * step), price: 12.0, lots: 1 },
                 { action: "SELL", type: "PE", strike: atm - (2 * step), price: 42.0, lots: 1 },
@@ -524,6 +589,15 @@
             ];
         }
         recalculatePayoff();
+    };
+
+    window.quickAddAtm = function (action, type) {
+        if (!state.chainData || !state.chainData.chain) return;
+        const atm = state.atmStrike;
+        const isCall = type.toUpperCase() === "CE";
+        const row = state.chainData.chain.find(r => r.strike === atm) || state.chainData.chain[Math.floor(state.chainData.chain.length / 2)];
+        const prem = isCall ? row.call.ltp : row.put.ltp;
+        window.addLegFromChain(action, type, atm, prem);
     };
 
     window.addNewLeg = function () {
@@ -539,10 +613,10 @@
 
     window.addLegFromChain = function (action, type, strike, price) {
         state.legs.push({
-            action: action,
-            type: type,
-            strike: strike,
-            price: price,
+            action: action.toUpperCase(),
+            type: type.toUpperCase(),
+            strike: parseFloat(strike),
+            price: parseFloat(price),
             lots: 1
         });
         recalculatePayoff();
@@ -576,16 +650,21 @@
     };
 
     window.copyBrokerBasket = function () {
+        // Sort BUY orders first for instant SEBI hedge margin benefit
+        const sortedLegs = [...state.legs].sort((a, b) => {
+            return (a.action.toUpperCase() === "BUY" ? 0 : 1) - (b.action.toUpperCase() === "BUY" ? 0 : 1);
+        });
+
         const basket = [];
-        state.legs.forEach(leg => {
+        sortedLegs.forEach(leg => {
             basket.push({
                 variety: "regular",
-                tradingsymbol: `${state.symbol}${parseInt(leg.strike, 10)}${leg.type}`,
+                tradingsymbol: `${state.symbol}${parseInt(leg.strike, 10)}${leg.type.toUpperCase()}`,
                 exchange: "NFO",
                 transaction_type: leg.action.toUpperCase(),
                 order_type: "LIMIT",
                 quantity: (leg.lots || 1) * state.lotSize,
-                price: leg.price,
+                price: parseFloat(leg.price),
                 product: "NRML"
             });
         });
@@ -593,10 +672,10 @@
         const basketJson = JSON.stringify(basket, null, 2);
         if (navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(basketJson).then(() => {
-                alert(`📋 Copied Zerodha Kite / Upstox Basket (${state.legs.length} legs) to clipboard!`);
+                alert(`📋 Copied Smart-Sequenced Zerodha Kite / Upstox Basket (${state.legs.length} legs) to clipboard!\n(BUY orders prioritized first for SEBI margin benefit)`);
             });
         } else {
-            prompt("Zerodha Kite Basket JSON:", basketJson);
+            prompt("Zerodha Kite Basket JSON (BUY orders prioritized):", basketJson);
         }
     };
 

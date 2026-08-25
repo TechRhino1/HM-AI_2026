@@ -194,14 +194,38 @@
             <div class="pane-card">
                 <div class="pane-header-row">
                     <div class="pane-title">
-                        <span>🧠 Strategy Architect & Legs</span>
+                        <span>🧠 Strategy Architect & Multi-Leg Builder</span>
                     </div>
-                    <div class="preset-buttons-wrap">
-                        <button class="preset-btn active" onclick="window.applyPresetStrategy('BULLISH')">Bull Call Spread</button>
-                        <button class="preset-btn" onclick="window.applyPresetStrategy('BEARISH')">Bear Put Spread</button>
+                    <div style="font-size:10px; color:var(--text-dim);">
+                        Option Buying (Long CE/PE), Option Selling/Writing (Short CE/PE), Hedged Spreads
+                    </div>
+                </div>
+
+                <!-- 12 Strategy Presets Organized by Bias -->
+                <div class="preset-categories-bar">
+                    <div class="preset-group">
+                        <span class="preset-group-lbl text-bull">🟢 Bullish:</span>
+                        <button class="preset-btn" onclick="window.applyPresetStrategy('BUY_CALL')">Buy Call (CE)</button>
+                        <button class="preset-btn active" onclick="window.applyPresetStrategy('BULL_CALL_SPREAD')">Bull Call Spread</button>
+                        <button class="preset-btn" onclick="window.applyPresetStrategy('BULL_PUT_SPREAD')">Bull Put (Credit)</button>
+                    </div>
+                    <div class="preset-group">
+                        <span class="preset-group-lbl text-bear">🔴 Bearish:</span>
+                        <button class="preset-btn" onclick="window.applyPresetStrategy('BUY_PUT')">Buy Put (PE)</button>
+                        <button class="preset-btn" onclick="window.applyPresetStrategy('BEAR_PUT_SPREAD')">Bear Put Spread</button>
+                        <button class="preset-btn" onclick="window.applyPresetStrategy('BEAR_CALL_SPREAD')">Bear Call (Credit)</button>
+                    </div>
+                    <div class="preset-group">
+                        <span class="preset-group-lbl text-gold">⚖️ Theta / Range:</span>
                         <button class="preset-btn" onclick="window.applyPresetStrategy('SHORT_STRADDLE')">Short Straddle</button>
+                        <button class="preset-btn" onclick="window.applyPresetStrategy('SHORT_STRANGLE')">Short Strangle</button>
                         <button class="preset-btn" onclick="window.applyPresetStrategy('IRON_CONDOR')">Iron Condor</button>
-                        <button class="preset-btn" onclick="window.addNewLeg()">➕ Add Leg</button>
+                        <button class="preset-btn" onclick="window.applyPresetStrategy('IRON_BUTTERFLY')">Iron Butterfly</button>
+                    </div>
+                    <div class="preset-group">
+                        <span class="preset-group-lbl text-cyan">⚡ Volatility:</span>
+                        <button class="preset-btn" onclick="window.applyPresetStrategy('LONG_STRADDLE')">Long Straddle</button>
+                        <button class="preset-btn" onclick="window.addNewLeg()">➕ Add Custom Leg</button>
                     </div>
                 </div>
 
@@ -294,8 +318,12 @@
                     <div class="pane-title">
                         <span>⚡ Live Option Chain Matrix (<span id="chain-und-tag">NIFTY</span>)</span>
                     </div>
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <span class="badge badge-nse">Greeks & IV Skew</span>
+                    <!-- Quick Strike Action Bar -->
+                    <div class="quick-strike-action-bar">
+                        <button class="quick-action-btn btn-buy-ce" onclick="window.quickAddAtm('BUY', 'CE')">➕ Buy ATM CE</button>
+                        <button class="quick-action-btn btn-sell-ce" onclick="window.quickAddAtm('SELL', 'CE')">⚡ Sell ATM CE</button>
+                        <button class="quick-action-btn btn-buy-pe" onclick="window.quickAddAtm('BUY', 'PE')">➕ Buy ATM PE</button>
+                        <button class="quick-action-btn btn-sell-pe" onclick="window.quickAddAtm('SELL', 'PE')">⚡ Sell ATM PE</button>
                     </div>
                 </div>
 
@@ -303,12 +331,12 @@
                     <table class="opt-chain-table">
                         <thead>
                             <tr>
-                                <th colspan="6" class="th-calls">CALLS (CE)</th>
+                                <th colspan="6" class="th-calls">CALLS (CE) — BULLISH MOMENTUM / WRITING</th>
                                 <th class="th-strike">STRIKE</th>
-                                <th colspan="6" class="th-puts">PUTS (PE)</th>
+                                <th colspan="6" class="th-puts">PUTS (PE) — BEARISH MOMENTUM / WRITING</th>
                             </tr>
                             <tr class="sub-th-row">
-                                <th>Add</th>
+                                <th style="width:55px;">Trade</th>
                                 <th>Delta</th>
                                 <th>IV %</th>
                                 <th>OI Chg</th>
@@ -320,7 +348,7 @@
                                 <th>OI Chg</th>
                                 <th>IV %</th>
                                 <th>Delta</th>
-                                <th>Add</th>
+                                <th style="width:55px;">Trade</th>
                             </tr>
                         </thead>
                         <tbody id="full-chain-tbody">
