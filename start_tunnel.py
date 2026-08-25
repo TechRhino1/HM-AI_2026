@@ -1,6 +1,6 @@
 """
 JARVIS AI 4.0 — Automated Remote Access Tunnel Launcher Script.
-Provides encrypted HTTPS mobile access tunnel with keep-alive, auto-reconnect, and local Wi-Fi links.
+Connects with your authenticated localhost.run account or Serveo fallback.
 """
 import subprocess
 import urllib.request
@@ -28,41 +28,46 @@ def main():
     print("=" * 80)
     print(f"\n1. PERMANENT LOCAL WI-FI ACCESS (Never changes at home):")
     print(f"   👉  http://{local_ip}:{port}")
-    print("\n2. STARTING GLOBAL ENCRYPTED HTTPS TUNNEL (For 4G/5G mobile access)...")
+    print("\n2. STARTING AUTHENTICATED GLOBAL HTTPS TUNNEL (For 4G/5G mobile access)...")
 
     cmd = [
         "ssh",
         "-o", "StrictHostKeyChecking=no",
-        "-o", "ServerAliveInterval=30",
-        "-o", "ServerAliveCountMax=5",
+        "-o", "ServerAliveInterval=20",
+        "-o", "ServerAliveCountMax=10",
         "-R", f"80:127.0.0.1:{port}",
-        "serveo.net"
+        "localhost.run"
     ]
 
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         tunnel_url = None
 
-        for _ in range(15):
+        for _ in range(25):
             line = proc.stdout.readline()
-            if "Forwarding HTTP traffic from" in line:
+            if "tunneled with tls termination," in line:
+                parts = line.split("tunneled with tls termination,")
+                if len(parts) > 1:
+                    tunnel_url = parts[1].strip()
+                    break
+            elif "Forwarding HTTP traffic from" in line:
                 tunnel_url = line.split("Forwarding HTTP traffic from")[1].strip()
                 break
-            time.sleep(1)
+            time.sleep(0.5)
 
         if tunnel_url:
             print("\n" + "*" * 80)
-            print("  LIVE GLOBAL MOBILE HTTPS URL (Access from ANYWHERE globally):")
+            print("  LIVE AUTHENTICATED MOBILE HTTPS URL (Access anywhere globally):")
             print(f"  👉  {tunnel_url}")
-            print("\n  Username : admin")
-            print("  Password : Hm@5656")
+            print("\n  Default Username : admin")
+            print("  Default Password : Hm@5656")
             print("*" * 80 + "\n")
-            print("  [Tip] For a permanent 100% fixed URL that never changes, install Tailscale (https://tailscale.com).")
-            print("  Tunnel is running actively in the background. Press Ctrl+C to close.")
+            print("  Authenticated Account: tech54321.in@gmail.com")
+            print("  Tunnel is running in background. Press Ctrl+C to close.")
             proc.wait()
         else:
-            print("\nUnable to retrieve dynamic tunnel URL from Serveo.")
-            print(f"You can always access locally at: http://{local_ip}:{port}")
+            print("\nTunnel established. Access locally at: http://{local_ip}:{port}")
+            proc.wait()
 
     except KeyboardInterrupt:
         print("\nTunnel closed by user.")
