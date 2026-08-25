@@ -363,7 +363,7 @@
         if (el.legendS1) el.legendS1.textContent = `🟢 S1: ${s1.toFixed(digits)}`;
     }
 
-    function renderTradingViewChartData() {
+    function renderTradingViewChartData(isFullReset = false) {
         if (!state.tvCandleSeries || !state.tvVolumeSeries || !state.candles || state.candles.length === 0) return;
         if (!isSameSymbol(state.candleSymbol, state.symbol)) return;
 
@@ -390,37 +390,54 @@
         const digits = firstClose > 100 ? 2 : (firstClose > 10 ? 3 : 5);
         const minMove = Math.pow(10, -digits);
 
-        // Dynamically adjust price precision for the active symbol (e.g. BTC/Gold 2 decimals vs Forex 5 decimals)
-        if (state.tvCandleSeries) {
-            state.tvCandleSeries.applyOptions({
-                priceFormat: {
-                    type: "price",
-                    precision: digits,
-                    minMove: minMove
-                }
+        if (isFullReset) {
+            // Full Reset on Symbol switch or Timeframe change
+            if (state.tvCandleSeries) {
+                state.tvCandleSeries.applyOptions({
+                    priceFormat: {
+                        type: "price",
+                        precision: digits,
+                        minMove: minMove
+                    }
+                });
+            }
+
+            const formattedCandles = sortedCandles.map(c => ({
+                time: c.time,
+                open: c.open,
+                high: c.high,
+                low: c.low,
+                close: c.close
+            }));
+
+            const formattedVolumes = sortedCandles.map(c => ({
+                time: c.time,
+                value: c.volume,
+                color: c.close >= c.open ? "rgba(0, 245, 155, 0.35)" : "rgba(255, 59, 92, 0.35)"
+            }));
+
+            state.tvCandleSeries.setData(formattedCandles);
+            state.tvVolumeSeries.setData(formattedVolumes);
+
+            // Auto-scale viewport to newly loaded symbol data ONCE
+            if (state.tvChartInstance) {
+                state.tvChartInstance.timeScale().fitContent();
+            }
+        } else {
+            // Incremental Live Update: only update the last forming candle so user scroll/pan position is PRESERVED
+            const last = sortedCandles[sortedCandles.length - 1];
+            state.tvCandleSeries.update({
+                time: last.time,
+                open: last.open,
+                high: last.high,
+                low: last.low,
+                close: last.close
             });
-        }
-
-        const formattedCandles = sortedCandles.map(c => ({
-            time: c.time,
-            open: c.open,
-            high: c.high,
-            low: c.low,
-            close: c.close
-        }));
-
-        const formattedVolumes = sortedCandles.map(c => ({
-            time: c.time,
-            value: c.volume,
-            color: c.close >= c.open ? "rgba(0, 245, 155, 0.35)" : "rgba(255, 59, 92, 0.35)"
-        }));
-
-        state.tvCandleSeries.setData(formattedCandles);
-        state.tvVolumeSeries.setData(formattedVolumes);
-
-        // Auto-scale viewport to newly loaded symbol data
-        if (state.tvChartInstance) {
-            state.tvChartInstance.timeScale().fitContent();
+            state.tvVolumeSeries.update({
+                time: last.time,
+                value: last.volume,
+                color: last.close >= last.open ? "rgba(0, 245, 155, 0.35)" : "rgba(255, 59, 92, 0.35)"
+            });
         }
 
         calculateSupportResistance(sortedCandles);
@@ -722,7 +739,7 @@
        ========================================================================== */
 
     let candleFetchSeq = 0;
-    async function fetchCandles() {
+    async function fetchCandles(isFullReset = false) {
         const seq = ++candleFetchSeq;
         const requestedSym = state.symbol || "XAUUSD";
         const requestedTf = state.timeframe || "H1";
@@ -734,7 +751,7 @@
                 state.candleSymbol = data.symbol || requestedSym;
                 state.candles = data.candles;
                 if (state.chartMode === "tv_live") {
-                    renderTradingViewChartData();
+                    renderTradingViewChartData(isFullReset);
                 }
             }
         } catch (err) {
@@ -2152,6 +2169,14 @@
         if (el.deskActiveSymbol) el.deskActiveSymbol.textContent = sym;
         if (el.chartLivePrice) el.chartLivePrice.textContent = "--";
 
+        // Instantly wipe old candlesticks and price lines from chart canvas
+        if (state.tvCandleSeries) {
+            try { state.tvCandleSeries.setData([]); } catch (e) {}
+        }
+        if (state.tvVolumeSeries) {
+            try { state.tvVolumeSeries.setData([]); } catch (e) {}
+        }
+
         // Clear existing Price Lines immediately
         if (state.tvPriceLines && state.tvPriceLines.length > 0) {
             state.tvPriceLines.forEach(pl => {
@@ -2197,7 +2222,7 @@
             }
         }
 
-        fetchCandles();
+        fetchCandles(true);
         fetchTelemetry();
 
         if (window.innerWidth <= 900 && state.activeMobileView === "radar") {
@@ -2214,7 +2239,7 @@
         document.querySelectorAll(".tf-btn").forEach(btn => {
             btn.classList.toggle("active", btn.textContent === tf);
         });
-        fetchCandles();
+        fetchCandles(true);
 
         if (state.chartMode === "tv_pro") {
             initTradingViewAdvancedWidget();
@@ -2419,7 +2444,7 @@
 
         checkRemoteAuth();
         updateMarketStatusDisplay(state.symbol);
-        fetchCandles();
+        fetchCandles(true);
         fetchTelemetry();
         fetchNews();
 
@@ -2428,7 +2453,7 @@
         }
 
         setInterval(fetchTelemetry, 1500);
-        setInterval(fetchCandles, 2000);
+        setInterval(() => fetchCandles(false), 2000);
         setInterval(fetchHistory, 5000);
         setInterval(fetchNews, 10000);
         setInterval(tickMarketCountdown, 1000);
