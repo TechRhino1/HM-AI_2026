@@ -210,6 +210,15 @@
                         <span class="overlay-legend-tag overlay-fvg">📊 Dynamic Volume</span>
                     </div>
 
+                    <!-- Real-Time Active Trade Floating HUD -->
+                    <div id="chart-active-trade-hud" class="chart-active-trade-hud" style="display:none;">
+                        <span id="chart-hud-ticket" class="chart-hud-tag badge-ready-buy">#-- BUY --L</span>
+                        <span id="chart-hud-entry" class="chart-hud-metric">Entry: --</span>
+                        <span id="chart-hud-sl" class="chart-hud-metric" style="color:var(--neon-bear);">SL: --</span>
+                        <span id="chart-hud-tp" class="chart-hud-metric" style="color:var(--neon-bull);">TP: --</span>
+                        <span id="chart-hud-pnl" class="chart-hud-metric" style="font-weight:800; color:var(--neon-bull);">$0.00</span>
+                    </div>
+
                     <!-- Mode 1: TradingView Lightweight Charts Canvas Stage (Live MT5 Streaming + S/R + Volume) -->
                     <div id="tv-lightweight-chart-container" style="width:100%; height:100%; position:absolute; top:0; left:0;"></div>
 

@@ -44,7 +44,8 @@
         tvChartInstance: null,
         tvCandleSeries: null,
         tvVolumeSeries: null,
-        tvPriceLines: []
+        tvPriceLines: [],
+        tvActiveTradeLines: []
     };
 
     // DOM Elements Cache
@@ -415,6 +416,168 @@
                 el.chartLivePrice.style.color = "var(--text-secondary)";
             }
         }
+
+        // Render Active Trade & Real-Time SL/TP Overlays
+        updateChartTradeOverlays();
+    }
+
+    /* ==========================================================================
+       REAL-TIME ACTIVE TRADE & DYNAMIC SL/TP CHART OVERLAY ENGINE
+       ========================================================================== */
+    function updateChartTradeOverlays() {
+        if (!state.tvCandleSeries || !state.candles || state.candles.length === 0) return;
+
+        // Clear existing trade overlay lines
+        if (state.tvActiveTradeLines && state.tvActiveTradeLines.length > 0) {
+            state.tvActiveTradeLines.forEach(pl => {
+                try {
+                    state.tvCandleSeries.removePriceLine(pl);
+                } catch (e) {}
+            });
+            state.tvActiveTradeLines = [];
+        }
+
+        const sym = (state.symbol || "XAUUSD").toUpperCase();
+        const positions = (state.positions || []).filter(p => {
+            const pSym = (p.symbol || "").toUpperCase();
+            return pSym === sym || pSym.includes(sym) || sym.includes(pSym);
+        });
+
+        const hudEl = document.getElementById("chart-active-trade-hud");
+        const hudTicket = document.getElementById("chart-hud-ticket");
+        const hudEntry = document.getElementById("chart-hud-entry");
+        const hudSl = document.getElementById("chart-hud-sl");
+        const hudTp = document.getElementById("chart-hud-tp");
+        const hudPnl = document.getElementById("chart-hud-pnl");
+
+        if (positions.length > 0) {
+            // Update Active Trade HUD Pill on Chart
+            const primaryPos = positions[0];
+            if (hudEl) {
+                hudEl.style.display = "flex";
+                const isBuy = (primaryPos.type || "").toUpperCase() === "BUY";
+                if (hudTicket) {
+                    hudTicket.className = `chart-hud-tag ${isBuy ? 'badge-ready-buy' : 'badge-ready-sell'}`;
+                    hudTicket.textContent = `#${primaryPos.ticket} ${primaryPos.type} ${Number(primaryPos.volume || 0.01).toFixed(2)}L`;
+                }
+                if (hudEntry) hudEntry.textContent = `Entry: ${formatPrice(primaryPos.open_price, primaryPos.symbol)}`;
+                if (hudSl) hudSl.textContent = `SL: ${primaryPos.sl > 0 ? formatPrice(primaryPos.sl, primaryPos.symbol) : 'NONE'}`;
+                if (hudTp) hudTp.textContent = `TP: ${primaryPos.tp > 0 ? formatPrice(primaryPos.tp, primaryPos.symbol) : 'NONE'}`;
+                if (hudPnl) {
+                    const pnlVal = Number(primaryPos.profit || 0);
+                    hudPnl.textContent = `${pnlVal >= 0 ? '+' : ''}$${pnlVal.toFixed(2)}`;
+                    hudPnl.style.color = pnlVal >= 0 ? "var(--neon-bull)" : "var(--neon-bear)";
+                }
+            }
+
+            positions.forEach(pos => {
+                const isBuy = (pos.type || "").toUpperCase() === "BUY";
+                const openPr = Number(pos.open_price || 0);
+                const slPr = Number(pos.sl || 0);
+                const tpPr = Number(pos.tp || 0);
+                const lots = Number(pos.volume || 0.01).toFixed(2);
+                const pnl = Number(pos.profit || 0);
+                const pnlTag = `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)}`;
+
+                // 1. Live Entry Price Line (Cyan / Blue Solid)
+                if (openPr > 0) {
+                    const entryLine = state.tvCandleSeries.createPriceLine({
+                        price: openPr,
+                        color: isBuy ? "#38bdf8" : "#f59e0b",
+                        lineWidth: 2,
+                        lineStyle: LightweightCharts.LineStyle.Solid,
+                        axisLabelVisible: true,
+                        title: `OPEN #${pos.ticket} ${pos.type} ${lots}L @ ${formatPrice(openPr, pos.symbol)} [${pnlTag}]`
+                    });
+                    state.tvActiveTradeLines.push(entryLine);
+                }
+
+                // 2. Real-Time Trailing Stop Loss Line (Neon Red or Gold when locked)
+                if (slPr > 0) {
+                    const isProfitLocked = isBuy ? (slPr >= openPr) : (slPr <= openPr);
+                    const lockStatus = isProfitLocked ? "🔒 LOCKED" : "TRAIL SL";
+                    const slLine = state.tvCandleSeries.createPriceLine({
+                        price: slPr,
+                        color: isProfitLocked ? "#f59e0b" : "#ff3b5c",
+                        lineWidth: 2,
+                        lineStyle: LightweightCharts.LineStyle.Dashed,
+                        axisLabelVisible: true,
+                        title: `SL #${pos.ticket} (${lockStatus}) @ ${formatPrice(slPr, pos.symbol)}`
+                    });
+                    state.tvActiveTradeLines.push(slLine);
+                }
+
+                // 3. Real-Time Take Profit Line (Neon Green)
+                if (tpPr > 0) {
+                    const tpLine = state.tvCandleSeries.createPriceLine({
+                        price: tpPr,
+                        color: "#00f59b",
+                        lineWidth: 2,
+                        lineStyle: LightweightCharts.LineStyle.Dashed,
+                        axisLabelVisible: true,
+                        title: `TP #${pos.ticket} @ ${formatPrice(tpPr, pos.symbol)}`
+                    });
+                    state.tvActiveTradeLines.push(tpLine);
+                }
+            });
+        } else {
+            // No active positions on this symbol: check if an AI Planned Setup exists
+            const activeDec = state.latestDecisions ? state.latestDecisions[state.symbol] : null;
+            if (activeDec && activeDec.entry_price && activeDec.stop_loss && Math.abs(activeDec.entry_price - activeDec.stop_loss) > 1e-5) {
+                if (hudEl) {
+                    hudEl.style.display = "flex";
+                    const isBuy = (activeDec.bias || "BUY").toUpperCase() === "BUY";
+                    if (hudTicket) {
+                        hudTicket.className = `chart-hud-tag ${isBuy ? 'badge-ready-buy' : 'badge-ready-sell'}`;
+                        hudTicket.textContent = `AI PLAN ${activeDec.bias || 'BUY'}`;
+                    }
+                    if (hudEntry) hudEntry.textContent = `Plan Entry: ${formatPrice(activeDec.entry_price, state.symbol)}`;
+                    if (hudSl) hudSl.textContent = `Plan SL: ${formatPrice(activeDec.stop_loss, state.symbol)}`;
+                    if (hudTp) hudTp.textContent = `Plan TP: ${activeDec.take_profit ? formatPrice(activeDec.take_profit, state.symbol) : '--'}`;
+                    if (hudPnl) {
+                        hudPnl.textContent = `R:R 1:${Number(activeDec.risk_reward_ratio || 2.0).toFixed(2)}`;
+                        hudPnl.style.color = "var(--accent-cyan)";
+                    }
+                }
+
+                // Draw Planned Entry (Dotted Cyan)
+                const planEntryLine = state.tvCandleSeries.createPriceLine({
+                    price: Number(activeDec.entry_price),
+                    color: "rgba(56, 189, 248, 0.75)",
+                    lineWidth: 1.5,
+                    lineStyle: LightweightCharts.LineStyle.Dotted,
+                    axisLabelVisible: true,
+                    title: `AI PLAN ${activeDec.bias || 'BUY'} @ ${formatPrice(activeDec.entry_price, state.symbol)}`
+                });
+                state.tvActiveTradeLines.push(planEntryLine);
+
+                // Draw Planned SL (Dotted Red)
+                const planSlLine = state.tvCandleSeries.createPriceLine({
+                    price: Number(activeDec.stop_loss),
+                    color: "rgba(255, 59, 92, 0.75)",
+                    lineWidth: 1.5,
+                    lineStyle: LightweightCharts.LineStyle.Dotted,
+                    axisLabelVisible: true,
+                    title: `AI PLAN SL @ ${formatPrice(activeDec.stop_loss, state.symbol)}`
+                });
+                state.tvActiveTradeLines.push(planSlLine);
+
+                // Draw Planned TP (Dotted Green)
+                if (activeDec.take_profit && Number(activeDec.take_profit) > 0) {
+                    const planTpLine = state.tvCandleSeries.createPriceLine({
+                        price: Number(activeDec.take_profit),
+                        color: "rgba(0, 245, 155, 0.75)",
+                        lineWidth: 1.5,
+                        lineStyle: LightweightCharts.LineStyle.Dotted,
+                        axisLabelVisible: true,
+                        title: `AI PLAN TP @ ${formatPrice(activeDec.take_profit, state.symbol)}`
+                    });
+                    state.tvActiveTradeLines.push(planTpLine);
+                }
+            } else {
+                if (hudEl) hudEl.style.display = "none";
+            }
+        }
     }
 
     function initTradingViewAdvancedWidget() {
@@ -780,6 +943,9 @@
 
         // Synchronize Global & Asset Market Open/Closed Status
         updateMarketStatusDisplay(state.symbol);
+
+        // Update Dynamic Active Trade & Trailing SL/TP Lines in Real Time (1.5s live cycle)
+        updateChartTradeOverlays();
     }
 
     function computeClientMarketStatus(symbol) {
