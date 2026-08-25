@@ -20,6 +20,7 @@
     // Terminal Application State
     const state = {
         symbol: "XAUUSD",
+        candleSymbol: "XAUUSD",
         timeframe: "H1",
         chartMode: "tv_live", // 'tv_live' or 'tv_pro'
         chartExpanded: false,
@@ -364,6 +365,7 @@
 
     function renderTradingViewChartData() {
         if (!state.tvCandleSeries || !state.tvVolumeSeries || !state.candles || state.candles.length === 0) return;
+        if (!isSameSymbol(state.candleSymbol, state.symbol)) return;
 
         // Deduplicate and strictly sort candles chronologically by timestamp
         const candleMap = new Map();
@@ -728,7 +730,8 @@
             const res = await fetch(`/api/candles?symbol=${requestedSym}&tf=${requestedTf}`);
             const data = await res.json();
             if (seq !== candleFetchSeq) return; // Discard out-of-order stale response
-            if (data && data.candles && Array.isArray(data.candles)) {
+            if (data && data.candles && Array.isArray(data.candles) && data.candles.length > 0) {
+                state.candleSymbol = data.symbol || requestedSym;
                 state.candles = data.candles;
                 if (state.chartMode === "tv_live") {
                     renderTradingViewChartData();
@@ -952,6 +955,9 @@
 
     function updateLiveCandleTick(livePrice) {
         if (!state.candles || state.candles.length === 0 || state.chartMode !== "tv_live" || !livePrice || isNaN(livePrice) || livePrice <= 0) return;
+        // CRITICAL GUARD: Only update forming candle if loaded candles match the currently active symbol
+        if (!isSameSymbol(state.candleSymbol, state.symbol)) return;
+
         const sym = state.symbol || "XAUUSD";
         const statusObj = (state.marketStatuses && state.marketStatuses[sym]) || computeClientMarketStatus(sym);
         if (!statusObj.is_open) return;
@@ -973,7 +979,7 @@
             });
         }
 
-        const digits = last.close > 100 ? 2 : 5;
+        const digits = last.close > 100 ? 2 : (last.close > 10 ? 3 : 5);
         if (el.chartLivePrice) {
             el.chartLivePrice.textContent = last.close.toFixed(digits);
             el.chartLivePrice.style.color = last.close >= last.open ? "var(--neon-bull)" : "var(--neon-bear)";
@@ -2139,8 +2145,28 @@
     window.selectSymbol = function (sym) {
         if (!sym) return;
         state.symbol = sym;
+        state.candleSymbol = ""; // Invalidate until new candles for `sym` are received
+        state.candles = [];      // Clear old symbol candles immediately
+        
         if (el.chartSymbol) el.chartSymbol.textContent = sym;
         if (el.deskActiveSymbol) el.deskActiveSymbol.textContent = sym;
+        if (el.chartLivePrice) el.chartLivePrice.textContent = "--";
+
+        // Clear existing Price Lines immediately
+        if (state.tvPriceLines && state.tvPriceLines.length > 0) {
+            state.tvPriceLines.forEach(pl => {
+                try { state.tvCandleSeries.removePriceLine(pl); } catch (e) {}
+            });
+            state.tvPriceLines = [];
+        }
+        if (state.tvActiveTradeLines && state.tvActiveTradeLines.length > 0) {
+            state.tvActiveTradeLines.forEach(pl => {
+                try { state.tvCandleSeries.removePriceLine(pl); } catch (e) {}
+            });
+            state.tvActiveTradeLines = [];
+        }
+        const hudEl = document.getElementById("chart-active-trade-hud");
+        if (hudEl) hudEl.style.display = "none";
 
         // Reset & immediate re-bind of 1-Click Execution Desk inputs to new symbol's decision
         const activeDec = getDecisionForSymbol(sym);
