@@ -1284,7 +1284,7 @@ body {
         gap: 6px;
     }
 
-    /* Option Chain Table Touch Scroll */
+    /* Option Chain Table Touch Scroll with Sticky Strike Center Column */
     .opt-chain-container {
         width: 100% !important;
         overflow-x: auto !important;
@@ -1302,6 +1302,14 @@ body {
         padding: 6px 8px !important;
     }
 
+    .strike-cell, .strike-col-th {
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        background: #0b1120 !important;
+        box-shadow: 2px 0 6px rgba(0,0,0,0.6), -2px 0 6px rgba(0,0,0,0.6);
+    }
+
     .greek-pills-row {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
@@ -1312,6 +1320,22 @@ body {
 
     .greek-pill {
         flex-shrink: 0;
+    }
+}
+
+/* TABLET SPECIFIC OPTIMIZATIONS (769px - 1024px) */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .opt-workspace-grid {
+        grid-template-columns: 1fr;
+        padding: 14px 16px 60px 14px;
+    }
+
+    .single-signal-cards-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .payoff-chart-container {
+        height: 240px;
     }
 }
 

@@ -1182,7 +1182,7 @@ body {
         grid-template-columns: 1fr !important;
     }
 
-    /* Screener Table: Fully Contained Touch Scroll */
+    /* Screener Table: Fully Contained Touch Scroll with Sticky Symbol Column */
     .screener-table-card {
         width: 100% !important;
         overflow-x: auto !important;
@@ -1198,6 +1198,15 @@ body {
 
     .screener-table th, .screener-table td {
         padding: 8px 10px !important;
+    }
+
+    .screener-table th:first-child,
+    .screener-table td:first-child {
+        position: sticky;
+        left: 0;
+        z-index: 2;
+        background: #080c16;
+        box-shadow: 2px 0 6px rgba(0, 0, 0, 0.6);
     }
 
     /* Modals (Dossier & Option Chain) on Mobile */
@@ -1247,6 +1256,25 @@ body {
     }
 }
 
+/* TABLET SPECIFIC OPTIMIZATIONS (769px - 1024px) */
+@media (min-width: 769px) and (max-width: 1024px) {
+    .india-layout-container {
+        padding: 14px 16px 60px 14px;
+    }
+
+    .buy-now-cards-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .sector-heatmap-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .dossier-body-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 @media (max-width: 480px) {
     .brand-text {
         font-size: 12px !important;
@@ -1265,4 +1293,3 @@ body {
         padding: 10px !important;
     }
 }
-
