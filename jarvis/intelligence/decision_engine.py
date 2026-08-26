@@ -340,29 +340,42 @@ class DecisionEngine:
         spec = resolve_symbol(context.symbol)
         atr_pips = context.volatility.atr / spec.pip_size if spec.pip_size > 0 else 0
 
+        is_prime_session = bool(getattr(context.session, "is_prime_session", False)) if hasattr(context, "session") else False
+
+        # Dynamic Scalp Confluence & Quality Factor
+        is_scalp_favorable = (
+            rr_ratio >= 1.8
+            and spread <= (spec.max_spread_pips * 0.7)
+            and not context.volatility.is_excessive_spread
+            and (abs(context.momentum.trend_score) >= 10 or context.structure.bos or context.liquidity.sweep_detected)
+        )
+
         if is_micro_mode:
-            if account_balance <= 40.0:
-                min_score = 80.0
-                min_rr = 2.0
-                base_spread = 2.5
-            elif account_balance <= 70.0:
-                min_score = 80.0
-                min_rr = 2.0
-                base_spread = 3.0
-            else:
+            if is_scalp_favorable and (is_prime_session or rr_ratio >= 2.0):
+                min_score = 72.0
+                min_rr = 1.8
+                required_win_p = 0.50
+            elif account_balance <= 40.0:
                 min_score = 78.0
                 min_rr = 1.8
-                base_spread = 3.5
+                required_win_p = 0.52
+            else:
+                min_score = 75.0
+                min_rr = 1.8
+                required_win_p = 0.52
             
+            base_spread = 3.0
             dynamic_max_spread = max(base_spread, atr_pips * 0.08)
             dynamic_max_spread = min(dynamic_max_spread, context.volatility.max_allowed_spread_pips * 0.75)
             max_spread = round(dynamic_max_spread, 1)
 
             if current_drawdown_pct > 5.0:
-                min_score = max(min_score, 85.0)
+                min_score = max(min_score, 82.0)
+                required_win_p = max(required_win_p, 0.58)
         else:
-            min_score = 75.0
+            min_score = 72.0 if is_scalp_favorable else 75.0
             min_rr = 1.5
+            required_win_p = 0.50 if is_scalp_favorable else 0.55
             max_spread = spec.max_spread_pips
 
         # Check Macro MTF Confluence (H4 and D1 alignment)
@@ -376,7 +389,8 @@ class DecisionEngine:
             mtf_counter_trend = True
 
         if mtf_counter_trend:
-            min_score = max(min_score, 85.0)
+            min_score = max(min_score, 82.0)
+            required_win_p = max(required_win_p, 0.62)
 
         from jarvis.market.sessions import SessionEngine
         mkt_status = SessionEngine.get_market_trading_status(context.symbol, dt=getattr(context, "timestamp", None))
@@ -393,15 +407,14 @@ class DecisionEngine:
             "Spread Protection": spread <= max_spread and not context.volatility.is_excessive_spread,
             "AI Multi-Score Gate": ai_score >= min_score,
             "Devil Adversarial Guard": devil_report.penalty_score <= self.max_devil_penalty,
-            "Calibrated Win Prob >= 55%": calibrated_win_p >= (0.65 if mtf_counter_trend else 0.55),
-            "Valid Stop Loss Distance": risk_dist >= (context.volatility.atr * (0.75 if is_micro_mode else 0.5)),
+            "Calibrated Win Prob >= 50%": calibrated_win_p >= required_win_p,
+            "Valid Stop Loss Distance": risk_dist >= (context.volatility.atr * (0.6 if is_micro_mode else 0.5)),
             "Premium/Discount Alignment": premium_discount_valid,
             "No Active Macro Shock": regime.primary_regime != MarketRegime.EVENT_RISK,
-            "Order Flow Momentum": abs(context.momentum.trend_score) >= 15 or context.structure.bos or context.liquidity.sweep_detected,
-            "Macro MTF Alignment": not mtf_counter_trend or (ai_score >= 85.0 and calibrated_win_p >= 0.65),
+            "Order Flow Momentum": abs(context.momentum.trend_score) >= 10 or context.structure.bos or context.liquidity.sweep_detected,
+            "Macro MTF Alignment": not mtf_counter_trend or (ai_score >= 82.0 and calibrated_win_p >= 0.62),
             "Margin Capacity Limit": account_balance >= 10.0 and planned_risk_dollars > 0
         }
-
 
         failing_reasons = [name for name, passed in gate_checks.items() if not passed]
         gate_passed = len(failing_reasons) == 0

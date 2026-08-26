@@ -221,10 +221,9 @@ class JarvisOrchestrator:
         }
 
         # ── Hard Quality Gate: min model_confidence ────────────────────────
-        # Root-cause of triple-Gold loss: entries with confidence only 0.40.
-        # Raised minimum to 0.55. Also require devil penalty > 0 (entries with
-        # zero devil penalty and high EV are suspiciously overconfident).
-        MIN_CONFIDENCE = 0.55
+        # Adaptive Confidence Gate: 0.50 for favorable asymmetric R:R (>=1.8) scalps, 0.55 standard
+        is_favorable_scalp = (decision.risk_reward_ratio >= 1.8 and decision.expected_value > 0 and context.volatility.current_spread_pips <= (_spec.max_spread_pips * 0.75))
+        MIN_CONFIDENCE = 0.50 if is_favorable_scalp else 0.55
         if decision.decision == "EXECUTE" and decision.model_confidence < MIN_CONFIDENCE:
             decision.decision = "WAIT"
             decision.execution_authorized = False

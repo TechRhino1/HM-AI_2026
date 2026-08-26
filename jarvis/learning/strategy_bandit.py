@@ -13,6 +13,8 @@ class StrategyBandit:
     
     STRATEGIES = [
         "MICRO_ACCOUNT_ADAPTIVE",
+        "MICRO_LIQUIDITY_SWEEP",
+        "M1_M5_FVG_SCALP",
         "TREND_FOLLOWING",
         "TREND_PULLBACK",
         "BREAKOUT_EXPANSION",
