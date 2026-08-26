@@ -1234,6 +1234,19 @@ body {
         gap: 10px;
     }
 
+    .buy-now-header-bar {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 6px !important;
+    }
+
+    .buy-now-title {
+        display: flex !important;
+        align-items: center !important;
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+    }
+
     .buy-now-plan-grid {
         grid-template-columns: 1fr 1fr !important;
         gap: 4px;
@@ -1301,22 +1314,73 @@ body {
     }
 
     .modal-header {
-        padding: 10px 12px !important;
+        padding: 8px 12px !important;
         flex-shrink: 0 !important;
         background: #0a0f1d !important;
         border-bottom: 1px solid rgba(255, 153, 0, 0.3) !important;
         display: flex !important;
         align-items: center !important;
         justify-content: space-between !important;
+        gap: 8px !important;
+    }
+
+    .modal-header-left {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 2px !important;
+        min-width: 0 !important;
+        flex: 1 !important;
+    }
+
+    .modal-ticker-row {
+        display: flex !important;
+        align-items: center !important;
+        gap: 6px !important;
+        flex-wrap: wrap !important;
+    }
+
+    .modal-ticker-name {
+        font-size: 16px !important;
+    }
+
+    .modal-comp-name {
+        font-size: 10px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+
+    .modal-header-right {
+        display: flex !important;
+        align-items: center !important;
+        gap: 8px !important;
+        flex-shrink: 0 !important;
+    }
+
+    .modal-price-box {
+        text-align: right !important;
+    }
+
+    .modal-price-val {
+        font-size: 13px !important;
+        font-weight: 800 !important;
+        color: #ffffff !important;
+    }
+
+    .modal-change-tag {
+        font-size: 10px !important;
+        color: var(--neon-bull) !important;
     }
 
     .btn-modal-close, .btn-close-panel {
-        min-width: 44px !important;
-        min-height: 44px !important;
+        min-width: 40px !important;
+        min-height: 40px !important;
+        width: 40px !important;
+        height: 40px !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        font-size: 22px !important;
+        font-size: 20px !important;
         font-weight: 900 !important;
         background: rgba(255, 59, 92, 0.25) !important;
         border: 1px solid rgba(255, 59, 92, 0.6) !important;
@@ -1325,26 +1389,45 @@ body {
         cursor: pointer !important;
     }
 
-    .modal-ticker-name {
-        font-size: 16px !important;
-    }
-
     .modal-body-scrollable {
         flex: 1 !important;
         overflow-y: auto !important;
         -webkit-overflow-scrolling: touch !important;
-        padding: 12px 10px 40px 10px !important;
+        padding: 10px 8px 40px 8px !important;
         display: flex !important;
         flex-direction: column !important;
-        gap: 12px !important;
-    }
-
-    .dossier-body-grid {
-        grid-template-columns: 1fr !important;
         gap: 10px !important;
     }
 
-    .tv-chart-box {
+    .dossier-kpi-bar {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 6px !important;
+    }
+
+    .dossier-kpi-bar .kpi-item {
+        padding: 6px 8px !important;
+    }
+
+    .dossier-kpi-bar .kpi-item:last-child {
+        grid-column: 1 / -1 !important;
+    }
+
+    .dossier-content-grid {
+        grid-template-columns: 1fr !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 10px !important;
+        width: 100% !important;
+    }
+
+    .dossier-left-pane, .dossier-right-pane {
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 10px !important;
+    }
+
+    .dossier-chart-viewport {
         height: 280px !important;
         min-height: 280px !important;
         width: 100% !important;
@@ -1355,9 +1438,19 @@ body {
         gap: 6px !important;
     }
 
-    .matrix-grid {
-        grid-template-columns: repeat(4, 1fr) !important;
-        gap: 4px !important;
+    .calc-inputs-row {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 6px !important;
+    }
+
+    .calc-results-matrix {
+        grid-template-columns: repeat(3, 1fr) !important;
+        gap: 6px !important;
+    }
+
+    .cpr-breakdown-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 6px !important;
     }
 
     .option-chain-table {

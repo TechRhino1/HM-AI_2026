@@ -1614,6 +1614,19 @@ body {
     }
 
     /* AI Buy Now Cards Grid */
+    .buy-now-header-bar {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 6px !important;
+    }
+
+    .buy-now-title {
+        display: flex !important;
+        align-items: center !important;
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+    }
+
     .buy-now-cards-grid {
         grid-template-columns: 1fr !important;
         gap: 10px;
