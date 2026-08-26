@@ -66,8 +66,8 @@ def _start_background_tunnel(port: int = 8501, custom_subdomain: str = "hm2026")
     key_path = os.path.expanduser("~/.ssh/id_ed25519")
 
     providers = [
-        ("localhost.run", ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=15", "-R", f"80:127.0.0.1:{port}", "localhost.run"]),
-        ("serveo.net", ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=10", "-R", f"{custom_subdomain}:80:127.0.0.1:{port}", "serveo.net"]),
+        ("serveo.net", ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=10", "-o", "ExitOnForwardFailure=yes", "-R", f"{custom_subdomain}:80:127.0.0.1:{port}", "serveo.net"]),
+        ("localhost.run", ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=15", "-o", "ExitOnForwardFailure=yes", "-R", f"80:127.0.0.1:{port}", "localhost.run"]),
     ]
 
     p_idx = 0
