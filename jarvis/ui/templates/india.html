@@ -58,6 +58,16 @@
     </header>
 
     <!-- ==========================================================================
+         MOBILE BOTTOM NAVIGATION TAB BAR (VISIBLE ON TOUCH / MOBILE <= 900PX)
+         ========================================================================== -->
+    <nav class="mobile-nav-bar" id="mobile-nav-bar">
+        <button id="mob-btn-buys" class="mob-tab-btn active" onclick="switchMobileIndiaView('buys')">⚡ Prime Buys</button>
+        <button id="mob-btn-screener" class="mob-tab-btn" onclick="switchMobileIndiaView('screener')">📋 Screener</button>
+        <button id="mob-btn-heatmap" class="mob-tab-btn" onclick="switchMobileIndiaView('heatmap')">🗺️ Heatmap</button>
+        <button id="mob-btn-all" class="mob-tab-btn" onclick="switchMobileIndiaView('all')">🌐 All View</button>
+    </nav>
+
+    <!-- ==========================================================================
          TOP INDICES & CPR STATUS BAR
          ========================================================================== -->
     <div class="indices-ticker-bar">
@@ -191,7 +201,7 @@
         <!-- ==========================================================================
              AI RECOMMENDED: BUY NOW SHOWCASE SECTION
              ========================================================================== -->
-        <div class="ai-buy-now-section">
+        <div id="section-buy-now" class="ai-buy-now-section">
             <div class="buy-now-header-bar">
                 <div class="buy-now-title">
                     <span class="buy-now-pulse-icon">⚡</span>
@@ -216,7 +226,7 @@
         <!-- ==========================================================================
              MAIN SCREENER TABLE CARD
              ========================================================================== -->
-        <div class="screener-main-grid">
+        <div id="section-screener" class="screener-main-grid">
             <div class="screener-table-card">
                 <div class="table-header-bar">
                     <div class="table-title">

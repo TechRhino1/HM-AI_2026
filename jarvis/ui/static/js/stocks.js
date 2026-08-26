@@ -1162,7 +1162,55 @@ window.selectSearchResult = function (symbol) {
 };
 
 /* ==========================================================================
-   11. GLOBAL INITIALIZATION
+   11. MOBILE DOCK NAVIGATION CONTROLLER
+   ========================================================================== */
+
+window.switchMobileStocksView = function (view) {
+    const btnSetups = document.getElementById("mob-btn-setups");
+    const btnScreener = document.getElementById("mob-btn-screener");
+    const btnHeatmap = document.getElementById("mob-btn-heatmap");
+    const btnAll = document.getElementById("mob-btn-all");
+
+    if (btnSetups) btnSetups.classList.toggle("active", view === "setups");
+    if (btnScreener) btnScreener.classList.toggle("active", view === "screener");
+    if (btnHeatmap) btnHeatmap.classList.toggle("active", view === "heatmap");
+    if (btnAll) btnAll.classList.toggle("active", view === "all");
+
+    const secBuyNow = document.getElementById("section-buy-now");
+    const secScreener = document.getElementById("section-screener");
+    const secHeatmap = document.getElementById("sector-heatmap-section");
+    const secControls = document.querySelector(".controls-deck");
+
+    if (window.innerWidth <= 900) {
+        if (view === "setups") {
+            if (secBuyNow) secBuyNow.style.display = "flex";
+            if (secControls) secControls.style.display = "none";
+            if (secScreener) secScreener.style.display = "none";
+            if (secHeatmap) secHeatmap.style.display = "none";
+        } else if (view === "screener") {
+            if (secBuyNow) secBuyNow.style.display = "none";
+            if (secControls) secControls.style.display = "flex";
+            if (secScreener) secScreener.style.display = "block";
+            if (secHeatmap) secHeatmap.style.display = "none";
+        } else if (view === "heatmap") {
+            if (secBuyNow) secBuyNow.style.display = "none";
+            if (secControls) secControls.style.display = "none";
+            if (secScreener) secScreener.style.display = "none";
+            if (secHeatmap) {
+                secHeatmap.style.display = "flex";
+                if (!state.heatmapLoaded) fetchHeatmapData();
+            }
+        } else if (view === "all") {
+            if (secBuyNow) secBuyNow.style.display = "flex";
+            if (secControls) secControls.style.display = "flex";
+            if (secScreener) secScreener.style.display = "block";
+            if (secHeatmap) secHeatmap.style.display = "none";
+        }
+    }
+};
+
+/* ==========================================================================
+   12. GLOBAL INITIALIZATION
    ========================================================================== */
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -1170,6 +1218,25 @@ document.addEventListener("DOMContentLoaded", () => {
     fetchScreenerData();
     fetchAlerts();
     startAutoScanTicker();
+    if (window.innerWidth <= 900) {
+        window.switchMobileStocksView("setups");
+    }
+});
+
+window.addEventListener("resize", () => {
+    if (window.innerWidth <= 900) {
+        window.switchMobileStocksView(state.activeMobileView || "setups");
+    } else {
+        const secBuyNow = document.getElementById("section-buy-now");
+        const secScreener = document.getElementById("section-screener");
+        const secHeatmap = document.getElementById("sector-heatmap-section");
+        const secControls = document.querySelector(".controls-deck");
+        if (secBuyNow) secBuyNow.style.display = "block";
+        if (secControls) secControls.style.display = "block";
+        if (secScreener) secScreener.style.display = "block";
+        if (secHeatmap) secHeatmap.style.display = state.heatmapVisible ? "block" : "none";
+    }
 });
 
 })();
+

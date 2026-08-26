@@ -965,7 +965,55 @@
     };
 
     /* ==========================================================================
-       10. INITIALIZATION
+       10. MOBILE DOCK NAVIGATION CONTROLLER
+       ========================================================================== */
+
+    window.switchMobileIndiaView = function (view) {
+        const btnBuys = document.getElementById("mob-btn-buys");
+        const btnScreener = document.getElementById("mob-btn-screener");
+        const btnHeatmap = document.getElementById("mob-btn-heatmap");
+        const btnAll = document.getElementById("mob-btn-all");
+
+        if (btnBuys) btnBuys.classList.toggle("active", view === "buys");
+        if (btnScreener) btnScreener.classList.toggle("active", view === "screener");
+        if (btnHeatmap) btnHeatmap.classList.toggle("active", view === "heatmap");
+        if (btnAll) btnAll.classList.toggle("active", view === "all");
+
+        const secBuyNow = document.getElementById("section-buy-now");
+        const secScreener = document.getElementById("section-screener");
+        const secHeatmap = document.getElementById("sector-heatmap-section");
+        const secFilters = document.querySelector(".filter-panel-card");
+
+        if (window.innerWidth <= 900) {
+            if (view === "buys") {
+                if (secBuyNow) secBuyNow.style.display = "flex";
+                if (secFilters) secFilters.style.display = "none";
+                if (secScreener) secScreener.style.display = "none";
+                if (secHeatmap) secHeatmap.style.display = "none";
+            } else if (view === "screener") {
+                if (secBuyNow) secBuyNow.style.display = "none";
+                if (secFilters) secFilters.style.display = "flex";
+                if (secScreener) secScreener.style.display = "block";
+                if (secHeatmap) secHeatmap.style.display = "none";
+            } else if (view === "heatmap") {
+                if (secBuyNow) secBuyNow.style.display = "none";
+                if (secFilters) secFilters.style.display = "none";
+                if (secScreener) secScreener.style.display = "none";
+                if (secHeatmap) {
+                    secHeatmap.style.display = "flex";
+                    if (!state.heatmapLoaded) fetchHeatmapData();
+                }
+            } else if (view === "all") {
+                if (secBuyNow) secBuyNow.style.display = "flex";
+                if (secFilters) secFilters.style.display = "flex";
+                if (secScreener) secScreener.style.display = "block";
+                if (secHeatmap) secHeatmap.style.display = "none";
+            }
+        }
+    };
+
+    /* ==========================================================================
+       11. INITIALIZATION
        ========================================================================== */
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -974,6 +1022,25 @@
         fetchFiiDiiData();
         fetchScannerData();
         startAutoScanTicker();
+        if (window.innerWidth <= 900) {
+            window.switchMobileIndiaView("buys");
+        }
+    });
+
+    window.addEventListener("resize", () => {
+        if (window.innerWidth <= 900) {
+            window.switchMobileIndiaView(state.activeMobileView || "buys");
+        } else {
+            const secBuyNow = document.getElementById("section-buy-now");
+            const secScreener = document.getElementById("section-screener");
+            const secHeatmap = document.getElementById("sector-heatmap-section");
+            const secFilters = document.querySelector(".filter-panel-card");
+            if (secBuyNow) secBuyNow.style.display = "block";
+            if (secFilters) secFilters.style.display = "block";
+            if (secScreener) secScreener.style.display = "block";
+            if (secHeatmap) secHeatmap.style.display = state.heatmapVisible ? "block" : "none";
+        }
     });
 
 })();
+

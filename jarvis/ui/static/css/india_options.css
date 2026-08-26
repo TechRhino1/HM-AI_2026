@@ -37,6 +37,10 @@ body {
     overflow-x: hidden;
 }
 
+.mobile-nav-bar {
+    display: none;
+}
+
 /* ==========================================================================
    1. TOP INSTITUTIONAL HUD HEADER
    ========================================================================== */
@@ -1106,7 +1110,11 @@ body {
 
 @media (max-width: 900px) {
     body {
-        overflow-x: hidden;
+        height: 100vh;
+        height: -webkit-fill-available;
+        overflow: hidden !important;
+        display: flex;
+        flex-direction: column;
         width: 100vw;
     }
 
@@ -1168,6 +1176,56 @@ body {
         padding: 5px 10px !important;
         font-size: 11px !important;
         border-radius: 5px;
+    }
+
+    /* Fixed Bottom iOS/Android Style Mobile Tab Navigation Bar */
+    .mobile-nav-bar {
+        display: flex !important;
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        height: 56px !important;
+        background: rgba(8, 12, 22, 0.96) !important;
+        backdrop-filter: blur(20px) !important;
+        -webkit-backdrop-filter: blur(20px) !important;
+        border-top: 1px solid rgba(251, 191, 36, 0.3) !important;
+        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.8) !important;
+        z-index: 9999 !important;
+        padding: 0 4px !important;
+        justify-content: space-around !important;
+        align-items: center !important;
+    }
+
+    .mob-tab-btn {
+        flex: 1;
+        height: 44px;
+        background: transparent;
+        border: none;
+        color: var(--text-dim);
+        font-family: var(--font-main);
+        font-size: 10.5px;
+        font-weight: 700;
+        padding: 4px 2px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        cursor: pointer;
+        border-radius: 6px;
+        transition: all 0.2s ease;
+    }
+
+    .mob-tab-btn.active {
+        color: var(--neon-gold);
+        background: rgba(251, 191, 36, 0.15);
+        border: 1px solid rgba(251, 191, 36, 0.35);
+        box-shadow: 0 0 12px rgba(251, 191, 36, 0.25);
+    }
+
+    .mob-tab-btn:active {
+        transform: scale(0.94);
     }
 
     /* Row 3: Search Box 100% Width */
@@ -1237,7 +1295,10 @@ body {
     /* Main 2-Pane Workspace Grid: Stack Vertically */
     .opt-workspace-grid {
         grid-template-columns: 1fr !important;
-        padding: 10px 8px 60px 8px !important;
+        flex: 1;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding: 10px 8px 70px 8px !important;
         gap: 12px;
         width: 100%;
         box-sizing: border-box;

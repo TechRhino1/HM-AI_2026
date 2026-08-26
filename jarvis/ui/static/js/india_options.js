@@ -834,13 +834,87 @@
     }
 
     /* ==========================================================================
-       6. INITIALIZATION & SEARCH
+       6. MOBILE DOCK NAVIGATION CONTROLLER
+       ========================================================================== */
+
+    window.switchMobileOptionsView = function (view) {
+        const btnSingles = document.getElementById("mob-btn-singles");
+        const btnSpreads = document.getElementById("mob-btn-spreads");
+        const btnPayoff = document.getElementById("mob-btn-payoff");
+        const btnChain = document.getElementById("mob-btn-chain");
+        const btnAll = document.getElementById("mob-btn-all");
+
+        if (btnSingles) btnSingles.classList.toggle("active", view === "singles");
+        if (btnSpreads) btnSpreads.classList.toggle("active", view === "spreads");
+        if (btnPayoff) btnPayoff.classList.toggle("active", view === "payoff");
+        if (btnChain) btnChain.classList.toggle("active", view === "chain");
+        if (btnAll) btnAll.classList.toggle("active", view === "all");
+
+        const secSingles = document.getElementById("section-singles");
+        const secSpreads = document.getElementById("section-spreads");
+        const secPayoff = document.getElementById("section-payoff");
+        const secChain = document.getElementById("section-chain");
+
+        if (window.innerWidth <= 900) {
+            if (view === "singles") {
+                if (secSingles) secSingles.style.display = "flex";
+                if (secSpreads) secSpreads.style.display = "none";
+                if (secPayoff) secPayoff.style.display = "none";
+                if (secChain) secChain.style.display = "none";
+            } else if (view === "spreads") {
+                if (secSingles) secSingles.style.display = "none";
+                if (secSpreads) secSpreads.style.display = "flex";
+                if (secPayoff) secPayoff.style.display = "none";
+                if (secChain) secChain.style.display = "none";
+            } else if (view === "payoff") {
+                if (secSingles) secSingles.style.display = "none";
+                if (secSpreads) secSpreads.style.display = "none";
+                if (secPayoff) secPayoff.style.display = "flex";
+                if (secChain) secChain.style.display = "none";
+            } else if (view === "chain") {
+                if (secSingles) secSingles.style.display = "none";
+                if (secSpreads) secSpreads.style.display = "none";
+                if (secPayoff) secPayoff.style.display = "none";
+                if (secChain) secChain.style.display = "flex";
+            } else if (view === "all") {
+                if (secSingles) secSingles.style.display = "flex";
+                if (secSpreads) secSpreads.style.display = "flex";
+                if (secPayoff) secPayoff.style.display = "flex";
+                if (secChain) secChain.style.display = "flex";
+            }
+        }
+    };
+
+    /* ==========================================================================
+       7. INITIALIZATION & SEARCH
        ========================================================================== */
 
     document.addEventListener("DOMContentLoaded", () => {
         fetchOptionChain("NIFTY");
         fetchSingleOptionSignals();
         fetchOptionRecommendations();
+        if (window.innerWidth <= 900) {
+            window.switchMobileOptionsView("singles");
+        }
+    });
+
+    window.addEventListener("resize", () => {
+        if (state.payoffChart) state.payoffChart.resize();
+        if (state.oiChart) state.oiChart.resize();
+
+        if (window.innerWidth <= 900) {
+            window.switchMobileOptionsView(state.activeMobileView || "singles");
+        } else {
+            const secSingles = document.getElementById("section-singles");
+            const secSpreads = document.getElementById("section-spreads");
+            const secPayoff = document.getElementById("section-payoff");
+            const secChain = document.getElementById("section-chain");
+            if (secSingles) secSingles.style.display = "block";
+            if (secSpreads) secSpreads.style.display = "block";
+            if (secPayoff) secPayoff.style.display = "block";
+            if (secChain) secChain.style.display = "block";
+        }
     });
 
 })();
+

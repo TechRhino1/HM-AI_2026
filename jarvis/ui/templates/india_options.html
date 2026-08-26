@@ -57,6 +57,17 @@
     </header>
 
     <!-- ==========================================================================
+         MOBILE BOTTOM NAVIGATION TAB BAR (VISIBLE ON TOUCH / MOBILE <= 900PX)
+         ========================================================================== -->
+    <nav class="mobile-nav-bar" id="mobile-nav-bar">
+        <button id="mob-btn-singles" class="mob-tab-btn active" onclick="switchMobileOptionsView('singles')">⚡ Single Buys</button>
+        <button id="mob-btn-spreads" class="mob-tab-btn" onclick="switchMobileOptionsView('spreads')">🛡️ Spreads</button>
+        <button id="mob-btn-payoff" class="mob-tab-btn" onclick="switchMobileOptionsView('payoff')">📈 Payoff & OI</button>
+        <button id="mob-btn-chain" class="mob-tab-btn" onclick="switchMobileOptionsView('chain')">📋 Option Chain</button>
+        <button id="mob-btn-all" class="mob-tab-btn" onclick="switchMobileOptionsView('all')">🌐 All View</button>
+    </nav>
+
+    <!-- ==========================================================================
          UNDERLYING SELECTOR & REAL-TIME SPOT TELEMETRY BAR
          ========================================================================== -->
     <div class="underlying-selector-bar">
@@ -122,7 +133,7 @@
     <!-- ==========================================================================
          AI HIGH-VELOCITY SINGLE ENTRY OPTION BUYING SIGNALS (CE / PE)
          ========================================================================== -->
-    <div class="opt-single-signals-section">
+    <div id="section-singles" class="opt-single-signals-section">
         <div class="single-signals-header-bar">
             <div class="single-signals-title">
                 <span class="pulse-dot"></span>
@@ -155,7 +166,7 @@
     <!-- ==========================================================================
          AI RECOMMENDED OPTIONS TRADES & STRATEGIES SHOWCASE (MULTI-LEG SPREADS)
          ========================================================================== -->
-    <div class="opt-recommendations-section">
+    <div id="section-spreads" class="opt-recommendations-section">
         <div class="opt-rec-header-bar">
             <div class="opt-rec-title">
                 <span class="pulse-dot"></span>
@@ -185,7 +196,7 @@
         <!-- ======================================================================
              LEFT PANE: INTERACTIVE MULTI-LEG PAYOFF & STRATEGY BUILDER
              ====================================================================== -->
-        <div class="opt-left-pane">
+        <div id="section-payoff" class="opt-left-pane">
             
             <!-- Payoff Diagram Card -->
             <div class="pane-card payoff-card">
@@ -346,7 +357,7 @@
         <!-- ======================================================================
              RIGHT PANE: FULL INTERACTIVE OPTION CHAIN (CE / PE MATRIX)
              ====================================================================== -->
-        <div class="opt-right-pane">
+        <div id="section-chain" class="opt-right-pane">
             <div class="pane-card chain-card">
                 <div class="pane-header-row">
                     <div class="pane-title">
