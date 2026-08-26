@@ -511,15 +511,11 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(404, f"Static file {req_path} not found")
 
-    def _serve_template(self, template_name: str = "app.html", initial_desk: str = "terminal"):
+    def _serve_template(self, template_name: str):
         ui_path = os.path.join(self.base_dir, "ui", "templates", template_name)
-        if not os.path.exists(ui_path):
-            ui_path = os.path.join(self.base_dir, "ui", "templates", "app.html")
-
         if os.path.exists(ui_path):
             with open(ui_path, "r", encoding="utf-8") as f:
                 content = f.read()
-            content = content.replace("{{INITIAL_DESK}}", initial_desk)
             content_bytes = content.encode("utf-8")
 
             self.send_response(200)
@@ -534,16 +530,16 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
             self.send_error(404, f"Template {template_name} not found")
 
     def _serve_terminal_ui(self):
-        self._serve_template("app.html", initial_desk="terminal")
+        self._serve_template("index.html")
 
     def _serve_stocks_ui(self):
-        self._serve_template("app.html", initial_desk="stocks")
+        self._serve_template("stocks.html")
 
     def _serve_india_ui(self):
-        self._serve_template("app.html", initial_desk="india")
+        self._serve_template("india.html")
 
     def _serve_options_ui(self):
-        self._serve_template("app.html", initial_desk="options")
+        self._serve_template("india_options.html")
 
 def start_server(host: str = "0.0.0.0", port: int = 8501) -> ThreadingHTTPServer:
     ThreadingHTTPServer.allow_reuse_address = True
