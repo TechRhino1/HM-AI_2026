@@ -54,42 +54,46 @@ def get_local_wifi_ip():
 
 def _start_background_tunnel(port: int = 8501):
     """Starts persistent authenticated HTTPS mobile tunnel in the background with auto-reconnect."""
-    cmd = [
-        "ssh",
-        "-o", "StrictHostKeyChecking=no",
-        "-o", "ServerAliveInterval=20",
-        "-o", "ServerAliveCountMax=10",
-        "-R", f"80:127.0.0.1:{port}",
-        "localhost.run"
+    key_path = os.path.expanduser("~/.ssh/id_ed25519")
+    providers = [
+        ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=15", "-R", f"80:127.0.0.1:{port}", "serveo.net"],
+        ["ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=15", "-R", f"80:127.0.0.1:{port}", "localhost.run"] if os.path.exists(key_path) else ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=15", "-R", f"80:127.0.0.1:{port}", "localhost.run"]
     ]
+    
+    idx = 0
     while True:
+        cmd = providers[idx % len(providers)]
         try:
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
             _TUNNEL_STATE["proc"] = proc
             _TUNNEL_STATE["status"] = "CONNECTED"
 
-            for _ in range(25):
+            for _ in range(30):
                 line = proc.stdout.readline()
                 if not line:
+                    line = proc.stderr.readline()
+                if not line:
                     break
-                if "tunneled with tls termination," in line:
-                    parts = line.split("tunneled with tls termination,")
-                    if len(parts) > 1:
-                        _TUNNEL_STATE["url"] = parts[1].strip()
-                        logger.info(f"Authenticated Mobile HTTPS Tunnel active: {_TUNNEL_STATE['url']}")
-                        break
-                elif "Forwarding HTTP traffic from" in line:
+                if "Forwarding HTTP traffic from" in line:
                     _TUNNEL_STATE["url"] = line.split("Forwarding HTTP traffic from")[1].strip()
                     logger.info(f"Mobile HTTPS Tunnel active: {_TUNNEL_STATE['url']}")
                     break
+                elif "tunneled with tls termination," in line:
+                    parts = line.split("tunneled with tls termination,")
+                    if len(parts) > 1:
+                        _TUNNEL_STATE["url"] = parts[1].strip()
+                        logger.info(f"Mobile HTTPS Tunnel active: {_TUNNEL_STATE['url']}")
+                        break
                 time.sleep(0.3)
 
             proc.wait()
             _TUNNEL_STATE["status"] = "RECONNECTING"
-            time.sleep(3)
+            idx += 1
+            time.sleep(2)
         except Exception as e:
             _TUNNEL_STATE["status"] = f"ERROR: {e}"
-            time.sleep(5)
+            idx += 1
+            time.sleep(4)
 
 def hm_start(mode: str = "live", port: int = 8501, host: str = "0.0.0.0"):
     local_ip = get_local_wifi_ip()
