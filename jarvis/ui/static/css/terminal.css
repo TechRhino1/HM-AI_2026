@@ -1840,12 +1840,16 @@ header.terminal-hud {
 
 /* 3. MOBILE PHONES & TOUCH TABLETS (<= 900px) */
 @media (max-width: 900px) {
-    body {
-        height: 100vh;
-        height: -webkit-fill-available;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
+    html, body {
+        min-height: 100vh;
+        min-height: 100dvh;
+        height: auto !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        overscroll-behavior-y: contain;
+        display: block !important;
+        width: 100% !important;
     }
 
     /* Fixed Top HUD on Mobile */

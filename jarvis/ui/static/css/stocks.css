@@ -1397,13 +1397,16 @@ body {
    ========================================================================== */
 
 @media (max-width: 900px) {
-    body {
-        height: 100vh;
-        height: -webkit-fill-available;
-        overflow: hidden !important;
-        display: flex;
-        flex-direction: column;
-        width: 100vw;
+    html, body {
+        min-height: 100vh;
+        min-height: 100dvh;
+        height: auto !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        overscroll-behavior-y: contain;
+        display: block !important;
+        width: 100% !important;
     }
 
     /* Fixed Clean 2-Row Header on Mobile */
