@@ -838,6 +838,7 @@
        ========================================================================== */
 
     window.switchMobileOptionsView = function (view) {
+        state.activeMobileView = view;
         const btnSingles = document.getElementById("mob-btn-singles");
         const btnSpreads = document.getElementById("mob-btn-spreads");
         const btnPayoff = document.getElementById("mob-btn-payoff");
@@ -854,43 +855,49 @@
         const secSpreads = document.getElementById("section-spreads");
         const secPayoff = document.getElementById("section-payoff");
         const secChain = document.getElementById("section-chain");
+        const optWorkspaceGrid = document.querySelector(".opt-workspace-grid");
 
         if (window.innerWidth <= 900) {
             if (view === "singles") {
-                if (secSingles) secSingles.style.display = "flex";
+                if (secSingles) secSingles.style.display = "block";
                 if (secSpreads) secSpreads.style.display = "none";
+                if (optWorkspaceGrid) optWorkspaceGrid.style.display = "none";
                 if (secPayoff) secPayoff.style.display = "none";
                 if (secChain) secChain.style.display = "none";
             } else if (view === "spreads") {
                 if (secSingles) secSingles.style.display = "none";
-                if (secSpreads) secSpreads.style.display = "flex";
+                if (secSpreads) secSpreads.style.display = "block";
+                if (optWorkspaceGrid) optWorkspaceGrid.style.display = "none";
                 if (secPayoff) secPayoff.style.display = "none";
                 if (secChain) secChain.style.display = "none";
             } else if (view === "payoff") {
                 if (secSingles) secSingles.style.display = "none";
                 if (secSpreads) secSpreads.style.display = "none";
+                if (optWorkspaceGrid) optWorkspaceGrid.style.display = "grid";
                 if (secPayoff) {
                     secPayoff.style.display = "flex";
                     setTimeout(() => {
                         if (state.payoffChart) state.payoffChart.resize();
                         if (state.oiChart) state.oiChart.resize();
-                    }, 50);
+                    }, 60);
                 }
                 if (secChain) secChain.style.display = "none";
             } else if (view === "chain") {
                 if (secSingles) secSingles.style.display = "none";
                 if (secSpreads) secSpreads.style.display = "none";
+                if (optWorkspaceGrid) optWorkspaceGrid.style.display = "grid";
                 if (secPayoff) secPayoff.style.display = "none";
                 if (secChain) secChain.style.display = "flex";
             } else if (view === "all") {
-                if (secSingles) secSingles.style.display = "flex";
-                if (secSpreads) secSpreads.style.display = "flex";
+                if (secSingles) secSingles.style.display = "block";
+                if (secSpreads) secSpreads.style.display = "block";
+                if (optWorkspaceGrid) optWorkspaceGrid.style.display = "grid";
                 if (secPayoff) {
                     secPayoff.style.display = "flex";
                     setTimeout(() => {
                         if (state.payoffChart) state.payoffChart.resize();
                         if (state.oiChart) state.oiChart.resize();
-                    }, 50);
+                    }, 60);
                 }
                 if (secChain) secChain.style.display = "flex";
             }

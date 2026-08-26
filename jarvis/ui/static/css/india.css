@@ -1237,13 +1237,19 @@ body {
     /* Buy Now Cards: 1 Column on Phone */
     .buy-now-cards-grid {
         grid-template-columns: 1fr !important;
+        display: flex !important;
+        flex-direction: column !important;
         gap: 12px;
+        width: 100% !important;
     }
 
-    .buy-card {
+    .buy-now-card, .buy-card {
+        width: 100% !important;
+        box-sizing: border-box !important;
         padding: 14px !important;
         border-radius: 12px !important;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+        margin: 0 !important;
     }
 
     .buy-now-header-bar {
