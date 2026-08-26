@@ -869,7 +869,13 @@
             } else if (view === "payoff") {
                 if (secSingles) secSingles.style.display = "none";
                 if (secSpreads) secSpreads.style.display = "none";
-                if (secPayoff) secPayoff.style.display = "flex";
+                if (secPayoff) {
+                    secPayoff.style.display = "flex";
+                    setTimeout(() => {
+                        if (state.payoffChart) state.payoffChart.resize();
+                        if (state.oiChart) state.oiChart.resize();
+                    }, 50);
+                }
                 if (secChain) secChain.style.display = "none";
             } else if (view === "chain") {
                 if (secSingles) secSingles.style.display = "none";
@@ -879,7 +885,13 @@
             } else if (view === "all") {
                 if (secSingles) secSingles.style.display = "flex";
                 if (secSpreads) secSpreads.style.display = "flex";
-                if (secPayoff) secPayoff.style.display = "flex";
+                if (secPayoff) {
+                    secPayoff.style.display = "flex";
+                    setTimeout(() => {
+                        if (state.payoffChart) state.payoffChart.resize();
+                        if (state.oiChart) state.oiChart.resize();
+                    }, 50);
+                }
                 if (secChain) secChain.style.display = "flex";
             }
         }

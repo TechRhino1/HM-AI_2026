@@ -297,12 +297,14 @@
     }
 
     .auth-input-field {
-        font-size: 12px;
-        padding: 8px 34px 8px 10px;
+        font-size: 14px;
+        padding: 10px 36px 10px 12px;
+        touch-action: manipulation;
     }
 
     .auth-submit-btn {
-        padding: 10px;
-        font-size: 11px;
+        padding: 12px;
+        font-size: 13px;
+        touch-action: manipulation;
     }
 }

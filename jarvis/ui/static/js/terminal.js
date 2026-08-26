@@ -276,6 +276,9 @@
                 }
             });
             ro.observe(el.tvLiveContainer);
+            if (el.tvLiveContainer.parentElement) {
+                ro.observe(el.tvLiveContainer.parentElement);
+            }
         }
 
         // Subscribe to crosshair move for Smart Tooltip

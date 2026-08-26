@@ -410,16 +410,20 @@
             el.newsContainer.innerHTML = nHtml;
         }
 
-        // Render Chart
-        initDossierChart(data.candles, data.cpr, data.camarilla);
-
-        // Update position size calculator
-        window.updatePositionCalculator();
-
+        // Display Modal FIRST so container dimensions are measurable
         if (el.dossierModal) {
             el.dossierModal.style.display = "flex";
             state.dossierOpen = true;
         }
+
+        // Update position size calculator
+        window.updatePositionCalculator();
+
+        // Render Chart and Radar after DOM layout computation
+        requestAnimationFrame(() => {
+            initDossierChart(data.candles, data.cpr, data.camarilla);
+            if (state.radarChart) state.radarChart.resize();
+        });
     }
 
     function initDossierChart(candles, cpr, camarilla) {
@@ -428,8 +432,8 @@
 
         el.chartContainer.innerHTML = "";
 
-        const width = el.chartContainer.clientWidth || 550;
-        const height = el.chartContainer.clientHeight || 320;
+        const width = el.chartContainer.clientWidth > 0 ? el.chartContainer.clientWidth : (window.innerWidth <= 900 ? window.innerWidth - 24 : 550);
+        const height = el.chartContainer.clientHeight > 0 ? el.chartContainer.clientHeight : (window.innerWidth <= 900 ? 280 : 320);
 
         const chart = LightweightCharts.createChart(el.chartContainer, {
             width: width,
@@ -503,6 +507,21 @@
                 lineStyle: LightweightCharts.LineStyle.Solid,
                 title: `Cam H4 Breakout: ₹${camarilla.h4_breakout}`
             });
+        }
+
+        // Auto-resize
+        if (window.ResizeObserver) {
+            const ro = new ResizeObserver(entries => {
+                for (const entry of entries) {
+                    if (entry.contentRect && entry.contentRect.width > 0 && entry.contentRect.height > 0) {
+                        chart.applyOptions({
+                            width: entry.contentRect.width,
+                            height: entry.contentRect.height
+                        });
+                    }
+                }
+            });
+            ro.observe(el.chartContainer);
         }
 
         state.chartInstance = chart;

@@ -565,18 +565,20 @@
             el.newsContainer.innerHTML = nHtml;
         }
 
-        // Render TradingView Chart
-        initDossierChart(data.candles, data.support_resistance);
+        // Display Modal FIRST so container dimensions are measurable
+        if (el.dossierModal) {
+            el.dossierModal.style.display = "flex";
+            state.dossierOpen = true;
+        }
 
         // Store state & update live position sizing calculator
         state.currentDossier = data;
         window.updatePositionCalculator();
 
-        // Display Modal
-        if (el.dossierModal) {
-            el.dossierModal.style.display = "flex";
-            state.dossierOpen = true;
-        }
+        // Render TradingView Chart after DOM layout computation
+        requestAnimationFrame(() => {
+            initDossierChart(data.candles, data.support_resistance);
+        });
     }
 
     function initDossierChart(candles, sr) {
@@ -585,8 +587,8 @@
 
         el.chartContainer.innerHTML = "";
 
-        const width = el.chartContainer.clientWidth || 650;
-        const height = el.chartContainer.clientHeight || 380;
+        const width = el.chartContainer.clientWidth > 0 ? el.chartContainer.clientWidth : (window.innerWidth <= 900 ? window.innerWidth - 24 : 650);
+        const height = el.chartContainer.clientHeight > 0 ? el.chartContainer.clientHeight : (window.innerWidth <= 900 ? 280 : 380);
 
         const chart = LightweightCharts.createChart(el.chartContainer, {
             width: width,
