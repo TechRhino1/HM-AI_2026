@@ -47,7 +47,7 @@ class IndiaTechnicalEngine:
         random.seed(seed_val)
 
         candles = []
-        current_close = base_price * (1.0 + (random.uniform(-0.06, 0.08)))
+        current_close = float(base_price)
 
         # Build reverse then forward
         prices = [current_close]
