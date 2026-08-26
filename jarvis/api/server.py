@@ -502,123 +502,81 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", mime_type)
             self.send_header("Content-Length", str(len(content)))
-            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
             self.end_headers()
             self.wfile.write(content)
         else:
             self.send_error(404, f"Static file {req_path} not found")
 
     def _serve_terminal_ui(self):
-        now = time.time()
-        if "__index_html__" in self._STATIC_CACHE:
-            content_bytes, mime_type, ts = self._STATIC_CACHE["__index_html__"]
-            if now - ts < 5.0:
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(content_bytes)))
-                self.send_header("Cache-Control", "no-cache")
-                self.end_headers()
-                self.wfile.write(content_bytes)
-                return
-
         ui_path = os.path.join(self.base_dir, "ui", "templates", "index.html")
         if os.path.exists(ui_path):
             with open(ui_path, "r", encoding="utf-8") as f:
                 content = f.read()
             content_bytes = content.encode("utf-8")
-            self._STATIC_CACHE["__index_html__"] = (content_bytes, "text/html", now)
 
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(content_bytes)))
-            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
             self.end_headers()
             self.wfile.write(content_bytes)
         else:
             self.send_error(404, "Terminal UI index.html not found")
 
     def _serve_stocks_ui(self):
-        now = time.time()
-        if "__stocks_html__" in self._STATIC_CACHE:
-            content_bytes, mime_type, ts = self._STATIC_CACHE["__stocks_html__"]
-            if now - ts < 5.0:
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(content_bytes)))
-                self.send_header("Cache-Control", "no-cache")
-                self.end_headers()
-                self.wfile.write(content_bytes)
-                return
-
         ui_path = os.path.join(self.base_dir, "ui", "templates", "stocks.html")
         if os.path.exists(ui_path):
             with open(ui_path, "r", encoding="utf-8") as f:
                 content = f.read()
             content_bytes = content.encode("utf-8")
-            self._STATIC_CACHE["__stocks_html__"] = (content_bytes, "text/html", now)
 
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(content_bytes)))
-            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
             self.end_headers()
             self.wfile.write(content_bytes)
         else:
             self.send_error(404, "Stocks UI stocks.html not found")
 
     def _serve_india_ui(self):
-        now = time.time()
-        if "__india_html__" in self._STATIC_CACHE:
-            content_bytes, ctype, cached_time = self._STATIC_CACHE["__india_html__"]
-            if (now - cached_time) < 1.0:
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(content_bytes)))
-                self.send_header("Cache-Control", "no-cache")
-                self.end_headers()
-                self.wfile.write(content_bytes)
-                return
-
         ui_path = os.path.join(self.base_dir, "ui", "templates", "india.html")
         if os.path.exists(ui_path):
             with open(ui_path, "r", encoding="utf-8") as f:
                 content = f.read()
             content_bytes = content.encode("utf-8")
-            self._STATIC_CACHE["__india_html__"] = (content_bytes, "text/html", now)
 
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(content_bytes)))
-            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
             self.end_headers()
             self.wfile.write(content_bytes)
         else:
             self.send_error(404, "India UI india.html not found")
 
     def _serve_options_ui(self):
-        now = time.time()
-        if "__india_options_html__" in self._STATIC_CACHE:
-            content_bytes, ctype, cached_time = self._STATIC_CACHE["__india_options_html__"]
-            if (now - cached_time) < 1.0:
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(content_bytes)))
-                self.send_header("Cache-Control", "no-cache")
-                self.end_headers()
-                self.wfile.write(content_bytes)
-                return
-
         ui_path = os.path.join(self.base_dir, "ui", "templates", "india_options.html")
         if os.path.exists(ui_path):
             with open(ui_path, "r", encoding="utf-8") as f:
                 content = f.read()
             content_bytes = content.encode("utf-8")
-            self._STATIC_CACHE["__india_options_html__"] = (content_bytes, "text/html", now)
 
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
             self.send_header("Content-Length", str(len(content_bytes)))
-            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
             self.end_headers()
             self.wfile.write(content_bytes)
         else:
