@@ -8,26 +8,98 @@ import time
 import hmac
 import hashlib
 import secrets
-from typing import Dict, Any, Optional, Tuple
+import logging
+from typing import Dict, Any, Optional, Tuple, List
 
-# Secret key for HMAC token signing (auto-generated or loaded from env)
-SECRET_KEY = os.environ.get("JARVIS_SECRET_KEY", secrets.token_hex(32))
+logger = logging.getLogger("JARVIS_RemoteAuth")
+
+# Persistent Secret key for HMAC token signing (auto-generated & stored on disk or loaded from env)
+def _get_or_create_secret_key() -> str:
+    env_key = os.environ.get("JARVIS_SECRET_KEY")
+    if env_key and len(env_key.strip()) >= 16:
+        return env_key.strip()
+
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    key_file = os.path.join(base_dir, ".jarvis_secret_key")
+    if os.path.exists(key_file):
+        try:
+            with open(key_file, "r", encoding="utf-8") as f:
+                k = f.read().strip()
+                if len(k) >= 32:
+                    return k
+        except Exception as e:
+            logger.warning(f"Could not read persistent secret key file: {e}")
+
+    new_key = secrets.token_hex(32)
+    try:
+        with open(key_file, "w", encoding="utf-8") as f:
+            f.write(new_key)
+    except Exception as e:
+        logger.warning(f"Could not write persistent secret key file: {e}")
+    return new_key
+
+SECRET_KEY = _get_or_create_secret_key()
 
 # Default Remote Access Admin Credentials (Override via environment variables)
 ADMIN_USERNAME = os.environ.get("JARVIS_ADMIN_USER", "admin")
 DEFAULT_PASS_RAW = os.environ.get("JARVIS_ADMIN_PASS", "Hm@5656")
 
+# Security warning if using fallback password
+if not os.environ.get("JARVIS_ADMIN_PASS"):
+    logger.warning("SECURITY NOTICE: JARVIS_ADMIN_PASS is not set in environment. Using default credentials.")
+
 
 class RemoteAuthEngine:
     """
     Secure Authentication and Session Engine for JARVIS AI Remote Web Terminals.
+    Includes rate limiting, temporary lockout against brute-force attacks, and persistent HMAC signing.
     """
     _tokens: Dict[str, float] = {}       # token -> expiration timestamp (24h validity)
     _revoked_tokens: set = set()          # set of revoked tokens (logged out)
     _token_ttl: float = 86400.0          # 24 hours in seconds
 
+    # Failed login attempts tracker for brute force protection
+    _failed_attempts: Dict[str, List[float]] = {}
+    _lockout_duration_sec: float = 60.0
+    _max_failed_attempts: int = 5
+
     # In-memory user database with salted hashes and roles
     _users: Dict[str, Dict[str, Any]] = {}
+
+    @classmethod
+    def check_rate_limit(cls, identifier: str) -> Tuple[bool, int]:
+        """
+        Checks if identifier (IP or username) is currently locked out.
+        Returns (is_allowed, seconds_remaining).
+        """
+        now = time.time()
+        key = (identifier or "global").strip().lower()
+        attempts = cls._failed_attempts.get(key, [])
+        # Retain attempts within last 300 seconds (5 mins)
+        attempts = [t for t in attempts if (now - t) < 300.0]
+        cls._failed_attempts[key] = attempts
+
+        if len(attempts) >= cls._max_failed_attempts:
+            last_attempt = max(attempts)
+            elapsed = now - last_attempt
+            if elapsed < cls._lockout_duration_sec:
+                remaining = max(1, int(cls._lockout_duration_sec - elapsed))
+                return False, remaining
+
+        return True, 0
+
+    @classmethod
+    def record_failed_attempt(cls, identifier: str):
+        now = time.time()
+        key = (identifier or "global").strip().lower()
+        if key not in cls._failed_attempts:
+            cls._failed_attempts[key] = []
+        cls._failed_attempts[key].append(now)
+
+    @classmethod
+    def record_successful_login(cls, identifier: str):
+        key = (identifier or "global").strip().lower()
+        cls._failed_attempts.pop(key, None)
 
     @classmethod
     def _init_default_users(cls):
@@ -64,34 +136,49 @@ class RemoteAuthEngine:
         return hashlib.sha256(salted_str.encode("utf-8")).hexdigest()
 
     @classmethod
-    def verify_credentials(cls, username: str, password_raw: str) -> Optional[Dict[str, Any]]:
+    def verify_credentials(cls, username: str, password_raw: str, client_ip: str = "") -> Tuple[Optional[Dict[str, Any]], str]:
         """
-        Strictly verifies provided username and password.
-        Returns user dictionary if valid, None if invalid.
+        Strictly verifies provided username and password with brute-force rate limiting.
+        Returns (user_dict, error_msg).
         """
         cls._init_default_users()
         user_key = (username or "").strip().lower()
         pwd = (password_raw or "").strip()
 
+        # Check rate limits for both IP and username
+        allowed_ip, remaining_ip = cls.check_rate_limit(client_ip or "global")
+        if not allowed_ip:
+            return None, f"Too many failed login attempts. Account locked for {remaining_ip}s."
+
+        allowed_user, remaining_user = cls.check_rate_limit(user_key)
+        if not allowed_user:
+            return None, f"Too many failed login attempts for user '{user_key}'. Locked for {remaining_user}s."
+
         if not user_key or not pwd:
-            return None
+            return None, "Username and password required"
 
         user_data = cls._users.get(user_key)
         if not user_data:
-            return None
+            cls.record_failed_attempt(client_ip or "global")
+            cls.record_failed_attempt(user_key)
+            return None, "Invalid username or password"
 
         salt = user_data["salt"]
         stored_hash = user_data["password_hash"]
         attempt_hash = cls._hash_password(pwd, salt)
 
         if hmac.compare_digest(attempt_hash, stored_hash):
+            cls.record_successful_login(client_ip or "global")
+            cls.record_successful_login(user_key)
             return {
                 "username": user_data["username"],
                 "role": user_data["role"],
                 "full_name": user_data["full_name"]
-            }
+            }, ""
 
-        return None
+        cls.record_failed_attempt(client_ip or "global")
+        cls.record_failed_attempt(user_key)
+        return None, "Invalid username or password"
 
     @classmethod
     def create_session_token(cls, username: str) -> Dict[str, Any]:

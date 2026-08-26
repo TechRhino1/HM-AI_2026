@@ -9,7 +9,7 @@ import mimetypes
 from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
-from typing import Any
+from typing import Any, Optional, Dict
 
 from jarvis.application.state_manager import StateManager, GLOBAL_STATE
 import threading
@@ -311,16 +311,17 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
             except Exception:
                 data = {}
 
-            # Remote Access Authentication Endpoints
             if path == "/api/auth/login":
                 username = data.get("username", "").strip()
                 password = data.get("password", "").strip()
-                user_info = RemoteAuthEngine.verify_credentials(username, password)
+                client_ip = self.headers.get("X-Forwarded-For", self.client_address[0] if hasattr(self, "client_address") and self.client_address else "global")
+                user_info, err_msg = RemoteAuthEngine.verify_credentials(username, password, client_ip=client_ip)
                 if user_info:
                     session_info = RemoteAuthEngine.create_session_token(username)
                     self._send_json(session_info)
                 else:
-                    self._send_json({"status": "UNAUTHORIZED", "error": "Invalid username or password"}, status_code=401)
+                    status_code = 429 if "locked" in (err_msg or "").lower() else 401
+                    self._send_json({"status": "UNAUTHORIZED" if status_code == 401 else "LOCKED", "error": err_msg or "Invalid username or password"}, status_code=status_code)
                 return
             elif path == "/api/auth/logout":
                 token = self._extract_token()
@@ -510,11 +511,15 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(404, f"Static file {req_path} not found")
 
-    def _serve_terminal_ui(self):
-        ui_path = os.path.join(self.base_dir, "ui", "templates", "index.html")
+    def _serve_template(self, template_name: str = "app.html", initial_desk: str = "terminal"):
+        ui_path = os.path.join(self.base_dir, "ui", "templates", template_name)
+        if not os.path.exists(ui_path):
+            ui_path = os.path.join(self.base_dir, "ui", "templates", "app.html")
+
         if os.path.exists(ui_path):
             with open(ui_path, "r", encoding="utf-8") as f:
                 content = f.read()
+            content = content.replace("{{INITIAL_DESK}}", initial_desk)
             content_bytes = content.encode("utf-8")
 
             self.send_response(200)
@@ -526,61 +531,19 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(content_bytes)
         else:
-            self.send_error(404, "Terminal UI index.html not found")
+            self.send_error(404, f"Template {template_name} not found")
+
+    def _serve_terminal_ui(self):
+        self._serve_template("app.html", initial_desk="terminal")
 
     def _serve_stocks_ui(self):
-        ui_path = os.path.join(self.base_dir, "ui", "templates", "stocks.html")
-        if os.path.exists(ui_path):
-            with open(ui_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            content_bytes = content.encode("utf-8")
-
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(content_bytes)))
-            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
-            self.send_header("Pragma", "no-cache")
-            self.send_header("Expires", "0")
-            self.end_headers()
-            self.wfile.write(content_bytes)
-        else:
-            self.send_error(404, "Stocks UI stocks.html not found")
+        self._serve_template("app.html", initial_desk="stocks")
 
     def _serve_india_ui(self):
-        ui_path = os.path.join(self.base_dir, "ui", "templates", "india.html")
-        if os.path.exists(ui_path):
-            with open(ui_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            content_bytes = content.encode("utf-8")
-
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(content_bytes)))
-            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
-            self.send_header("Pragma", "no-cache")
-            self.send_header("Expires", "0")
-            self.end_headers()
-            self.wfile.write(content_bytes)
-        else:
-            self.send_error(404, "India UI india.html not found")
+        self._serve_template("app.html", initial_desk="india")
 
     def _serve_options_ui(self):
-        ui_path = os.path.join(self.base_dir, "ui", "templates", "india_options.html")
-        if os.path.exists(ui_path):
-            with open(ui_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            content_bytes = content.encode("utf-8")
-
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(content_bytes)))
-            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
-            self.send_header("Pragma", "no-cache")
-            self.send_header("Expires", "0")
-            self.end_headers()
-            self.wfile.write(content_bytes)
-        else:
-            self.send_error(404, "India Options UI india_options.html not found")
+        self._serve_template("app.html", initial_desk="options")
 
 def start_server(host: str = "0.0.0.0", port: int = 8501) -> ThreadingHTTPServer:
     ThreadingHTTPServer.allow_reuse_address = True

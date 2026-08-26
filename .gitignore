@@ -48,6 +48,8 @@ trades_log.db
 jarvis_trade_memory.db
 jarvis.lock
 jarvis_bandit_state.json
+.jarvis_secret_key
+*.secret_key
 system_diagnostics.json
 opportunities.json
 trade_plans.json

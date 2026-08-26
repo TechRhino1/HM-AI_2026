@@ -1,0 +1,350 @@
+/* ==========================================================================
+   HM AI 4.0 — UNIFIED APPLICATION SHELL DESIGN SYSTEM (app_shell.css)
+   Consolidates design tokens, layout, navigation, and mobile responsiveness
+   ========================================================================== */
+
+:root {
+    --bg-primary: #06090e;
+    --bg-secondary: #0b1118;
+    --bg-card: #0f1722;
+    --bg-card-hover: #152232;
+    --bg-overlay: rgba(6, 9, 14, 0.88);
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-card: rgba(0, 212, 255, 0.12);
+    --border-active: #00d4ff;
+
+    --accent-cyan: #00d4ff;
+    --accent-blue: #3b82f6;
+    --neon-bull: #10b981;
+    --neon-bear: #ef4444;
+    --neon-gold: #f59e0b;
+    --neon-purple: #a855f7;
+
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-full: 9999px;
+
+    --hud-height: 64px;
+    --mobile-nav-height: 68px;
+}
+
+/* Global Reset & Strict Single Scroll Container Engine */
+*, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    font-family: var(--font-sans);
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+    scroll-behavior: smooth;
+    min-height: 100%;
+}
+
+body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    overflow-y: visible !important;
+    overflow-x: hidden !important;
+    touch-action: pan-y !important;
+    min-height: 100dvh;
+    padding-bottom: calc(var(--mobile-nav-height) + 24px);
+    display: flex;
+    flex-direction: column;
+}
+
+@media (min-width: 901px) {
+    body {
+        padding-bottom: 24px;
+    }
+}
+
+/* ==========================================================================
+   UNIFIED TOP INSTITUTIONAL HUD HEADER
+   ========================================================================== */
+.unified-header {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    background: rgba(11, 17, 24, 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 0 16px;
+    height: var(--hud-height);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.unified-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.unified-brand .brand-icon {
+    font-size: 22px;
+    background: linear-gradient(135deg, #00d4ff, #3b82f6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: drop-shadow(0 0 8px rgba(0, 212, 255, 0.5));
+}
+
+.unified-brand .brand-name {
+    font-weight: 800;
+    font-size: 17px;
+    letter-spacing: 0.5px;
+    color: #fff;
+}
+
+.unified-brand .brand-name span {
+    color: var(--accent-cyan);
+    font-weight: 900;
+}
+
+/* Desktop Desk Navigation Switcher (Tabs) */
+.desk-switcher {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(15, 23, 34, 0.85);
+    padding: 4px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--border-subtle);
+}
+
+.desk-tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: var(--radius-full);
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    white-space: nowrap;
+}
+
+.desk-tab:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.desk-tab.active {
+    color: #000;
+    background: var(--accent-cyan);
+    font-weight: 700;
+    box-shadow: 0 0 14px rgba(0, 212, 255, 0.4);
+}
+
+.desk-tab.tab-stocks.active {
+    background: #38bdf8;
+    box-shadow: 0 0 14px rgba(56, 189, 248, 0.4);
+}
+
+.desk-tab.tab-india.active {
+    background: #fb923c;
+    box-shadow: 0 0 14px rgba(251, 146, 60, 0.4);
+}
+
+.desk-tab.tab-options.active {
+    background: #fbbf24;
+    box-shadow: 0 0 14px rgba(251, 191, 36, 0.4);
+}
+
+/* Header Telemetry Status Indicator */
+.header-status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--neon-bull);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.status-pill .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--neon-bull);
+    box-shadow: 0 0 8px var(--neon-bull);
+    animation: pulseDot 2s infinite;
+}
+
+@keyframes pulseDot {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.3); opacity: 0.6; }
+}
+
+/* User Profile Badge */
+.user-profile-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-full);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.user-profile-badge .role-tag {
+    font-size: 10px;
+    padding: 2px 6px;
+    background: rgba(0, 212, 255, 0.15);
+    color: var(--accent-cyan);
+    border-radius: var(--radius-sm);
+    font-weight: 700;
+}
+
+.btn-logout {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 4px;
+    transition: color 0.2s;
+}
+
+.btn-logout:hover {
+    color: var(--neon-bear);
+}
+
+/* ==========================================================================
+   APP CONTENT MOUNT POINT & PANELS
+   ========================================================================== */
+#app-content-mount {
+    flex: 1;
+    position: relative;
+    width: 100%;
+    min-height: calc(100vh - var(--hud-height));
+}
+
+.app-panel {
+    display: none;
+    width: 100%;
+    animation: fadeIn 0.18s ease-in-out;
+}
+
+.app-panel.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ==========================================================================
+   UNIFIED MOBILE BOTTOM NAVIGATION DOCK (TOUCH / MOBILE <= 900PX)
+   ========================================================================== */
+.mobile-nav-dock {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: var(--mobile-nav-height);
+    background: rgba(11, 17, 24, 0.96);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border-subtle);
+    z-index: 9999;
+    padding: 6px 12px calc(6px + env(safe-area-inset-bottom, 0px));
+    justify-content: space-around;
+    align-items: center;
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.6);
+}
+
+.mobile-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 600;
+    text-decoration: none;
+    padding: 6px 4px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    touch-action: manipulation;
+}
+
+.mobile-nav-item .nav-icon {
+    font-size: 20px;
+    transition: transform 0.2s;
+}
+
+.mobile-nav-item.active {
+    color: var(--accent-cyan);
+    background: rgba(0, 212, 255, 0.1);
+}
+
+.mobile-nav-item.active .nav-icon {
+    transform: translateY(-2px) scale(1.1);
+}
+
+.mobile-nav-item.tab-india.active {
+    color: #fb923c;
+    background: rgba(251, 146, 60, 0.1);
+}
+
+.mobile-nav-item.tab-options.active {
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.1);
+}
+
+@media (max-width: 900px) {
+    .desk-switcher {
+        display: none !important;
+    }
+    .mobile-nav-dock {
+        display: flex !important;
+    }
+    .hud-telemetry {
+        display: none !important;
+    }
+}

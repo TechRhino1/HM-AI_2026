@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>HM AI 4.0 — Institutional Multi-Asset Intelligence Platform</title>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Charting & External Libraries -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="https://s3.tradingview.com/tv.js"></script>
+    
+    <!-- Unified CSS Design Tokens & Base Shell -->
+    <link rel="stylesheet" href="/static/css/app_shell.css?v=20260826_v7">
+    <link rel="stylesheet" href="/static/css/auth.css?v=20260826_v7">
+    <!-- Desk-Specific Stylesheets -->
+    <link rel="stylesheet" href="/static/css/terminal.css?v=20260826_v7">
+    <link rel="stylesheet" href="/static/css/stocks.css?v=20260826_v7">
+    <link rel="stylesheet" href="/static/css/india.css?v=20260826_v7">
+    <link rel="stylesheet" href="/static/css/india_options.css?v=20260826_v7">
+</head>
+<body data-initial-desk="{{INITIAL_DESK}}">
+
+    <!-- ==========================================================================
+         UNIFIED TOP INSTITUTIONAL HUD HEADER
+         ========================================================================== -->
+    <header class="unified-header">
+        <div class="unified-brand" data-desk-route="/">
+            <div class="brand-icon">⚡</div>
+            <div class="brand-name">HM <span>AI 4.0</span></div>
+        </div>
+
+        <!-- Desktop Desk Switcher Tabs -->
+        <nav class="desk-switcher">
+            <button class="desk-tab tab-terminal active" data-desk="terminal" data-desk-route="/">
+                <span>⚡</span> Forex & Crypto
+            </button>
+            <button class="desk-tab tab-stocks" data-desk="stocks" data-desk-route="/stocks">
+                <span>🇺🇸</span> US Stocks
+            </button>
+            <button class="desk-tab tab-india" data-desk="india" data-desk-route="/india">
+                <span>🇮🇳</span> India Stocks
+            </button>
+            <button class="desk-tab tab-options" data-desk="options" data-desk-route="/options">
+                <span>📊</span> Options F&O
+            </button>
+        </nav>
+
+        <!-- Header Status & Auth Controls -->
+        <div class="header-status">
+            <div class="status-pill">
+                <span class="dot"></span> LIVE
+            </div>
+            
+            <!-- Auth & User State Profile -->
+            <div id="auth-status-widget" class="user-profile-badge">
+                <span id="auth-user-name">Guest</span>
+                <span id="auth-user-role" class="role-tag">VIEWER</span>
+                <button id="auth-logout-btn" class="btn-logout" title="Sign Out" onclick="if(window.RemoteAuthUI) window.RemoteAuthUI.logout();">⏻</button>
+            </div>
+        </div>
+    </header>
+
+    <!-- ==========================================================================
+         UNIFIED MOBILE BOTTOM NAVIGATION DOCK (VISIBLE ON MOBILE <= 900PX)
+         ========================================================================== -->
+    <nav class="mobile-nav-dock">
+        <button class="mobile-nav-item tab-terminal active" data-desk="terminal" data-desk-route="/">
+            <span class="nav-icon">⚡</span>
+            <span>Forex</span>
+        </button>
+        <button class="mobile-nav-item tab-stocks" data-desk="stocks" data-desk-route="/stocks">
+            <span class="nav-icon">🇺🇸</span>
+            <span>US Stocks</span>
+        </button>
+        <button class="mobile-nav-item tab-india" data-desk="india" data-desk-route="/india">
+            <span class="nav-icon">🇮🇳</span>
+            <span>India</span>
+        </button>
+        <button class="mobile-nav-item tab-options" data-desk="options" data-desk-route="/options">
+            <span class="nav-icon">📊</span>
+            <span>Options</span>
+        </button>
+    </nav>
+
+    <!-- ==========================================================================
+         UNIFIED CONTENT MOUNT POINT (SWAPPABLE DESK PANELS)
+         ========================================================================== -->
+    <main id="app-content-mount">
+
+        <!-- 1. FOREX & CRYPTO TERMINAL PANEL -->
+        <section id="panel-terminal" class="app-panel active">
+            <!-- Institutional Broker Telemetry Bar -->
+            <div class="hud-telemetry" style="background:var(--bg-secondary); padding:10px 16px; border-bottom:1px solid var(--border-subtle); display:flex; gap:16px; overflow-x:auto;">
+                <div class="hud-tile"><span class="hud-tile-label">Broker</span><span id="hud-server" class="hud-tile-value">Connecting...</span></div>
+                <div class="hud-tile"><span class="hud-tile-label">Login</span><span id="hud-login" class="hud-tile-value">#--</span></div>
+                <div class="hud-tile"><span class="hud-tile-label">Balance</span><span id="hud-balance" class="hud-tile-value mono-number">$0.00</span></div>
+                <div class="hud-tile"><span class="hud-tile-label">Equity</span><span id="hud-equity" class="hud-tile-value mono-number" style="color:var(--neon-bull);">$0.00</span></div>
+                <div class="hud-tile"><span class="hud-tile-label">Free Margin</span><span id="hud-free-margin" class="hud-tile-value mono-number">$0.00</span></div>
+                <div class="hud-tile"><span class="hud-tile-label">Margin Level</span><span id="hud-margin-level" class="hud-tile-value mono-number" style="color:var(--accent-cyan);">--%</span></div>
+                <div class="hud-tile"><span class="hud-tile-label">State</span><span id="hud-sync" class="hud-tile-value" style="color:var(--neon-bull);">ONLINE</span></div>
+            </div>
+
+            <!-- Terminal Grid -->
+            <div class="terminal-grid" style="padding:16px;">
+                <!-- Left Column: Order Panel & Positions -->
+                <div class="panel-column left-column">
+                    <div class="panel order-panel">
+                        <div class="panel-header">
+                            <span class="panel-title">🎯 Manual Trade Execution</span>
+                        </div>
+                        <div class="order-form-body">
+                            <div class="form-row">
+                                <label>Symbol</label>
+                                <select id="order-symbol" class="form-select">
+                                    <option value="XAUUSD">XAUUSD (Gold)</option>
+                                    <option value="EURUSD">EURUSD</option>
+                                    <option value="GBPUSD">GBPUSD</option>
+                                    <option value="USDJPY">USDJPY</option>
+                                    <option value="BTCUSD">BTCUSD</option>
+                                </select>
+                            </div>
+                            <div class="form-row">
+                                <label>Volume (Lots)</label>
+                                <input type="number" id="order-volume" class="form-input" value="0.01" step="0.01" min="0.01">
+                            </div>
+                            <div class="form-actions" style="display:flex; gap:10px; margin-top:12px;">
+                                <button id="btn-buy" class="btn-trade btn-buy" onclick="placeTrade('BUY')">BUY / LONG</button>
+                                <button id="btn-sell" class="btn-trade btn-sell" onclick="placeTrade('SELL')">SELL / SHORT</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Positions Table -->
+                    <div class="panel positions-panel" style="margin-top:16px;">
+                        <div class="panel-header" style="display:flex; justify-content:space-between;">
+                            <span class="panel-title">📋 Active Positions (<span id="pos-count">0</span>)</span>
+                            <button class="btn-mini btn-danger" onclick="closeAllPositions()">Close All</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="terminal-table" id="positions-table">
+                                <thead>
+                                    <tr>
+                                        <th>Ticket</th>
+                                        <th>Symbol</th>
+                                        <th>Type</th>
+                                        <th>Volume</th>
+                                        <th>Open Price</th>
+                                        <th>Current</th>
+                                        <th>PnL ($)</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="positions-tbody">
+                                    <tr><td colspan="8" class="text-center text-muted">No open positions</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Live Trading Chart & Decisions -->
+                <div class="panel-column right-column">
+                    <div class="panel chart-panel">
+                        <div class="panel-header" style="display:flex; justify-content:space-between;">
+                            <span class="panel-title">📈 Live Interactive Chart (<span id="chart-symbol-label">XAUUSD</span>)</span>
+                            <div class="timeframe-selector">
+                                <button class="tf-btn active" onclick="changeChartTf('M1')">1M</button>
+                                <button class="tf-btn" onclick="changeChartTf('M5')">5M</button>
+                                <button class="tf-btn" onclick="changeChartTf('M15')">15M</button>
+                                <button class="tf-btn" onclick="changeChartTf('H1')">1H</button>
+                                <button class="tf-btn" onclick="changeChartTf('D1')">1D</button>
+                            </div>
+                        </div>
+                        <div id="tradingview-chart-container" style="height:440px; width:100%; position:relative;"></div>
+                    </div>
+
+                    <!-- AI Signal & Decision Stream -->
+                    <div class="panel decision-panel" style="margin-top:16px;">
+                        <div class="panel-header">
+                            <span class="panel-title">🤖 AI Quantum Decision Stream</span>
+                        </div>
+                        <div id="decision-stream-list" class="decision-stream" style="max-height:240px; overflow-y:auto;">
+                            <div class="decision-item loading">Listening for live quantitative signals...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. US STOCKS SCREENER PANEL -->
+        <section id="panel-stocks" class="app-panel">
+            <!-- Breakout Alert Ribbon -->
+            <div class="stocks-ticker-wrap">
+                <div class="stocks-ticker-tag">⚡ BREAKOUT ALERTS:</div>
+                <div id="stocks-ticker-track" class="stocks-ticker-track">
+                    <div class="stocks-ticker-item">Loading real-time US breakout scanners...</div>
+                </div>
+            </div>
+
+            <!-- Prime Buy Setups -->
+            <div class="stocks-prime-section" style="padding:16px;">
+                <div class="section-hdr">
+                    <h2>🔥 Prime Breakout Opportunities (AI Buy Now Signals)</h2>
+                </div>
+                <div id="stocks-prime-grid" class="prime-grid">
+                    <div class="loading-state">Analyzing 45+ US large-cap breakout setups...</div>
+                </div>
+            </div>
+
+            <!-- Full Screener Grid -->
+            <div class="screener-table-wrap" style="padding:0 16px 24px;">
+                <div class="section-hdr" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <h2>📋 Institutional Multi-Factor Screener</h2>
+                    <input type="text" id="stocks-search" placeholder="Filter by symbol/company..." class="form-input" style="max-width:240px;">
+                </div>
+                <div class="table-responsive">
+                    <table class="stocks-table" id="stocks-screener-table">
+                        <thead>
+                            <tr>
+                                <th>Symbol</th>
+                                <th>Name</th>
+                                <th>Price</th>
+                                <th>Change %</th>
+                                <th>Volume</th>
+                                <th>RSI (14)</th>
+                                <th>Breakout Status</th>
+                                <th>Entry Zone</th>
+                                <th>TP2 Target</th>
+                                <th>Stop Loss</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="stocks-screener-tbody">
+                            <tr><td colspan="11" class="text-center text-muted">Loading stock universe...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. INDIA STOCKS PANEL -->
+        <section id="panel-india" class="app-panel">
+            <!-- Indices Ribbon -->
+            <div class="indices-ticker-bar">
+                <div class="indices-title-tag">🇮🇳 BENCHMARK INDICES:</div>
+                <div id="indices-track" class="indices-track">
+                    <div class="index-pill-loading">Loading live NIFTY, BANKNIFTY, SENSEX telemetry...</div>
+                </div>
+            </div>
+
+            <!-- FII/DII Institutional Flows -->
+            <div class="fii-dii-ribbon">
+                <div class="fii-card"><span class="flow-label">FII Net Cash:</span><span id="fii-cash-val" class="flow-val text-bull">+₹1,845.50 Cr</span></div>
+                <div class="fii-card"><span class="flow-label">DII Net Cash:</span><span id="dii-cash-val" class="flow-val text-bull">+₹2,410.20 Cr</span></div>
+                <div class="fii-card"><span class="flow-label">FII Index Futures:</span><span id="fii-fno-val" class="flow-val text-bull">64.2% Long</span></div>
+                <div class="fii-card"><span class="flow-label">India VIX:</span><span id="india-vix-val" class="flow-val text-bear">13.8 (-1.2%)</span></div>
+            </div>
+
+            <!-- India Prime Buys Grid -->
+            <div class="india-prime-section" style="padding:16px;">
+                <div class="section-hdr">
+                    <h2>⚡ Prime Intraday Buy Recommendations (CPR + Camarilla + Multi-Timeframe)</h2>
+                </div>
+                <div id="india-prime-grid" class="india-prime-grid">
+                    <div class="loading-state">Analyzing 22+ NSE/BSE institutional setups...</div>
+                </div>
+            </div>
+
+            <!-- India Screener Table -->
+            <div class="india-table-wrap" style="padding:0 16px 24px;">
+                <div class="section-hdr" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <h2>📋 NSE / BSE Institutional Multi-Factor Stock Screener</h2>
+                    <input type="text" id="india-screener-filter" placeholder="Filter symbol (e.g. RELIANCE, TCS)..." class="form-input" style="max-width:260px;">
+                </div>
+                <div class="table-responsive">
+                    <table class="india-table" id="india-screener-table">
+                        <thead>
+                            <tr>
+                                <th>Symbol</th>
+                                <th>Company</th>
+                                <th>Sector</th>
+                                <th>Price (₹)</th>
+                                <th>Change %</th>
+                                <th>CPR Width</th>
+                                <th>Camarilla</th>
+                                <th>Entry Zone</th>
+                                <th>Target 2</th>
+                                <th>Stop Loss</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="india-screener-tbody">
+                            <tr><td colspan="11" class="text-center text-muted">Loading NSE/BSE scanner...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. INDIA OPTIONS & DERIVATIVES PANEL -->
+        <section id="panel-options" class="app-panel">
+            <!-- Underlying Selector Bar -->
+            <div class="underlying-selector-bar">
+                <div class="underlying-pills-scroll">
+                    <button class="und-pill active" onclick="window.selectUnderlying('NIFTY', this)">NIFTY 50</button>
+                    <button class="und-pill" onclick="window.selectUnderlying('BANKNIFTY', this)">BANK NIFTY</button>
+                    <button class="und-pill" onclick="window.selectUnderlying('FINNIFTY', this)">FIN NIFTY</button>
+                    <button class="und-pill" onclick="window.selectUnderlying('MIDCPNIFTY', this)">MIDCAP NIFTY</button>
+                    <button class="und-pill" onclick="window.selectUnderlying('SENSEX', this)">SENSEX</button>
+                    <button class="und-pill" onclick="window.selectUnderlying('RELIANCE', this)">RELIANCE</button>
+                    <button class="und-pill" onclick="window.selectUnderlying('HDFCBANK', this)">HDFC BANK</button>
+                    <button class="und-pill" onclick="window.selectUnderlying('TCS', this)">TCS</button>
+                    <button class="und-pill" onclick="window.selectUnderlying('ITC', this)">ITC</button>
+                </div>
+            </div>
+
+            <!-- Prime Options Buys & Spreads -->
+            <div class="options-top-signals" style="padding:16px;">
+                <div class="section-hdr">
+                    <h2>🎯 AI High-Probability Option Buy Signals</h2>
+                </div>
+                <div id="options-single-signals-grid" class="options-signals-grid">
+                    <div class="loading-state">Analyzing momentum option buy setups...</div>
+                </div>
+            </div>
+
+            <!-- Multi-Leg Payoff & Option Chain -->
+            <div class="options-analytics-grid" style="padding:0 16px 24px; display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+                <div class="panel payoff-panel">
+                    <div class="panel-header">
+                        <span class="panel-title">📈 Continuous Multi-Leg Payoff Curve & Greeks</span>
+                    </div>
+                    <div id="payoff-chart-mount" style="height:320px; width:100%;"></div>
+                </div>
+                <div class="panel oi-panel">
+                    <div class="panel-header">
+                        <span class="panel-title">📊 Open Interest (OI) Strike Distribution</span>
+                    </div>
+                    <div id="oi-chart-mount" style="height:320px; width:100%;"></div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ==========================================================================
+         UNIVERSAL MODAL CONTAINERS & TOASTS
+         ========================================================================== -->
+    <div id="universal-modal-overlay" class="modal-overlay" style="display:none;" onclick="closeUniversalModal()">
+        <div class="modal-content" onclick="event.stopPropagation();">
+            <div class="modal-header">
+                <h3 id="universal-modal-title">Intelligence Dossier</h3>
+                <button class="btn-close" onclick="closeUniversalModal()">✕</button>
+            </div>
+            <div id="universal-modal-body" class="modal-body"></div>
+        </div>
+    </div>
+
+    <!-- Scripts: Core Auth -> Unified Router -> Desk Modules -->
+    <script src="/static/js/auth.js?v=20260826_v7"></script>
+    <script src="/static/js/app_shell.js?v=20260826_v7"></script>
+    <script src="/static/js/terminal.js?v=20260826_v7"></script>
+    <script src="/static/js/stocks.js?v=20260826_v7"></script>
+    <script src="/static/js/india.js?v=20260826_v7"></script>
+    <script src="/static/js/india_options.js?v=20260826_v7"></script>
+
+</body>
+</html>
