@@ -125,7 +125,10 @@ class OptionSignalEngine:
             volatility=iv_base
         )
         greek_item = greeks["call"] if option_type == "CE" else greeks["put"]
-        entry_prem = max(15.0, float(greek_item["price"]))
+        
+        # Proportional realistic option premium based on Black-Scholes model & spot scale
+        min_prem = max(1.0, round(spot * 0.007, 1))
+        entry_prem = round(max(min_prem, float(greek_item["price"])), 2)
         delta_val = abs(float(greek_item["delta"]))
         gamma_val = float(greek_item["gamma"])
         theta_val = abs(float(greek_item["theta"]))
