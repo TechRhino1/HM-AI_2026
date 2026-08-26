@@ -52,11 +52,11 @@ def get_local_wifi_ip():
     except Exception:
         return "127.0.0.1"
 
-def _start_background_tunnel(port: int = 8501):
+def _start_background_tunnel(port: int = 8501, custom_subdomain: str = "hm2026"):
     """Starts persistent authenticated HTTPS mobile tunnel in the background with auto-reconnect."""
     key_path = os.path.expanduser("~/.ssh/id_ed25519")
     providers = [
-        ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=15", "-R", f"80:127.0.0.1:{port}", "serveo.net"],
+        ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=15", "-R", f"{custom_subdomain}:80:127.0.0.1:{port}", "serveo.net"],
         ["ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=15", "-R", f"80:127.0.0.1:{port}", "localhost.run"] if os.path.exists(key_path) else ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=15", "-R", f"80:127.0.0.1:{port}", "localhost.run"]
     ]
     
