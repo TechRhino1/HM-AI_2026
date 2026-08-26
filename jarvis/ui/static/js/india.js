@@ -1041,6 +1041,13 @@
         fetchFiiDiiData();
         fetchScannerData();
         startAutoScanTicker();
+        if (el.dossierModal) {
+            el.dossierModal.addEventListener("click", (e) => {
+                if (e.target === el.dossierModal) {
+                    window.closeIndiaDossier();
+                }
+            });
+        }
         if (window.innerWidth <= 900) {
             window.switchMobileIndiaView("buys");
         }

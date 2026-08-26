@@ -1155,10 +1155,10 @@ body {
 
     /* Main Container */
     .india-layout-container {
-        flex: 1;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-        padding: 10px 8px 70px 8px !important;
+        height: auto;
+        min-height: calc(100dvh - 120px);
+        overflow: visible;
+        padding: 10px 10px calc(76px + env(safe-area-inset-bottom)) 10px !important;
         gap: 12px;
         width: 100%;
         box-sizing: border-box;
@@ -1179,44 +1179,49 @@ body {
     .filter-group {
         flex-direction: column !important;
         align-items: flex-start !important;
-        gap: 4px !important;
-        width: 100%;
+        gap: 4px;
     }
 
-    .filter-label {
-        font-size: 10px;
+    .search-group {
+        width: 100% !important;
+    }
+
+    .search-input-field {
+        width: 100% !important;
+        font-size: 14px !important;
+        padding: 10px 12px 10px 32px !important;
+        touch-action: manipulation;
     }
 
     .filter-pills-wrap {
-        display: flex !important;
+        width: 100% !important;
         overflow-x: auto !important;
         -webkit-overflow-scrolling: touch !important;
         white-space: nowrap !important;
-        width: 100% !important;
-        gap: 4px !important;
-        padding-bottom: 3px !important;
+        padding-bottom: 2px;
+        gap: 6px;
         scrollbar-width: none;
     }
     .filter-pills-wrap::-webkit-scrollbar { display: none; }
 
-    .sector-pill, .cpr-pill, .prob-pill {
-        flex-shrink: 0 !important;
-        padding: 4px 8px !important;
-        font-size: 10.5px !important;
+    .filter-pill {
+        flex-shrink: 0;
+        padding: 6px 10px;
+        font-size: 11px;
+        touch-action: manipulation;
     }
 
-    .toolbar-bottom-row {
-        flex-direction: column;
-        align-items: stretch;
+    .toolbar-row {
+        flex-direction: column !important;
+        align-items: stretch !important;
         gap: 8px;
     }
 
     .toolbar-left-actions, .toolbar-right-actions {
-        display: flex;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        white-space: nowrap;
-        width: 100%;
+        width: 100% !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        white-space: nowrap !important;
         gap: 6px;
         scrollbar-width: none;
     }
@@ -1224,14 +1229,21 @@ body {
 
     .btn-action-tool {
         flex-shrink: 0;
-        padding: 6px 10px;
-        font-size: 10.5px;
+        padding: 8px 12px;
+        font-size: 11px;
+        touch-action: manipulation;
     }
 
     /* Buy Now Cards: 1 Column on Phone */
     .buy-now-cards-grid {
         grid-template-columns: 1fr !important;
-        gap: 10px;
+        gap: 12px;
+    }
+
+    .buy-card {
+        padding: 14px !important;
+        border-radius: 12px !important;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
     }
 
     .buy-now-header-bar {
@@ -1249,7 +1261,15 @@ body {
 
     .buy-now-plan-grid {
         grid-template-columns: 1fr 1fr !important;
-        gap: 4px;
+        gap: 6px;
+    }
+
+    .btn-open-dossier {
+        padding: 12px !important;
+        font-size: 12.5px !important;
+        font-weight: 800 !important;
+        border-radius: 8px !important;
+        touch-action: manipulation;
     }
 
     .sector-heatmap-grid {
@@ -1261,7 +1281,7 @@ body {
         width: 100% !important;
         overflow-x: auto !important;
         -webkit-overflow-scrolling: touch !important;
-        border-radius: 8px;
+        border-radius: 10px;
         display: block;
     }
 
@@ -1283,7 +1303,7 @@ body {
         box-shadow: 2px 0 6px rgba(0, 0, 0, 0.6);
     }
 
-    /* Modals (Dossier & Option Chain) on Mobile */
+    /* Native Slide-Up Bottom Sheets on Mobile */
     .modal-overlay {
         position: fixed !important;
         top: 0 !important;
@@ -1293,28 +1313,44 @@ body {
         z-index: 10000 !important;
         padding: 0 !important;
         margin: 0 !important;
-        background: rgba(6, 9, 15, 0.96) !important;
-        backdrop-filter: blur(16px) !important;
-        align-items: stretch !important;
-        justify-content: stretch !important;
+        background: rgba(0, 0, 0, 0.78) !important;
+        backdrop-filter: blur(14px) !important;
+        -webkit-backdrop-filter: blur(14px) !important;
+        display: none;
+        align-items: flex-end !important;
+        justify-content: center !important;
     }
 
     .modal-card, .modal-card-wide {
         width: 100vw !important;
-        height: 100vh !important;
+        height: 92dvh !important;
         max-width: 100vw !important;
-        max-height: 100vh !important;
-        border-radius: 0 !important;
-        border: none !important;
+        max-height: 92dvh !important;
+        border-radius: 20px 20px 0 0 !important;
+        border: 1px solid rgba(255, 153, 0, 0.3) !important;
+        border-bottom: none !important;
         margin: 0 !important;
         display: flex !important;
         flex-direction: column !important;
         overflow: hidden !important;
         background: #060a14 !important;
+        box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.9) !important;
+        animation: slideUpSheet 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+
+    .modal-card::before, .modal-card-wide::before {
+        content: "";
+        display: block;
+        width: 40px;
+        height: 4px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.25);
+        margin: 8px auto 4px auto;
+        flex-shrink: 0;
     }
 
     .modal-header {
-        padding: 8px 12px !important;
+        padding: 8px 14px 10px 14px !important;
         flex-shrink: 0 !important;
         background: #0a0f1d !important;
         border-bottom: 1px solid rgba(255, 153, 0, 0.3) !important;
@@ -1382,21 +1418,22 @@ body {
         justify-content: center !important;
         font-size: 20px !important;
         font-weight: 900 !important;
-        background: rgba(255, 59, 92, 0.25) !important;
-        border: 1px solid rgba(255, 59, 92, 0.6) !important;
-        border-radius: 8px !important;
+        background: rgba(255, 59, 92, 0.2) !important;
+        border: 1px solid rgba(255, 59, 92, 0.5) !important;
+        border-radius: 50% !important;
         color: #ffffff !important;
         cursor: pointer !important;
+        touch-action: manipulation;
     }
 
     .modal-body-scrollable {
         flex: 1 !important;
         overflow-y: auto !important;
         -webkit-overflow-scrolling: touch !important;
-        padding: 10px 8px 40px 8px !important;
+        padding: 12px 10px calc(30px + env(safe-area-inset-bottom)) 10px !important;
         display: flex !important;
         flex-direction: column !important;
-        gap: 10px !important;
+        gap: 12px !important;
     }
 
     .dossier-kpi-bar {
@@ -1455,6 +1492,17 @@ body {
 
     .option-chain-table {
         min-width: 680px !important;
+    }
+}
+
+@keyframes slideUpSheet {
+    from {
+        transform: translateY(100%);
+        opacity: 0.8;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
     }
 }
 

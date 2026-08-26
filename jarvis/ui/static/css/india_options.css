@@ -1292,25 +1292,26 @@ body {
         padding: 4px 8px !important;
     }
 
-    /* Main 2-Pane Workspace Grid: Stack Vertically */
+    /* Main 2-Pane Workspace Grid: Stack Vertically with Natural Scrolling */
     .opt-workspace-grid {
         grid-template-columns: 1fr !important;
-        flex: 1;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-        padding: 10px 8px 70px 8px !important;
+        height: auto;
+        min-height: calc(100dvh - 120px);
+        overflow: visible;
+        padding: 10px 10px calc(76px + env(safe-area-inset-bottom)) 10px !important;
         gap: 12px;
         width: 100%;
         box-sizing: border-box;
     }
 
     .pane-card {
-        padding: 10px !important;
+        padding: 12px !important;
+        border-radius: 12px;
         gap: 10px;
     }
 
     .payoff-chart-container {
-        height: 220px !important;
+        height: 240px !important;
     }
 
     .strike-dist-container {

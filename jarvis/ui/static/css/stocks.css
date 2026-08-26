@@ -1534,14 +1534,12 @@ body {
     .ticker-alert-pill {
         font-size: 10px;
         flex-shrink: 0;
-    }
-
-    /* Main Container */
+    }    /* Main Container */
     .screener-app-container {
-        flex: 1;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-        padding: 10px 8px 70px 8px !important;
+        height: auto;
+        min-height: calc(100dvh - 120px);
+        overflow: visible;
+        padding: 10px 10px calc(76px + env(safe-area-inset-bottom)) 10px !important;
         gap: 12px;
         width: 100%;
         box-sizing: border-box;
@@ -1564,8 +1562,9 @@ body {
     }
 
     .search-input {
-        font-size: 13px !important; /* Prevents auto-zoom on iOS */
-        padding: 8px 10px 8px 32px !important;
+        font-size: 14px !important; /* Prevents auto-zoom on iOS */
+        padding: 10px 10px 10px 34px !important;
+        touch-action: manipulation;
     }
 
     .screener-quick-stats {
@@ -1582,7 +1581,8 @@ body {
 
     .quick-stat-item {
         flex-shrink: 0;
-        padding: 4px 8px;
+        padding: 6px 10px;
+        border-radius: 6px;
     }
 
     .auto-scan-box {
@@ -1596,7 +1596,7 @@ body {
         -webkit-overflow-scrolling: touch !important;
         white-space: nowrap !important;
         width: 100% !important;
-        gap: 5px !important;
+        gap: 6px !important;
         padding: 4px 0 !important;
         scrollbar-width: none;
     }
@@ -1609,8 +1609,9 @@ body {
 
     .filter-pill {
         flex-shrink: 0 !important;
-        padding: 4px 8px !important;
-        font-size: 10.5px !important;
+        padding: 6px 10px !important;
+        font-size: 11px !important;
+        touch-action: manipulation;
     }
 
     /* AI Buy Now Cards Grid */
@@ -1629,7 +1630,21 @@ body {
 
     .buy-now-cards-grid {
         grid-template-columns: 1fr !important;
-        gap: 10px;
+        gap: 12px;
+    }
+
+    .buy-card {
+        padding: 14px !important;
+        border-radius: 12px !important;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    }
+
+    .btn-open-dossier {
+        padding: 12px !important;
+        font-size: 12.5px !important;
+        font-weight: 800 !important;
+        border-radius: 8px !important;
+        touch-action: manipulation;
     }
 
     /* Screener Table Touch Scroll with Sticky Symbol Column */
@@ -1637,7 +1652,7 @@ body {
         width: 100% !important;
         overflow-x: auto !important;
         -webkit-overflow-scrolling: touch !important;
-        border-radius: 8px;
+        border-radius: 10px;
         display: block;
     }
 
@@ -1659,7 +1674,7 @@ body {
         box-shadow: 2px 0 6px rgba(0, 0, 0, 0.6);
     }
 
-    /* Full-Screen Touch Responsive Stock Dossier Modal */
+    /* Native Slide-Up Bottom Sheet for Mobile Dossier */
     .stock-dossier-modal {
         position: fixed !important;
         top: 0 !important;
@@ -1669,57 +1684,75 @@ body {
         z-index: 10000 !important;
         padding: 0 !important;
         margin: 0 !important;
-        background: rgba(6, 9, 15, 0.96) !important;
-        backdrop-filter: blur(16px) !important;
+        background: rgba(0, 0, 0, 0.78) !important;
+        backdrop-filter: blur(14px) !important;
+        -webkit-backdrop-filter: blur(14px) !important;
         display: none;
-        align-items: stretch !important;
-        justify-content: stretch !important;
+        align-items: flex-end !important;
+        justify-content: center !important;
     }
 
     .dossier-card {
         width: 100vw !important;
-        height: 100vh !important;
+        height: 92dvh !important;
         max-width: 100vw !important;
-        max-height: 100vh !important;
-        border-radius: 0 !important;
-        border: none !important;
+        max-height: 92dvh !important;
+        border-radius: 20px 20px 0 0 !important;
+        border: 1px solid rgba(56, 189, 248, 0.3) !important;
+        border-bottom: none !important;
         margin: 0 !important;
         display: flex !important;
         flex-direction: column !important;
         overflow: hidden !important;
         background: #080c14 !important;
+        box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.9) !important;
+        animation: slideUpSheet 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+
+    .dossier-card::before {
+        content: "";
+        display: block;
+        width: 40px;
+        height: 4px;
+        border-radius: 2px;
+        background: rgba(255, 255, 255, 0.25);
+        margin: 8px auto 4px auto;
+        flex-shrink: 0;
     }
 
     .dossier-header {
-        padding: 10px 12px !important;
+        padding: 8px 14px 10px 14px !important;
         flex-shrink: 0 !important;
         background: #0d131f !important;
-        border-bottom: 1px solid rgba(56, 189, 248, 0.3) !important;
+        border-bottom: 1px solid rgba(56, 189, 248, 0.2) !important;
         display: flex !important;
         align-items: center !important;
         justify-content: space-between !important;
     }
 
     .btn-close-modal {
-        min-width: 44px !important;
-        min-height: 44px !important;
+        min-width: 40px !important;
+        min-height: 40px !important;
+        width: 40px !important;
+        height: 40px !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        font-size: 22px !important;
+        font-size: 20px !important;
         font-weight: 900 !important;
-        background: rgba(255, 59, 92, 0.25) !important;
-        border: 1px solid rgba(255, 59, 92, 0.6) !important;
-        border-radius: 8px !important;
+        background: rgba(255, 59, 92, 0.2) !important;
+        border: 1px solid rgba(255, 59, 92, 0.5) !important;
+        border-radius: 50% !important;
         color: #ffffff !important;
         cursor: pointer !important;
+        touch-action: manipulation;
     }
 
     .dossier-body-grid {
         flex: 1 !important;
         overflow-y: auto !important;
         -webkit-overflow-scrolling: touch !important;
-        padding: 12px 10px 40px 10px !important;
+        padding: 12px 10px calc(30px + env(safe-area-inset-bottom)) 10px !important;
         display: flex !important;
         flex-direction: column !important;
         gap: 12px !important;
@@ -1748,15 +1781,28 @@ body {
     /* Comparison & Calc Modals */
     .compare-modal-card, .calc-modal-card {
         width: 100vw !important;
-        height: 100vh !important;
+        height: 90dvh !important;
         max-width: 100vw !important;
-        max-height: 100vh !important;
-        border-radius: 0 !important;
-        border: none !important;
+        max-height: 90dvh !important;
+        border-radius: 20px 20px 0 0 !important;
+        border: 1px solid rgba(56, 189, 248, 0.3) !important;
+        border-bottom: none !important;
         margin: 0 !important;
         display: flex !important;
         flex-direction: column !important;
         overflow: hidden !important;
+        animation: slideUpSheet 0.28s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    }
+}
+
+@keyframes slideUpSheet {
+    from {
+        transform: translateY(100%);
+        opacity: 0.8;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
     }
 }
 

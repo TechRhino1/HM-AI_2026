@@ -1220,6 +1220,13 @@ document.addEventListener("DOMContentLoaded", () => {
     fetchScreenerData();
     fetchAlerts();
     startAutoScanTicker();
+    if (el.dossierModal) {
+        el.dossierModal.addEventListener("click", (e) => {
+            if (e.target === el.dossierModal) {
+                window.closeStockDossier();
+            }
+        });
+    }
     if (window.innerWidth <= 900) {
         window.switchMobileStocksView("setups");
     }
