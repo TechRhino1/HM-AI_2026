@@ -52,23 +52,37 @@ def get_local_wifi_ip():
     except Exception:
         return "127.0.0.1"
 
+def _cleanup_stale_processes():
+    """Kills orphan ssh processes to avoid port forward collisions on Serveo."""
+    try:
+        if sys.platform == "win32":
+            subprocess.run(["taskkill", "/F", "/IM", "ssh.exe"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
 def _start_background_tunnel(port: int = 8501, custom_subdomain: str = "hm2026"):
-    """Starts persistent authenticated HTTPS mobile tunnel in the background with auto-reconnect."""
+    """Starts persistent authenticated HTTPS mobile tunnel with automatic multi-provider fallback."""
+    _cleanup_stale_processes()
     key_path = os.path.expanduser("~/.ssh/id_ed25519")
+
     providers = [
-        ["ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=15", "-R", f"{custom_subdomain}:80:127.0.0.1:{port}", "serveo.net"] if os.path.exists(key_path) else ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=15", "-R", f"{custom_subdomain}:80:127.0.0.1:{port}", "serveo.net"],
-        ["ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=15", "-R", f"80:127.0.0.1:{port}", "localhost.run"] if os.path.exists(key_path) else ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=15", "-R", f"80:127.0.0.1:{port}", "localhost.run"]
+        ("localhost.run", ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=15", "-R", f"80:127.0.0.1:{port}", "localhost.run"]),
+        ("serveo.net", ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=10", "-R", f"{custom_subdomain}:80:127.0.0.1:{port}", "serveo.net"]),
     ]
-    
-    idx = 0
+
+    p_idx = 0
     while True:
-        cmd = providers[idx % len(providers)]
+        p_name, cmd = providers[p_idx % len(providers)]
+        if os.path.exists(key_path) and "-i" not in cmd:
+            cmd = [cmd[0], "-i", key_path] + cmd[1:]
+        
         try:
+            logger.info(f"Establishing mobile HTTPS tunnel via {p_name}...")
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
             _TUNNEL_STATE["proc"] = proc
             _TUNNEL_STATE["status"] = "CONNECTED"
 
-            for _ in range(30):
+            for _ in range(40):
                 line = proc.stdout.readline()
                 if not line:
                     line = proc.stderr.readline()
@@ -84,20 +98,22 @@ def _start_background_tunnel(port: int = 8501, custom_subdomain: str = "hm2026")
                         _TUNNEL_STATE["url"] = parts[1].strip()
                         logger.info(f"Mobile HTTPS Tunnel active: {_TUNNEL_STATE['url']}")
                         break
-                time.sleep(0.3)
+                time.sleep(0.2)
 
             proc.wait()
             _TUNNEL_STATE["status"] = "RECONNECTING"
-            idx += 1
+            logger.warning(f"Tunnel via {p_name} closed. Reconnecting to next provider in 2s...")
+            p_idx += 1
             time.sleep(2)
         except Exception as e:
             _TUNNEL_STATE["status"] = f"ERROR: {e}"
-            idx += 1
-            time.sleep(4)
+            logger.error(f"Tunnel error ({p_name}): {e}. Trying next provider...")
+            p_idx += 1
+            time.sleep(3)
 
 def hm_start(mode: str = "live", port: int = 8501, host: str = "0.0.0.0"):
     local_ip = get_local_wifi_ip()
-    mobile_url = _TUNNEL_STATE["url"]
+    mobile_url = f"https://hm2026.serveousercontent.com"
 
     # 1. Launch Mobile Tunnel Background Worker
     tunnel_thread = threading.Thread(target=_start_background_tunnel, args=(port,), daemon=True, name="hm_mobile_tunnel")
