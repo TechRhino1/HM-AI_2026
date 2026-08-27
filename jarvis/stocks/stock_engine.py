@@ -601,6 +601,8 @@ class StockIntelligenceEngine:
 
             "candles": candles,
             "data_source": getattr(self, "_last_data_source", "synthetic_fallback"),
+            "bars_available": len(candles),
+            "history_complete": len(candles) >= 120,
             "analyzed_at": datetime.now(timezone.utc).isoformat()
         }
 

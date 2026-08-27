@@ -186,9 +186,12 @@ class IndiaTechnicalEngine:
 
         profile = get_india_profile(symbol)
         candles = self.generate_candles(symbol, timeframe=timeframe, num_bars=120)
-        
+
         last_bar = candles[-1]
-        prev_bar = candles[-2]
+        # Some live sources (e.g. certain indices on yfinance) only return the
+        # latest bar. Guard against short series so analysis never crashes and
+        # the real current price is still shown.
+        prev_bar = candles[-2] if len(candles) >= 2 else candles[-1]
         
         current_price = round(last_bar["close"], 2)
         day_open = round(last_bar["open"], 2)
@@ -223,9 +226,13 @@ class IndiaTechnicalEngine:
         rsi = round(100.0 - (100.0 / (1.0 + rs)), 1)
 
         # VWAP & Standard Deviation Bands
-        cum_vol = sum(vols[-30:])
-        cum_vp = sum(closes[i] * vols[i] for i in range(-30, 0))
-        vwap = round(cum_vp / max(1, cum_vol), 2)
+        if len(candles) >= 30:
+            cum_vol = sum(vols[-30:])
+            cum_vp = sum(closes[i] * vols[i] for i in range(-30, 0))
+            vwap = round(cum_vp / max(1, cum_vol), 2)
+        else:
+            # Insufficient history from the live source — VWAP degenerates to last price.
+            vwap = round(current_price, 2)
         vwap_sd = round(atr14 * 0.85, 2)
         vwap_upper1 = round(vwap + vwap_sd, 2)
         vwap_upper2 = round(vwap + (2 * vwap_sd), 2)
@@ -436,6 +443,8 @@ class IndiaTechnicalEngine:
 
             "candles": candles,
             "data_source": getattr(self, "_last_data_source", "synthetic_fallback"),
+            "bars_available": len(candles),
+            "history_complete": len(candles) >= 120,
             "analyzed_at": datetime.now(timezone.utc).isoformat()
         }
 

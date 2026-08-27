@@ -32,7 +32,9 @@ _INDIA_INDEX_MAP = {
     "NIFTY 50": "^NSEI",
     "BANKNIFTY": "^NSEBANK",
     "BANK NIFTY": "^NSEBANK",
-    "FINNIFTY": "^NSEFIN",
+    "FINNIFTY": "NIFTY_FIN_SERVICE.NS",
+    "NIFTYAUTO": "^CNXAUTO",
+    "NIFTYIT": "^CNXIT",
     "SENSEX": "^BSESN",
 }
 
