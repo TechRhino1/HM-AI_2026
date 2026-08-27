@@ -2,3 +2,5 @@ MetaTrader5>=5.0.60
 pandas>=2.0.0
 numpy>=1.24.0
 psutil>=5.9.0
+# Real market-data source for India (NSE/BSE) & global equities in jarvis/data/market_data_provider.py
+yfinance>=0.2.40
