@@ -163,6 +163,25 @@ class JarvisOrchestrator:
             f"PnL=${pnl:.2f}, Win={is_win}, R={r_multiple}, Strat={strategy}, Regime={regime_name}"
         )
 
+    @staticmethod
+    def _df_to_candles(df) -> List[Dict[str, Any]]:
+        if df is None or not hasattr(df, "empty") or df.empty:
+            return []
+        try:
+            recs = df.tail(120).to_dict("records")
+        except Exception:
+            return []
+        out: List[Dict[str, Any]] = []
+        for r in recs:
+            out.append({
+                "open": float(r.get("Open", r.get("open", 0.0))),
+                "high": float(r.get("High", r.get("high", 0.0))),
+                "low": float(r.get("Low", r.get("low", 0.0))),
+                "close": float(r.get("Close", r.get("close", 0.0))),
+                "volume": float(r.get("Volume", r.get("volume", 0.0))),
+            })
+        return out
+
     def run_cycle_for_symbol(self, symbol: str) -> Dict[str, Any]:
         """Executes a single end-to-end analytical and decision cycle for a target symbol."""
         # 1. Fetch Multi-Timeframe Data
@@ -206,7 +225,7 @@ class JarvisOrchestrator:
         if account and account.balance > 0 and account.equity < account.balance:
             dd_pct = ((account.balance - account.equity) / account.balance) * 100.0
         decision = self.decision_engine.evaluate(
-            context, regime, analyst_reports, devil_report, account_balance=account.equity, current_drawdown_pct=dd_pct, mtf_data=mtf_data
+            context, regime, analyst_reports, devil_report, account_balance=account.equity, current_drawdown_pct=dd_pct, mtf_data=mtf_data, recent_candles=self._df_to_candles(mtf_data.get("primary") if isinstance(mtf_data, dict) else None)
         )
         self.state_manager.record_decision(symbol, decision)
 
@@ -214,6 +233,7 @@ class JarvisOrchestrator:
         positions = self.state_manager.positions
         _spec = _resolve_sym(symbol)
         sym_info = {
+            "name": symbol,
             "trade_contract_size": _spec.contract_size,
             "volume_min": 0.01,
             "volume_max": 100.0,

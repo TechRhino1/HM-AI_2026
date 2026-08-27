@@ -18,6 +18,7 @@ Live sources (attempted in order):
 from typing import Optional, List, Dict, Any
 import logging
 import socket
+import datetime as _dt
 
 logger = logging.getLogger("jarvis.market_data")
 
@@ -89,6 +90,42 @@ def _try_yfinance(ticker: str, timeframe: str, num_bars: int) -> Optional[List[D
     return rows if rows else None
 
 
+def _try_nse(symbol: str, timeframe: str, num_bars: int) -> Optional[List[Dict[str, Any]]]:
+    """Live NSE daily candles (real exchange data). Intraday not provided by the
+    free endpoint, so only Daily/Weekly/Monthly timeframes are served."""
+    if timeframe.upper() not in ("1D", "1W", "1MO", "1WK"):
+        return None
+    try:
+        from jarvis.india.nse_bse_adapter import fetch_nse_historical
+    except Exception:
+        return None
+    rows = fetch_nse_historical(symbol, days=num_bars)
+    if not rows:
+        return None
+    out: List[Dict[str, Any]] = []
+    for r in rows:
+        try:
+            ts = r.get("date")
+            if isinstance(ts, str):
+                ts = int(_dt.datetime.strptime(ts, "%Y-%m-%d").timestamp())
+            elif hasattr(ts, "timestamp"):
+                ts = int(ts.timestamp())
+            else:
+                ts = int(ts) if ts else 0
+            out.append({
+                "time": ts,
+                "open": float(r["open"]),
+                "high": float(r["high"]),
+                "low": float(r["low"]),
+                "close": float(r["close"]),
+                "volume": int(r.get("volume", 0) or 0),
+            })
+        except Exception:
+            continue
+    out = out[-num_bars:]
+    return out if out else None
+
+
 def fetch_real_candles(
     symbol: str,
     timeframe: str = "1D",
@@ -101,9 +138,23 @@ def fetch_real_candles(
     source is reachable. Callers MUST fall back to a synthetic generator and
     flag the result as such when this returns ``None``.
     """
+    # Indian equities/indices: prefer the real NSE feed, then yfinance.
+    if market == "IN":
+        candles = _try_nse(symbol, timeframe, num_bars)
+        if candles:
+            logger.info("Live NSE candles for %s (%d bars)", symbol, len(candles))
+            return candles
+        ticker = _resolve_ticker(symbol, market)
+        candles = _try_yfinance(ticker, timeframe, num_bars)
+        if candles:
+            logger.info("Live candles for %s (ticker=%s, %d bars)", symbol, ticker, len(candles))
+            return candles
+        return None
+
     ticker = _resolve_ticker(symbol, market)
     candles = _try_yfinance(ticker, timeframe, num_bars)
     if candles:
         logger.info("Live candles for %s (ticker=%s, %d bars)", symbol, ticker, len(candles))
         return candles
     return None
+

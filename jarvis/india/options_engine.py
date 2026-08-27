@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from jarvis.india.universe import get_india_profile, INDIA_UNIVERSE
 from jarvis.india.nse_rules import NSE_RULES
 from jarvis.india.greeks import GREEKS_ENGINE, norm_cdf, norm_pdf
+from jarvis.india.gamma_exposure import compute_gex, interpret_for_signal
 
 
 class IndiaOptionsEngine:
@@ -40,95 +41,158 @@ class IndiaOptionsEngine:
         time_years = days_to_exp / 365.0
         iv_base = float(profile.get("implied_volatility", 16.5)) / 100.0
 
-        # Determine ATM Strike
-        atm_strike = round(base_price / strike_step) * strike_step
-        
-        # Build 12 strikes above and 12 strikes below (25 total strikes)
-        num_wings = 12
-        min_strike = atm_strike - (num_wings * strike_step)
-        max_strike = atm_strike + (num_wings * strike_step)
+        # ---- Attempt REAL NSE option chain (live OI / IV / greeks) ----
+        live_chain = None
+        try:
+            from jarvis.india.nse_bse_adapter import fetch_nse_option_chain
+            live_chain = fetch_nse_option_chain(sym)
+        except Exception:
+            live_chain = None
 
-        strikes_list = []
-        curr_k = min_strike
-        while curr_k <= max_strike:
-            strikes_list.append(round(curr_k, 2))
-            curr_k += strike_step
-
-        seed_val = int(hash(sym + str(atm_strike)) % 100000)
-        random.seed(seed_val)
-
+        data_source = "synthetic"
         rows = []
-        for strike in strikes_list:
-            greeks = GREEKS_ENGINE.calculate_greeks(
-                spot=base_price,
-                strike=strike,
-                time_to_expiry_years=time_years,
-                volatility=iv_base
-            )
+        if live_chain and live_chain.get("chain"):
+            data_source = "live"
+            base_price = float(live_chain.get("spot_price") or base_price)
+            strikes_list = sorted({float(r["strike"]) for r in live_chain["chain"]})
+            atm_strike = min(strikes_list, key=lambda s: abs(s - base_price))
+            for r in live_chain["chain"]:
+                ce = r["call"]
+                pe = r["put"]
+                ce_itm = r["strike"] < base_price
+                pe_itm = r["strike"] > base_price
+                ce_oi_chg = float(ce.get("oi_change_pct", 0.0) or 0.0)
+                pe_oi_chg = float(pe.get("oi_change_pct", 0.0) or 0.0)
+                ce_ltp = float(ce.get("ltp", 0.0) or 0.0)
+                pe_ltp = float(pe.get("ltp", 0.0) or 0.0)
+                ce_buildup = "LONG_BUILDUP" if (ce_ltp > 5 and ce_oi_chg > 0) else ("SHORT_COVERING" if ce_oi_chg < 0 else "SHORT_BUILDUP")
+                pe_buildup = "LONG_BUILDUP" if (pe_ltp > 5 and pe_oi_chg > 0) else ("SHORT_COVERING" if pe_oi_chg < 0 else "SHORT_BUILDUP")
+                rows.append({
+                    "strike": r["strike"],
+                    "is_atm": abs(r["strike"] - atm_strike) < (strike_step * 0.5),
+                    "call": {
+                        "ltp": ce_ltp,
+                        "change_pct": float(ce.get("change_pct", 0.0) or 0.0),
+                        "oi": int(ce.get("oi", 0) or 0),
+                        "oi_change_pct": ce_oi_chg,
+                        "volume": int(ce.get("volume", 0) or 0),
+                        "iv": float(ce.get("iv", 0.0) or 0.0),
+                        "delta": float(ce.get("delta", 0.0) or 0.0),
+                        "theta": float(ce.get("theta", 0.0) or 0.0),
+                        "gamma": float(ce.get("gamma", 0.0) or 0.0),
+                        "vega": float(ce.get("vega", 0.0) or 0.0),
+                        "bid": max(0.05, ce_ltp * 0.99),
+                        "ask": ce_ltp * 1.01,
+                        "is_itm": ce_itm,
+                        "buildup": ce_buildup
+                    },
+                    "put": {
+                        "ltp": pe_ltp,
+                        "change_pct": float(pe.get("change_pct", 0.0) or 0.0),
+                        "oi": int(pe.get("oi", 0) or 0),
+                        "oi_change_pct": pe_oi_chg,
+                        "volume": int(pe.get("volume", 0) or 0),
+                        "iv": float(pe.get("iv", 0.0) or 0.0),
+                        "delta": float(pe.get("delta", 0.0) or 0.0),
+                        "theta": float(pe.get("theta", 0.0) or 0.0),
+                        "gamma": float(pe.get("gamma", 0.0) or 0.0),
+                        "vega": float(pe.get("vega", 0.0) or 0.0),
+                        "bid": max(0.05, pe_ltp * 0.99),
+                        "ask": pe_ltp * 1.01,
+                        "is_itm": pe_itm,
+                        "buildup": pe_buildup
+                    }
+                })
+        else:
+            # Determine ATM Strike
+            atm_strike = round(base_price / strike_step) * strike_step
 
-            is_atm = (abs(strike - atm_strike) < (strike_step * 0.5))
-            ce_itm = (strike < base_price)
-            pe_itm = (strike > base_price)
+            # Build 12 strikes above and 12 strikes below (25 total strikes)
+            num_wings = 12
+            min_strike = atm_strike - (num_wings * strike_step)
+            max_strike = atm_strike + (num_wings * strike_step)
 
-            # Volatility Skew Smile
-            moneyness = math.log(strike / base_price)
-            iv_ce = round((iv_base + (moneyness * moneyness * 0.15) + random.uniform(-0.008, 0.008)) * 100.0, 1)
-            iv_pe = round((iv_base + (moneyness * moneyness * 0.18) + random.uniform(-0.008, 0.008)) * 100.0, 1)
+            strikes_list = []
+            curr_k = min_strike
+            while curr_k <= max_strike:
+                strikes_list.append(round(curr_k, 2))
+                curr_k += strike_step
 
-            # Open Interest distribution
-            dist_factor = math.exp(-0.5 * ((strike - base_price) / (base_price * 0.04)) ** 2)
-            ce_oi = int((dist_factor * 140000 + random.uniform(5000, 45000)) * (lot_size / 25.0))
-            pe_oi = int((dist_factor * 155000 + random.uniform(5000, 45000)) * (lot_size / 25.0))
-            
-            ce_oi_chg = round(random.uniform(-18.5, 34.0), 1)
-            pe_oi_chg = round(random.uniform(-14.0, 42.0), 1)
+            seed_val = int(hash(sym + str(atm_strike)) % 100000)
+            random.seed(seed_val)
 
-            ce_vol = int(ce_oi * random.uniform(0.4, 2.2))
-            pe_vol = int(pe_oi * random.uniform(0.4, 2.2))
+            rows = []
+            for strike in strikes_list:
+                greeks = GREEKS_ENGINE.calculate_greeks(
+                    spot=base_price,
+                    strike=strike,
+                    time_to_expiry_years=time_years,
+                    volatility=iv_base
+                )
 
-            ce_price = greeks["call"]["price"]
-            pe_price = greeks["put"]["price"]
+                is_atm = (abs(strike - atm_strike) < (strike_step * 0.5))
+                ce_itm = (strike < base_price)
+                pe_itm = (strike > base_price)
 
-            # Flow Build-Up Analysis
-            ce_buildup = "LONG_BUILDUP" if (ce_price > 5 and ce_oi_chg > 0) else ("SHORT_COVERING" if ce_oi_chg < 0 else "SHORT_BUILDUP")
-            pe_buildup = "LONG_BUILDUP" if (pe_price > 5 and pe_oi_chg > 0) else ("SHORT_COVERING" if pe_oi_chg < 0 else "SHORT_BUILDUP")
+                # Volatility Skew Smile
+                moneyness = math.log(strike / base_price)
+                iv_ce = round((iv_base + (moneyness * moneyness * 0.15) + random.uniform(-0.008, 0.008)) * 100.0, 1)
+                iv_pe = round((iv_base + (moneyness * moneyness * 0.18) + random.uniform(-0.008, 0.008)) * 100.0, 1)
 
-            rows.append({
-                "strike": strike,
-                "is_atm": is_atm,
-                "call": {
-                    "ltp": ce_price,
-                    "change_pct": round(random.uniform(-25.0, 45.0), 1),
-                    "oi": ce_oi,
-                    "oi_change_pct": ce_oi_chg,
-                    "volume": ce_vol,
-                    "iv": iv_ce,
-                    "delta": greeks["call"]["delta"],
-                    "theta": greeks["call"]["theta"],
-                    "gamma": greeks["call"]["gamma"],
-                    "vega": greeks["call"]["vega"],
-                    "bid": round(max(0.05, ce_price * 0.99), 2),
-                    "ask": round(ce_price * 1.01, 2),
-                    "is_itm": ce_itm,
-                    "buildup": ce_buildup
-                },
-                "put": {
-                    "ltp": pe_price,
-                    "change_pct": round(random.uniform(-25.0, 45.0), 1),
-                    "oi": pe_oi,
-                    "oi_change_pct": pe_oi_chg,
-                    "volume": pe_vol,
-                    "iv": iv_pe,
-                    "delta": greeks["put"]["delta"],
-                    "theta": greeks["put"]["theta"],
-                    "gamma": greeks["put"]["gamma"],
-                    "vega": greeks["put"]["vega"],
-                    "bid": round(max(0.05, pe_price * 0.99), 2),
-                    "ask": round(pe_price * 1.01, 2),
-                    "is_itm": pe_itm,
-                    "buildup": pe_buildup
-                }
-            })
+                # Open Interest distribution
+                dist_factor = math.exp(-0.5 * ((strike - base_price) / (base_price * 0.04)) ** 2)
+                ce_oi = int((dist_factor * 140000 + random.uniform(5000, 45000)) * (lot_size / 25.0))
+                pe_oi = int((dist_factor * 155000 + random.uniform(5000, 45000)) * (lot_size / 25.0))
+
+                ce_oi_chg = round(random.uniform(-18.5, 34.0), 1)
+                pe_oi_chg = round(random.uniform(-14.0, 42.0), 1)
+
+                ce_vol = int(ce_oi * random.uniform(0.4, 2.2))
+                pe_vol = int(pe_oi * random.uniform(0.4, 2.2))
+
+                ce_price = greeks["call"]["price"]
+                pe_price = greeks["put"]["price"]
+
+                # Flow Build-Up Analysis
+                ce_buildup = "LONG_BUILDUP" if (ce_price > 5 and ce_oi_chg > 0) else ("SHORT_COVERING" if ce_oi_chg < 0 else "SHORT_BUILDUP")
+                pe_buildup = "LONG_BUILDUP" if (pe_price > 5 and pe_oi_chg > 0) else ("SHORT_COVERING" if pe_oi_chg < 0 else "SHORT_BUILDUP")
+
+                rows.append({
+                    "strike": strike,
+                    "is_atm": is_atm,
+                    "call": {
+                        "ltp": ce_price,
+                        "change_pct": round(random.uniform(-25.0, 45.0), 1),
+                        "oi": ce_oi,
+                        "oi_change_pct": ce_oi_chg,
+                        "volume": ce_vol,
+                        "iv": iv_ce,
+                        "delta": greeks["call"]["delta"],
+                        "theta": greeks["call"]["theta"],
+                        "gamma": greeks["call"]["gamma"],
+                        "vega": greeks["call"]["vega"],
+                        "bid": round(max(0.05, ce_price * 0.99), 2),
+                        "ask": round(ce_price * 1.01, 2),
+                        "is_itm": ce_itm,
+                        "buildup": ce_buildup
+                    },
+                    "put": {
+                        "ltp": pe_price,
+                        "change_pct": round(random.uniform(-25.0, 45.0), 1),
+                        "oi": pe_oi,
+                        "oi_change_pct": pe_oi_chg,
+                        "volume": pe_vol,
+                        "iv": iv_pe,
+                        "delta": greeks["put"]["delta"],
+                        "theta": greeks["put"]["theta"],
+                        "gamma": greeks["put"]["gamma"],
+                        "vega": greeks["put"]["vega"],
+                        "bid": round(max(0.05, pe_price * 0.99), 2),
+                        "ask": round(pe_price * 1.01, 2),
+                        "is_itm": pe_itm,
+                        "buildup": pe_buildup
+                    }
+                })
 
         # Calculate Chain Aggregate Metrics (Max Pain, PCR)
         strikes_payload = [{"strike": r["strike"], "ce_oi": r["call"]["oi"], "pe_oi": r["put"]["oi"], "ce_volume": r["call"]["volume"], "pe_volume": r["put"]["volume"]} for r in rows]
@@ -144,6 +208,7 @@ class IndiaOptionsEngine:
         return {
             "symbol": sym,
             "name": profile.get("name", f"{sym} India Ltd"),
+            "data_source": data_source,
             "spot_price": round(base_price, 2),
             "atm_strike": atm_strike,
             "strike_step": strike_step,
@@ -163,7 +228,11 @@ class IndiaOptionsEngine:
                 "expected_move_pct": round((straddle_premium / base_price) * 100.0, 2)
             },
             "iv_rank": round(random.uniform(25.0, 75.0), 1),
-            "chain": rows
+            "chain": rows,
+            "gex": compute_gex(
+                {"chain": rows, "data_source": data_source},
+                spot=base_price, multiplier=lot_size, time_years=time_years, volatility=iv_base
+            )
         }
 
     def get_oi_distribution(self, symbol: str) -> Dict[str, Any]:

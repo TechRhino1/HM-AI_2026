@@ -319,13 +319,22 @@ class IndiaTechnicalEngine:
         tp3 = round(entry_zone + (5.0 * atr14), 2)
         rr_ratio = round(abs(tp2 - entry_zone) / max(0.01, abs(entry_zone - sl_price)), 2)
 
-        # Multi-timeframe structure
+        # Multi-timeframe structure — strength is DERIVED from each timeframe's
+        # actual distance/divergence (no fabricated constants).
+        _dv = abs((current_price - vwap) / vwap * 100.0) * 6.0 if vwap else 0.0
+        _dc = abs((current_price - cpr["pivot"]) / cpr["pivot"] * 100.0) * 6.0 if cpr.get("pivot") else 0.0
+        _ds = abs((current_price - sma20) / sma20 * 100.0) * 5.0 if sma20 else 0.0
         multi_tf = {
-            "5M": {"bias": "BULLISH" if current_price > vwap else "BEARISH", "strength": 78},
-            "15M": {"bias": "BULLISH" if current_price > cpr["pivot"] else "BEARISH", "strength": 82},
-            "1H": {"bias": "BULLISH" if rsi > 52 else "NEUTRAL", "strength": 75},
-            "1D": {"bias": "BULLISH" if current_price > sma20 else "NEUTRAL", "strength": 88},
-            "1W": {"bias": "BULLISH" if change_pct > -1.0 else "BEARISH", "strength": 84}
+            "5M": {"bias": "BULLISH" if current_price > vwap else "BEARISH",
+                   "strength": int(min(95, 60 + _dv))},
+            "15M": {"bias": "BULLISH" if current_price > cpr["pivot"] else "BEARISH",
+                    "strength": int(min(95, 60 + _dc))},
+            "1H": {"bias": "BULLISH" if rsi > 52 else "NEUTRAL",
+                   "strength": int(min(95, 55 + abs(rsi - 50.0) * 1.5))},
+            "1D": {"bias": "BULLISH" if current_price > sma20 else "NEUTRAL",
+                   "strength": int(min(95, 60 + _ds))},
+            "1W": {"bias": "BULLISH" if change_pct > -1.0 else "BEARISH",
+                   "strength": int(min(95, 60 + abs(change_pct) * 3.0))},
         }
 
         # 10-Day Monte Carlo Simulations (1,000 paths)

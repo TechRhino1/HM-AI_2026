@@ -225,6 +225,8 @@ class DecisionObject:
     first_target_price: Optional[float] = None
     first_target_volume_pct: float = 0.50
     pattern_sample_size: int = 0
+    meta_label_prob: Optional[float] = None
+    gate_policy_decision: str = "BLOCK"
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -263,7 +265,9 @@ class DecisionObject:
             "waiting_reasons": self.waiting_reasons,
             "rejection_reasons": self.rejection_reasons,
             "decision": self.decision,
-            "execution_authorized": self.execution_authorized
+            "execution_authorized": self.execution_authorized,
+            "meta_label_prob": self.meta_label_prob,
+            "gate_policy_decision": self.gate_policy_decision
         }
 
 @dataclass

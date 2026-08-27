@@ -14,6 +14,8 @@ from jarvis.india.nse_rules import NSE_RULES
 from jarvis.india.greeks import GREEKS_ENGINE
 from jarvis.india.india_engine import INDIA_ENGINE
 from jarvis.india.news_analyzer import INDIA_NEWS
+from jarvis.india.options_engine import INDIA_OPTIONS
+from jarvis.india.gamma_exposure import interpret_for_signal
 
 
 class OptionSignalEngine:
@@ -171,7 +173,21 @@ class OptionSignalEngine:
         vsa_score = 20 if rvol >= 1.4 or is_squeeze else 12
         news_score = 15 if fii_sentiment_score > 0.55 else 10
 
-        conviction_score = min(96, cpr_score + vwap_score + pcr_score + vsa_score + news_score)
+        # 4.5 Dealer-flow (GEX) overlay
+        try:
+            gex = INDIA_OPTIONS.generate_option_chain(symbol).get("gex")
+            gex_interp = interpret_for_signal(gex)
+        except Exception:
+            gex_interp = {"gex_applicable": False}
+        gex_adj = gex_interp.get("confidence_adj", 0) if gex_interp.get("gex_applicable") else 0
+        if gex_interp.get("gex_applicable"):
+            db = gex_interp.get("dealer_bias")
+            if db == "BULLISH" and option_type == "PE":
+                gex_adj = -gex_adj
+            elif db == "BEARISH" and option_type == "CE":
+                gex_adj = -gex_adj
+
+        conviction_score = min(96, cpr_score + vwap_score + pcr_score + vsa_score + news_score + gex_adj)
 
         # Trade Contract Identifier (e.g. NIFTY 24850 CE)
         contract_symbol = f"{symbol} {int(selected_strike)} {option_type}"
@@ -191,6 +207,8 @@ class OptionSignalEngine:
             catalyst_reasons.append(f"🔴 Bearish Call Writing Pressure (PCR {pcr})")
         if iv_rank < 50:
             catalyst_reasons.append(f"💎 Low IV Rank ({iv_rank}) — Cheaper Option Vega")
+        if gex_interp.get("gex_applicable") and gex_interp.get("regime") == "NEGATIVE":
+            catalyst_reasons.append(f"🌀 Dealer SHORT-gamma regime (momentum-acceleration)")
         if not catalyst_reasons:
             catalyst_reasons.append("⚡ Multi-Timeframe Trend & VWAP Confluence")
 
@@ -221,6 +239,13 @@ class OptionSignalEngine:
             },
             "pcr": pcr,
             "iv_rank": iv_rank,
+            "gex": {
+                "applicable": bool(gex_interp.get("gex_applicable")),
+                "regime": gex_interp.get("regime"),
+                "dealer_bias": gex_interp.get("dealer_bias"),
+                "zero_gamma_level": gex.get("zero_gamma_level") if gex else None,
+                "data_source": gex.get("data_source") if gex else None,
+            },
             "trade_plan": {
                 "entry_premium": round(entry_prem, 2),
                 "entry_range": f"₹{round(entry_prem * 0.99, 1)} - ₹{round(entry_prem * 1.01, 1)}",

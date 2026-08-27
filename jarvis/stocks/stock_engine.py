@@ -383,7 +383,10 @@ class StockIntelligenceEngine:
         # Cap probability between 18% and 98%
         prob_score = max(18.0, min(prob_score, 97.0))
         prob_score_rounded = int(round(prob_score))
-        confidence = round(min(0.96, max(0.60, prob_score / 100.0 + random.uniform(-0.02, 0.04))), 2)
+        # Confidence is DETERMINISTIC (no fabricated noise): driven by the same
+        # confluence score plus a small bump when flow + relative strength align.
+        conf_bump = 0.03 if (cmf_20 >= 0.08 and rs_vs_spy > 0) else 0.0
+        confidence = round(min(0.96, max(0.55, prob_score / 100.0 + conf_bump)), 2)
 
         # -------------------------------------------------------------
         # 5. Institutional Setup Grading (GRADE A+, A, B, C)

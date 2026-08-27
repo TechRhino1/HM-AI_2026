@@ -30,6 +30,8 @@ from jarvis.risk.account_tier import is_micro_account, get_effective_min_ev
 
 from jarvis.learning.fractional_diff import FractionalDifferentiationTransformer
 from jarvis.learning.ensemble_bandit import EnsembleStrategyBandit
+from jarvis.intelligence.meta_labeler import MetaLabeler
+from jarvis.intelligence.gate_policy import AdaptiveGatePolicy
 
 class DecisionEngine:
     def __init__(
@@ -51,6 +53,8 @@ class DecisionEngine:
         self.max_devil_penalty = max_devil_penalty
         self.order_flow = InstitutionalVolumeOrderFlowEngine()
         self.self_learning = SelfLearningEngine()
+        self.meta_labeler = MetaLabeler()
+        self.gate_policy = AdaptiveGatePolicy()
 
 
     def _compute_bias_and_levels(
@@ -430,7 +434,8 @@ class DecisionEngine:
         account_balance: float = 10000.0,
         risk_per_trade_pct: float = 0.5,
         current_drawdown_pct: float = 0.0,
-        mtf_data=None
+        mtf_data=None,
+        recent_candles: Optional[List[Dict[str, Any]]] = None
     ) -> DecisionObject:
         tentative_bias, entry_price, sl_price, tp_price, risk_dist, rr_ratio, first_target_price, first_target_volume_pct = self._compute_bias_and_levels(
             context, regime, analyst_reports
@@ -586,6 +591,42 @@ class DecisionEngine:
         gate_passed = quality_gate.passed
         failing_reasons = quality_gate.failing_reasons
 
+        # ---- ML Meta-Label confirmation gate (safe: neutral until a model is trained) ----
+        meta_label_prob = None
+        gate_policy_decision = "PASS"
+        softened_gates: List[str] = []
+        if recent_candles and len(recent_candles) >= self.meta_labeler.MIN_WINDOW:
+            _bias = 1.0 if tentative_bias == "BUY" else (-1.0 if tentative_bias == "SELL" else 0.0)
+            meta_label_prob = self.meta_labeler.predict_proba(recent_candles, bias=_bias)
+            if meta_label_prob is not None:
+                quality_gate.checks["ML Meta-Label Confirmation"] = meta_label_prob >= self.meta_labeler.MIN_PROB
+                quality_gate.failing_reasons = [
+                    r for r in quality_gate.failing_reasons if r != "ML Meta-Label Confirmation"
+                ]
+                if meta_label_prob < self.meta_labeler.MIN_PROB:
+                    quality_gate.failing_reasons.append("ML Meta-Label Confirmation")
+                quality_gate.passed = len(quality_gate.failing_reasons) == 0
+                failing_reasons = quality_gate.failing_reasons
+                gate_passed = quality_gate.passed
+
+        # ---- Adaptive gate strictness (AI-decided hard vs soft) ----
+        if not gate_passed:
+            _rwr = pattern_memory.get("win_rate") if pattern_memory.get("sample_size", 0) >= 5 else None
+            _decision, _soft = self.gate_policy.decide(failing_reasons, _rwr)
+            if _decision == "SOFTEN":
+                _pen = self.gate_policy.confidence_penalty(_soft)
+                calibrated_win_p = max(0.05, calibrated_win_p - _pen)
+                final_win_p = max(0.05, final_win_p - _pen)
+                loss_p = round(1.0 - final_win_p, 2)
+                softened_gates = _soft
+                gate_passed = True
+                failing_reasons = []
+                quality_gate.passed = True
+                quality_gate.failing_reasons = []
+                gate_policy_decision = "SOFTEN"
+            else:
+                gate_policy_decision = "BLOCK"
+
         if not is_mkt_open:
             decision_action = "NO_TRADE"
         elif gate_passed:
@@ -597,6 +638,9 @@ class DecisionEngine:
 
         waiting_reasons = []
         rejection_reasons = []
+
+        if gate_policy_decision == "SOFTEN" and softened_gates:
+            waiting_reasons.extend([f"Softened gate (AI adaptive, win-rate evidence): {g}" for g in softened_gates])
 
         if not is_mkt_open:
             rejection_reasons.append(
@@ -694,5 +738,7 @@ class DecisionEngine:
             decision=decision_action,
             execution_authorized=gate_passed,
             context=context,
-            pattern_sample_size=pattern_memory.get("sample_size", 0) if "pattern_memory" in locals() and pattern_memory else 0
+            pattern_sample_size=pattern_memory.get("sample_size", 0) if "pattern_memory" in locals() and pattern_memory else 0,
+            meta_label_prob=meta_label_prob,
+            gate_policy_decision=gate_policy_decision
         )
