@@ -21,7 +21,7 @@ if BASE_DIR not in sys.path:
 
 from jarvis.application.orchestrator import JarvisOrchestrator
 from jarvis.api.server import run_web_server
-from jarvis.api.remote_auth import ADMIN_USERNAME, DEFAULT_PASS_RAW
+# Admin credentials are resolved from environment at runtime (see jarvis.api.remote_auth)
 
 if sys.stdout and hasattr(sys.stdout, "reconfigure"):
     try:
@@ -126,8 +126,7 @@ def hm_start(mode: str = "live", port: int = 8501, host: str = "0.0.0.0"):
     print(f" -> Remote Access Server       : http://{host}:{port}", flush=True)
     print(f" -> Permanent Local Wi-Fi Link : http://{local_ip}:{port}", flush=True)
     print(f" -> Global Mobile HTTPS Link   : {mobile_url}", flush=True)
-    print(f" -> Admin Login Username       : {ADMIN_USERNAME}", flush=True)
-    print(f" -> Access Password            : {DEFAULT_PASS_RAW}", flush=True)
+    print(f" -> Admin Login                : configure via JARVIS_ADMIN_USER / JARVIS_ADMIN_PASS env vars", flush=True)
     print("=" * 95, flush=True)
 
     # 2. Start Autonomous Orchestrator

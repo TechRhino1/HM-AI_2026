@@ -88,7 +88,7 @@ class ParallelAnalystCluster:
                 symbol=context.symbol,
                 counter_bias="NEUTRAL",
                 penalty_score=0.0,
-                invalidation_risk_coefficient=0.0,
+                invalidation_risk_coefficient=1.0,
                 threats_detected=[],
                 invalidation_triggers=[],
                 liquidity_traps=[]

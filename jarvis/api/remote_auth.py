@@ -9,6 +9,7 @@ import hmac
 import hashlib
 import secrets
 import logging
+import bcrypt
 from typing import Dict, Any, Optional, Tuple, List
 
 logger = logging.getLogger("JARVIS_RemoteAuth")
@@ -42,11 +43,35 @@ SECRET_KEY = _get_or_create_secret_key()
 
 # Default Remote Access Admin Credentials (Override via environment variables)
 ADMIN_USERNAME = os.environ.get("JARVIS_ADMIN_USER", "admin")
-DEFAULT_PASS_RAW = os.environ.get("JARVIS_ADMIN_PASS", "Hm@5656")
 
-# Security warning if using fallback password
-if not os.environ.get("JARVIS_ADMIN_PASS"):
-    logger.warning("SECURITY NOTICE: JARVIS_ADMIN_PASS is not set in environment. Using default credentials.")
+def _resolve_admin_password() -> str:
+    """Resolve the admin password from env, else generate + persist a random one (never a known literal)."""
+    env_pass = os.environ.get("JARVIS_ADMIN_PASS")
+    if env_pass and len(env_pass.strip()) >= 8:
+        return env_pass.strip()
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    pass_file = os.path.join(base_dir, ".jarvis_admin_pass")
+    try:
+        if os.path.exists(pass_file):
+            with open(pass_file, "r", encoding="utf-8") as f:
+                existing = f.read().strip()
+                if existing:
+                    return existing
+    except Exception:
+        pass
+    new_pass = secrets.token_urlsafe(18)
+    try:
+        with open(pass_file, "w", encoding="utf-8") as f:
+            f.write(new_pass)
+    except Exception as e:
+        logger.warning(f"Could not persist generated admin password: {e}")
+    logger.warning(
+        "SECURITY NOTICE: JARVIS_ADMIN_PASS not set. Generated a random admin password "
+        "(saved to .jarvis_admin_pass). Set JARVIS_ADMIN_PASS to use a fixed password."
+    )
+    return new_pass
+
+DEFAULT_PASS_RAW = _resolve_admin_password()
 
 
 class RemoteAuthEngine:
@@ -109,7 +134,7 @@ class RemoteAuthEngine:
 
         def _make_user_record(username: str, password_raw: str, role: str, full_name: str) -> Dict[str, Any]:
             salt = secrets.token_hex(16)
-            pwd_hash = cls._hash_password(password_raw, salt)
+            pwd_hash = cls._hash_password(password_raw)
             return {
                 "username": username.lower(),
                 "role": role,
@@ -120,20 +145,32 @@ class RemoteAuthEngine:
             }
 
         # 1. Primary Admin Account
-        admin_pass = DEFAULT_PASS_RAW.strip() if DEFAULT_PASS_RAW else "Hm@5656"
+        admin_pass = DEFAULT_PASS_RAW.strip() if DEFAULT_PASS_RAW else secrets.token_urlsafe(18)
         cls._users["admin"] = _make_user_record("admin", admin_pass, "ADMIN", "System Administrator")
 
         # 2. Trader Account
-        cls._users["trader"] = _make_user_record("trader", "trader2026", "TRADER", "Senior Algo Trader")
+        trader_pass = os.environ.get("JARVIS_TRADER_PASS") or secrets.token_urlsafe(16)
+        cls._users["trader"] = _make_user_record("trader", trader_pass, "TRADER", "Senior Algo Trader")
 
         # 3. Viewer/Demo Account
-        cls._users["demo"] = _make_user_record("demo", "demo2026", "VIEWER", "Demo Guest Account")
+        demo_pass = os.environ.get("JARVIS_DEMO_PASS") or secrets.token_urlsafe(16)
+        cls._users["demo"] = _make_user_record("demo", demo_pass, "VIEWER", "Demo Guest Account")
 
     @classmethod
-    def _hash_password(cls, password: str, salt: str) -> str:
-        """Returns salted SHA-256 hash of password."""
-        salted_str = f"{salt}:{password.strip()}"
-        return hashlib.sha256(salted_str.encode("utf-8")).hexdigest()
+    def _hash_password(cls, password: str, salt: str = None) -> str:
+        """Returns bcrypt hash of password (salt param retained for call compatibility)."""
+        pw = password.strip().encode("utf-8")[:72]
+        return bcrypt.hashpw(pw, bcrypt.gensalt()).decode("utf-8")
+
+    @classmethod
+    def _verify_password(cls, password: str, stored_hash: str) -> bool:
+        """Constant-time verification supporting bcrypt hashes."""
+        try:
+            if stored_hash.startswith("$2"):
+                return bcrypt.checkpw(password.strip().encode("utf-8")[:72], stored_hash.encode("utf-8"))
+        except Exception:
+            return False
+        return False
 
     @classmethod
     def verify_credentials(cls, username: str, password_raw: str, client_ip: str = "") -> Tuple[Optional[Dict[str, Any]], str]:
@@ -163,11 +200,9 @@ class RemoteAuthEngine:
             cls.record_failed_attempt(user_key)
             return None, "Invalid username or password"
 
-        salt = user_data["salt"]
         stored_hash = user_data["password_hash"]
-        attempt_hash = cls._hash_password(pwd, salt)
 
-        if hmac.compare_digest(attempt_hash, stored_hash):
+        if cls._verify_password(pwd, stored_hash):
             cls.record_successful_login(client_ip or "global")
             cls.record_successful_login(user_key)
             return {
@@ -283,9 +318,7 @@ class RemoteAuthEngine:
         if len(new_password.strip()) < 6:
             return False, "New password must be at least 6 characters long"
 
-        salt = secrets.token_hex(16)
-        pwd_hash = cls._hash_password(new_password.strip(), salt)
-        cls._users[user_key]["salt"] = salt
+        pwd_hash = cls._hash_password(new_password.strip())
         cls._users[user_key]["password_hash"] = pwd_hash
         return True, "Password updated successfully"
 

@@ -65,10 +65,8 @@ def main():
             print("\n" + "*" * 80, flush=True)
             print("  LIVE AUTHENTICATED MOBILE HTTPS URL (Access anywhere globally):", flush=True)
             print(f"  ->  {tunnel_url}", flush=True)
-            print("\n  Default Username : admin", flush=True)
-            print("  Default Password : Hm@5656", flush=True)
+            print("  Log in with your configured JARVIS credentials (set JARVIS_ADMIN_PASS).", flush=True)
             print("*" * 80 + "\n", flush=True)
-            print("  Authenticated Account: tech54321.in@gmail.com", flush=True)
             print("  Tunnel is running in background. Press Ctrl+C to close.", flush=True)
             proc.wait()
         else:

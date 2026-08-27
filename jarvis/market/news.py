@@ -105,8 +105,6 @@ class LiveNewsEngine:
         self._cached_news: List[Dict[str, Any]] = []
         self._last_fetch_time: float = 0.0
         self._ctx = ssl.create_default_context()
-        self._ctx.check_hostname = False
-        self._ctx.verify_mode = ssl.CERT_NONE
 
     def get_news_calendar(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
         """Returns fresh macro economic events formatted in IST & UTC with 1 most recent on top."""

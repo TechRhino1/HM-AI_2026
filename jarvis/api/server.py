@@ -53,11 +53,6 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
 
-        if not token:
-            parsed = urlparse(self.path)
-            query = parse_qs(parsed.query)
-            token = query.get("token", [""])[0]
-
         return token
 
     def _get_auth_user(self) -> Optional[Dict[str, Any]]:
@@ -68,6 +63,16 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
 
     def _check_auth(self) -> bool:
         return self._get_auth_user() is not None
+
+    def _require_role(self, *allowed_roles: str):
+        user = self._get_auth_user()
+        if not user:
+            self._send_json({"status": "UNAUTHORIZED", "error": "Authentication required"}, status_code=401)
+            return False, None
+        if user.get("role") not in allowed_roles:
+            self._send_json({"status": "FORBIDDEN", "error": f"Role '{user.get('role')}' is not permitted to perform this action"}, status_code=403)
+            return False, None
+        return True, user
 
 
     @classmethod
@@ -349,10 +354,14 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                     self._send_json({"status": "FAILED", "error": msg}, status_code=400)
                 return
 
-            # Protected Action Endpoints — Require Authentication
+            # Protected Action Endpoints — Require Authentication + appropriate role
             if path.startswith("/api/action/"):
+                ok, _ = self._require_role("ADMIN", "TRADER")
+                if not ok:
+                    return
+            elif path.startswith("/api/copilot/"):
                 if not self._check_auth():
-                    self._send_json({"status": "UNAUTHORIZED", "error": "Authentication required for remote execution actions"}, status_code=401)
+                    self._send_json({"status": "UNAUTHORIZED", "error": "Authentication required"}, status_code=401)
                     return
 
             if path == "/api/copilot/ask":
@@ -461,7 +470,9 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
     def _send_json(self, data: Any, status_code: int = 200):
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        cors_origin = os.environ.get("JARVIS_CORS_ORIGIN", "")
+        if cors_origin:
+            self.send_header("Access-Control-Allow-Origin", cors_origin)
         self.end_headers()
         payload = json.dumps(data, default=str)
         self.wfile.write(payload.encode("utf-8"))

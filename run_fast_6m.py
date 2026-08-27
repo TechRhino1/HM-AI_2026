@@ -28,8 +28,8 @@ def main():
         
         m = res.get("metrics", {})
         m["in_sample_win_rate"] = m.get("win_rate_pct", 78.5)
-        m["oos_win_rate"] = wf_res.get("out_of_sample_metrics", {}).get("win_rate_pct", m.get("win_rate_pct", 78.5) * 0.94)
-        m["oos_profit_factor"] = wf_res.get("out_of_sample_metrics", {}).get("profit_factor", m.get("profit_factor", 4.2) * 0.91)
+        m["oos_win_rate"] = wf_res.get("aggregate_oos_metrics", {}).get("win_rate_pct", m.get("win_rate_pct", 0.0))
+        m["oos_profit_factor"] = wf_res.get("aggregate_oos_metrics", {}).get("profit_factor", m.get("profit_factor", 0.0))
         m["wfe"] = wf_res.get("walk_forward_efficiency", 1.08)
         m["final_balance"] = res.get("final_balance", 10000.0)
         m["roi_pct"] = ((m["final_balance"] - 10000.0) / 10000.0) * 100.0

@@ -493,6 +493,7 @@ class DecisionEngine:
         if pattern_memory.get("sample_size", 0) >= 3:
             p_mult = pattern_memory.get("conviction_multiplier", 1.0)
             calibrated_win_p = min(0.99, max(0.10, calibrated_win_p * p_mult))
+            final_win_p = min(0.99, max(0.10, final_win_p * p_mult))
             if pattern_memory.get("empirical_edge"):
                 ai_score = min(100.0, ai_score + 5.0)
                 logger.info(f"[{context.symbol}] Empirical pattern edge: WinRate={pattern_memory['win_rate']*100:.0f}%, EV={pattern_memory['avg_ev']:.2f}")
@@ -507,6 +508,7 @@ class DecisionEngine:
         if news_reaction.get("news_reversal_setup"):
             c_boost = news_reaction.get("conviction_boost", 0.0)
             calibrated_win_p = min(0.99, calibrated_win_p + c_boost)
+            final_win_p = min(0.99, final_win_p + c_boost)
             ai_score = min(100.0, ai_score + 8.0)
             logger.info(f"[{context.symbol}] {news_reaction.get('reason')}")
 
@@ -543,7 +545,23 @@ class DecisionEngine:
             if sl_multiplier != 1.0:
                 logger.info(f"[{context.symbol}] Self-Learning Engine adjusting {regime_str} Win Prob by {sl_multiplier}x")
                 calibrated_win_p = min(0.99, calibrated_win_p * sl_multiplier)
-        
+                final_win_p = min(0.99, final_win_p * sl_multiplier)
+
+        # Recompute EV from the (now fully adjusted) blended win probability so the
+        # Expected Value shown/used for gating is consistent with the displayed probability.
+        if tentative_bias in ["BUY", "SELL"]:
+            loss_p = round(1.0 - final_win_p, 2)
+            _risk_dollars = max(0.50, account_balance * (risk_per_trade_pct / 100.0))
+            _win_dollars = _risk_dollars * rr_ratio
+            _spec = resolve_symbol(context.symbol)
+            _est_lots = max(0.01, _risk_dollars / (max(risk_dist, 1e-4) * _spec.contract_size))
+            _spread_cost = context.volatility.current_spread_pips * _spec.pip_value_per_lot * _est_lots
+            _slippage = (context.volatility.atr * 0.02) * _est_lots
+            ev = round(float((final_win_p * _win_dollars) - (loss_p * _risk_dollars) - _spread_cost - _slippage), 2)
+        else:
+            loss_p = round(1.0 - final_win_p, 2)
+            ev = 0.0
+
         st = context.structure
         premium_discount_valid = True
         if tentative_bias == "BUY" and st.discount_premium_zone == "PREMIUM" and context.momentum.trend_score < 60:

@@ -6,6 +6,20 @@ import urllib.request
 import urllib.error
 import json
 import sys
+import os
+
+def _get_admin_pass():
+    p = os.environ.get("JARVIS_ADMIN_PASS")
+    if p:
+        return p
+    try:
+        with open(".jarvis_admin_pass", "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except Exception:
+        return "CHANGE_ME"
+
+def _get_trader_pass():
+    return os.environ.get("JARVIS_TRADER_PASS", "CHANGE_ME")
 
 BASE_URL = "http://127.0.0.1:8501"
 
@@ -57,9 +71,9 @@ def run_auth_tests():
 
     # 1. Test Login with Valid Admin Credentials
     admin_session = test_post(
-        "1. Login Valid Admin (admin / Hm@5656)",
+        "1. Login Valid Admin (admin / configured)",
         "/api/auth/login",
-        {"username": "admin", "password": "Hm@5656"},
+         {"username": "admin", "password": _get_admin_pass()},
         200,
         validator=lambda d: bool(d.get("token") and d.get("role") == "ADMIN")
     )
@@ -83,11 +97,11 @@ def run_auth_tests():
         validator=lambda d: d.get("status") == "UNAUTHORIZED"
     )
 
-    # 4. Test Login with Secondary Account (trader / trader2026)
+    # 4. Test Login with Secondary Account (trader / configured)
     test_post(
-        "4. Login Valid Trader (trader / trader2026)",
+        "4. Login Valid Trader (trader / configured)",
         "/api/auth/login",
-        {"username": "trader", "password": "trader2026"},
+        {"username": "trader", "password": _get_trader_pass()},
         200,
         validator=lambda d: bool(d.get("token") and d.get("role") == "TRADER")
     )

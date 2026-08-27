@@ -10,6 +10,7 @@ from datetime import datetime, timezone, timedelta
 
 from jarvis.india.universe import get_india_profile, INDIA_UNIVERSE
 from jarvis.india.nse_rules import NSE_RULES
+from jarvis.data.market_data_provider import fetch_real_candles
 
 
 class IndiaTechnicalEngine:
@@ -20,6 +21,7 @@ class IndiaTechnicalEngine:
     def __init__(self):
         self._cache: Dict[str, Dict[str, Any]] = {}
         self._cache_ttl = 3.0
+        self._last_data_source = "synthetic_fallback"
 
     def generate_candles(
         self,
@@ -28,7 +30,29 @@ class IndiaTechnicalEngine:
         num_bars: int = 120
     ) -> List[Dict[str, Any]]:
         """
-        Generates geometrically bounded OHLC candle series for Indian equities/indices.
+        Returns OHLC candle series for the instrument.
+
+        Attempts to fetch REAL market data first (via the configured live
+        provider); only falls back to a synthetic generator when no live
+        source is available. The chosen source is recorded on
+        ``self._last_data_source`` so callers can audit data integrity.
+        """
+        real = fetch_real_candles(symbol, timeframe=timeframe, num_bars=num_bars, market="IN")
+        if real:
+            self._last_data_source = "live"
+            return real
+        self._last_data_source = "synthetic_fallback"
+        return self._generate_synthetic_candles(symbol, timeframe=timeframe, num_bars=num_bars)
+
+    def _generate_synthetic_candles(
+        self,
+        symbol: str,
+        timeframe: str = "1D",
+        num_bars: int = 120
+    ) -> List[Dict[str, Any]]:
+        """
+        Synthetic OHLC generator used ONLY when no live market data is available.
+        Output is geometrically bounded and deterministic per symbol.
         """
         profile = get_india_profile(symbol)
         base_price = float(profile.get("base_price", 1000.0))
@@ -411,6 +435,7 @@ class IndiaTechnicalEngine:
             "multi_timeframe": multi_tf,
 
             "candles": candles,
+            "data_source": getattr(self, "_last_data_source", "synthetic_fallback"),
             "analyzed_at": datetime.now(timezone.utc).isoformat()
         }
 

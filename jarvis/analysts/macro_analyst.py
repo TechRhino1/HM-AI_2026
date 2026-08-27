@@ -10,6 +10,28 @@ from typing import Dict, Any, List, Optional
 from jarvis.data.schemas import MarketContext, RegimeOutput, AnalystReport, AnalystRole
 from jarvis.analysts.base_analyst import BaseAnalyst
 
+
+def _parse_metric(value: str) -> Optional[float]:
+    """Parse a numeric macro metric, honouring %/K/M/B magnitude suffixes."""
+    s = str(value).strip().replace("%", "")
+    if not s:
+        return None
+    mult = 1.0
+    if s[-1] in ("K", "k"):
+        mult = 1_000.0
+        s = s[:-1]
+    elif s[-1] in ("M", "m"):
+        mult = 1_000_000.0
+        s = s[:-1]
+    elif s[-1] in ("B", "b"):
+        mult = 1_000_000_000.0
+        s = s[:-1]
+    try:
+        return float(s) * mult
+    except Exception:
+        return None
+
+
 class MacroAnalyst(BaseAnalyst):
     def __init__(self, news_calendar: Optional[List[Dict[str, Any]]] = None):
         super().__init__(AnalystRole.MACRO)
@@ -63,14 +85,16 @@ class MacroAnalyst(BaseAnalyst):
                     continue
 
                 try:
-                    act = float(actual_str.replace("%", "").replace("K", "").replace("M", "").strip())
-                    fcst = float(fcst_str.replace("%", "").replace("K", "").replace("M", "").strip())
-                    
+                    act = _parse_metric(actual_str)
+                    fcst = _parse_metric(fcst_str)
+                    if act is None or fcst is None:
+                        raise ValueError("unparseable macro metric")
+
                     # Detect inverse indicators where higher actual = weaker USD
                     is_inverse = any(kw in event_name for kw in [
                         "jobless", "unemployment", "trade deficit", "deficit"
                     ])
-                    
+
                     if is_inverse:
                         # Higher actual = weaker economy = bearish USD
                         if act > fcst:

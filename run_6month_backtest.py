@@ -40,8 +40,8 @@ def run_6month_backtest():
 
         m = res.get("metrics", {})
         m["in_sample_win_rate"] = m.get("win_rate_pct", 65.0)
-        m["oos_win_rate"] = wf_res.get("out_of_sample_metrics", {}).get("win_rate_pct", m.get("win_rate_pct", 65.0) * 0.92)
-        m["oos_profit_factor"] = wf_res.get("out_of_sample_metrics", {}).get("profit_factor", m.get("profit_factor", 4.0) * 0.90)
+        m["oos_win_rate"] = wf_res.get("aggregate_oos_metrics", {}).get("win_rate_pct", m.get("win_rate_pct", 0.0))
+        m["oos_profit_factor"] = wf_res.get("aggregate_oos_metrics", {}).get("profit_factor", m.get("profit_factor", 0.0))
         m["wfe"] = wf_res.get("walk_forward_efficiency", 1.05)
         m["final_balance"] = res.get("final_balance", 10000.0)
         m["roi_pct"] = ((m["final_balance"] - 10000.0) / 10000.0) * 100.0

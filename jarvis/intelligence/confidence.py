@@ -18,20 +18,27 @@ class ConfidenceCalibrationEngine:
         }
 
     def calibrate_probability(self, raw_confidence: float) -> float:
-        """Applies empirical calibration curve to adjust for overconfidence."""
+        """Applies empirical reliability curve to shrink overconfidence.
+
+        Properly interpolates between empirical bin centres instead of
+        inflating the probability above the empirical value.
+        """
         raw_confidence = min(1.0, max(0.0, raw_confidence))
-        for (low, high), true_prob in self.calibration_curve.items():
-            if low <= raw_confidence < high:
-                # Linear interpolation within the bin
-                bin_span = high - low
-                frac = (raw_confidence - low) / bin_span
-                next_val = true_prob + (frac * (high - low) * 0.8)
-                return round(float(next_val), 3)
-        # Smooth fallback for values outside bins (below 0.40 or above 1.0)
-        # Use a gentle linear scaling instead of harsh 0.85× compression
-        if raw_confidence < 0.40:
-            return round(raw_confidence * 0.95, 3)
-        return round(raw_confidence * 0.90, 3)
+        # Ordered (bin_centre, calibrated_value) points from the reliability curve
+        points = sorted(
+            (( (low + high) / 2.0, true_prob) for (low, high), true_prob in self.calibration_curve.items())
+        )
+        if raw_confidence <= points[0][0]:
+            return round(float(points[0][1]), 3)
+        if raw_confidence >= points[-1][0]:
+            return round(float(points[-1][1]), 3)
+        for i in range(len(points) - 1):
+            x0, y0 = points[i]
+            x1, y1 = points[i + 1]
+            if x0 <= raw_confidence <= x1:
+                frac = (raw_confidence - x0) / (x1 - x0) if x1 > x0 else 0.0
+                return round(float(y0 + frac * (y1 - y0)), 3)
+        return round(float(raw_confidence), 3)
 
     def compute_brier_score(self, predictions: List[float], outcomes: List[int]) -> float:
         """Calculates Brier Score (lower is better, 0.0 is perfect calibration)."""

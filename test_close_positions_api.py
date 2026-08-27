@@ -1,10 +1,21 @@
 import urllib.request
 import json
+import os
+
+def _get_admin_pass():
+    p = os.environ.get("JARVIS_ADMIN_PASS")
+    if p:
+        return p
+    try:
+        with open(".jarvis_admin_pass", "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except Exception:
+        return "CHANGE_ME"
 
 def test_close_all():
     # 1. Login to get token
     login_url = "http://127.0.0.1:8501/api/auth/login"
-    login_req = urllib.request.Request(login_url, data=json.dumps({"username": "admin", "password": "Hm@5656"}).encode("utf-8"), headers={"Content-Type": "application/json"})
+    login_req = urllib.request.Request(login_url, data=json.dumps({"username": "admin", "password": _get_admin_pass()}).encode("utf-8"), headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(login_req) as resp:
         token = json.loads(resp.read().decode("utf-8"))["token"]
         print("[TOKEN OBTAINED]:", token[:30] + "...")

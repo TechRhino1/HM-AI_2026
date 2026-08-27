@@ -13,6 +13,7 @@ import pandas as pd
 import numpy as np
 
 from jarvis.stocks.universe import STOCK_UNIVERSE, get_stock_profile
+from jarvis.data.market_data_provider import fetch_real_candles
 
 
 class StockIntelligenceEngine:
@@ -24,11 +25,22 @@ class StockIntelligenceEngine:
     def __init__(self):
         self._cache: Dict[str, Dict[str, Any]] = {}
         self._cache_ttl_sec = 3.0
+        self._last_data_source = "synthetic_fallback"
 
     def generate_candles(self, symbol: str, timeframe: str = "1D", num_bars: int = 120) -> List[Dict[str, Any]]:
         """
-        Generates realistic chronological OHLCV candlestick data tailored to the stock's profile and volatility.
+        Returns OHLCV candles for the instrument.
+
+        Attempts to fetch REAL market data first (via the configured live
+        provider); only falls back to the synthetic generator below when no
+        live source is available. ``self._last_data_source`` records which was used.
         """
+        real = fetch_real_candles(symbol, timeframe=timeframe, num_bars=num_bars, market="US")
+        if real:
+            self._last_data_source = "live"
+            return real
+        self._last_data_source = "synthetic_fallback"
+
         profile = get_stock_profile(symbol)
         base_price = float(profile.get("base_price", 150.0))
         beta = float(profile.get("beta", 1.2))
@@ -588,6 +600,7 @@ class StockIntelligenceEngine:
             "multi_timeframe": multi_tf,
 
             "candles": candles,
+            "data_source": getattr(self, "_last_data_source", "synthetic_fallback"),
             "analyzed_at": datetime.now(timezone.utc).isoformat()
         }
 
