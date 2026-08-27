@@ -31,7 +31,15 @@ from jarvis.risk.account_tier import is_micro_account, get_effective_min_ev
 from jarvis.learning.fractional_diff import FractionalDifferentiationTransformer
 from jarvis.learning.ensemble_bandit import EnsembleStrategyBandit
 from jarvis.intelligence.meta_labeler import MetaLabeler
-from jarvis.intelligence.gate_policy import AdaptiveGatePolicy
+from jarvis.intelligence.gate_policy import AdaptiveGatePolicy, HARD_GATES
+
+
+def _is_forex(symbol: str) -> bool:
+    try:
+        spec = resolve_symbol(symbol)
+        return getattr(spec, "asset_class", "").upper() == "FOREX"
+    except Exception:
+        return False
 
 class DecisionEngine:
     def __init__(
@@ -382,6 +390,9 @@ class DecisionEngine:
             required_win_p = 0.50 if is_scalp_favorable else 0.55
             max_spread = spec.max_spread_pips
 
+        if _is_forex(context.symbol):
+            required_win_p = 0.48
+
         # Check Macro MTF Confluence (H4 and D1 alignment)
         mtf_align = getattr(context, "mtf_alignment", {})
         h4_bias = mtf_align.get("H4", "NEUTRAL") if isinstance(mtf_align, dict) else "NEUTRAL"
@@ -612,20 +623,42 @@ class DecisionEngine:
         # ---- Adaptive gate strictness (AI-decided hard vs soft) ----
         if not gate_passed:
             _rwr = pattern_memory.get("win_rate") if pattern_memory.get("sample_size", 0) >= 5 else None
-            _decision, _soft = self.gate_policy.decide(failing_reasons, _rwr)
-            if _decision == "SOFTEN":
-                _pen = self.gate_policy.confidence_penalty(_soft)
-                calibrated_win_p = max(0.05, calibrated_win_p - _pen)
-                final_win_p = max(0.05, final_win_p - _pen)
-                loss_p = round(1.0 - final_win_p, 2)
-                softened_gates = _soft
-                gate_passed = True
-                failing_reasons = []
-                quality_gate.passed = True
-                quality_gate.failing_reasons = []
-                gate_policy_decision = "SOFTEN"
+            if _is_forex(context.symbol):
+                # Forex is the LIVE trading domain. When confidence is decent (>=0.50) and
+                # only NON-critical gates fail (<=2), allow execution (softened with a small
+                # confidence penalty). Hard gates (session/drawdown/margin/regime) always block.
+                _soft_only = [g for g in failing_reasons if g not in HARD_GATES]
+                if _soft_only and len(_soft_only) <= 2 and calibrated_win_p >= 0.50:
+                    _pen = min(
+                        self.gate_policy.confidence_penalty(_soft_only),
+                        max(0.0, calibrated_win_p - 0.45)
+                    )
+                    calibrated_win_p = max(0.45, calibrated_win_p - _pen)
+                    final_win_p = max(0.45, final_win_p - _pen)
+                    loss_p = round(1.0 - final_win_p, 2)
+                    gate_passed = True
+                    failing_reasons = []
+                    quality_gate.passed = True
+                    quality_gate.failing_reasons = []
+                    gate_policy_decision = "SOFTEN"
+                    softened_gates = _soft_only
+                else:
+                    gate_policy_decision = "BLOCK"
             else:
-                gate_policy_decision = "BLOCK"
+                _decision, _soft = self.gate_policy.decide(failing_reasons, _rwr)
+                if _decision == "SOFTEN":
+                    _pen = self.gate_policy.confidence_penalty(_soft)
+                    calibrated_win_p = max(0.05, calibrated_win_p - _pen)
+                    final_win_p = max(0.05, final_win_p - _pen)
+                    loss_p = round(1.0 - final_win_p, 2)
+                    softened_gates = _soft
+                    gate_passed = True
+                    failing_reasons = []
+                    quality_gate.passed = True
+                    quality_gate.failing_reasons = []
+                    gate_policy_decision = "SOFTEN"
+                else:
+                    gate_policy_decision = "BLOCK"
 
         if not is_mkt_open:
             decision_action = "NO_TRADE"

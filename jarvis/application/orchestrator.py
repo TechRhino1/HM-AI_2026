@@ -241,14 +241,16 @@ class JarvisOrchestrator:
         }
 
         # ── Hard Quality Gate: min model_confidence ────────────────────────
-        # Adaptive Confidence Gate: 0.50 for favorable asymmetric R:R (>=1.8) scalps, 0.55 standard
+        # Adaptive Confidence Gate: 0.50 for favorable asymmetric R:R (>=1.8) scalps, 0.55 standard.
+        # Forex (the live trading domain) uses a relaxed 0.45 floor per the user directive.
         is_favorable_scalp = (decision.risk_reward_ratio >= 1.8 and decision.expected_value > 0 and context.volatility.current_spread_pips <= (_spec.max_spread_pips * 0.75))
-        MIN_CONFIDENCE = 0.50 if is_favorable_scalp else 0.55
+        is_forex = (_spec.asset_class == "FOREX")
+        MIN_CONFIDENCE = 0.45 if is_forex else (0.50 if is_favorable_scalp else 0.55)
         if decision.decision == "EXECUTE" and decision.model_confidence < MIN_CONFIDENCE:
             decision.decision = "WAIT"
             decision.execution_authorized = False
             auth_res = {"authorized": False, "reason": f"CONFIDENCE_GATE: {decision.model_confidence:.2f} < {MIN_CONFIDENCE} minimum"}
-        elif decision.decision == "EXECUTE" and decision.adversarial_penalty == 0.0 and decision.expected_value > 1.0:
+        elif decision.decision == "EXECUTE" and not is_forex and decision.adversarial_penalty == 0.0 and decision.expected_value > 1.0:
             decision.decision = "WAIT"
             decision.execution_authorized = False
             auth_res = {"authorized": False, "reason": "OVERCONFIDENCE_GUARD: Zero devil penalty with high EV is suspicious."}
