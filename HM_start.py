@@ -37,7 +37,7 @@ logging.basicConfig(
 logger = logging.getLogger("HM_START")
 
 _TUNNEL_STATE = {
-    "url": "https://ab23fdf1a98644.lhr.life",
+    "url": "establishing...",
     "status": "STARTING",
     "proc": None
 }
@@ -113,7 +113,7 @@ def _start_background_tunnel(port: int = 8501, custom_subdomain: str = "hm2026")
 
 def hm_start(mode: str = "live", port: int = 8501, host: str = "0.0.0.0"):
     local_ip = get_local_wifi_ip()
-    mobile_url = f"https://hm2026.serveousercontent.com"
+    mobile_url = _TUNNEL_STATE["url"]
 
     # 1. Launch Mobile Tunnel Background Worker
     tunnel_thread = threading.Thread(target=_start_background_tunnel, args=(port,), daemon=True, name="hm_mobile_tunnel")
