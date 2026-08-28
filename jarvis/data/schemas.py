@@ -227,6 +227,10 @@ class DecisionObject:
     pattern_sample_size: int = 0
     meta_label_prob: Optional[float] = None
     gate_policy_decision: str = "BLOCK"
+    dissection_score: float = 0.0
+    dissection_tier: str = "UNKNOWN"
+    master_confluence_score: float = 0.0
+    master_confluence_tier: str = "UNKNOWN"
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -267,7 +271,11 @@ class DecisionObject:
             "decision": self.decision,
             "execution_authorized": self.execution_authorized,
             "meta_label_prob": self.meta_label_prob,
-            "gate_policy_decision": self.gate_policy_decision
+            "gate_policy_decision": self.gate_policy_decision,
+            "dissection_score": self.dissection_score,
+            "dissection_tier": self.dissection_tier,
+            "master_confluence_score": self.master_confluence_score,
+            "master_confluence_tier": self.master_confluence_tier
         }
 
 @dataclass

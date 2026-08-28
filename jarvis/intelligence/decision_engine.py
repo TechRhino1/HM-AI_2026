@@ -32,6 +32,9 @@ from jarvis.learning.fractional_diff import FractionalDifferentiationTransformer
 from jarvis.learning.ensemble_bandit import EnsembleStrategyBandit
 from jarvis.intelligence.meta_labeler import MetaLabeler
 from jarvis.intelligence.gate_policy import AdaptiveGatePolicy, HARD_GATES
+from jarvis.intelligence.ai_dissector import AIDissector
+from jarvis.intelligence.realtime_optimizer import RealtimeOptimizer
+from jarvis.intelligence.master_confluence import MasterConfluenceEngine
 
 
 def _is_forex(symbol: str) -> bool:
@@ -50,6 +53,9 @@ class DecisionEngine:
         ml_predictor: Optional[OnlineMLPredictor] = None,
         self_learning: Optional[SelfLearningEngine] = None,
         meta_labeler: Optional[MetaLabeler] = None,
+        ai_dissector: Optional[AIDissector] = None,
+        realtime_optimizer: Optional[RealtimeOptimizer] = None,
+        master_confluence: Optional[MasterConfluenceEngine] = None,
         min_ev_hurdle: float = 0.50,
         max_devil_penalty: float = 38.0
     ):
@@ -65,6 +71,9 @@ class DecisionEngine:
         self.self_learning = self_learning or SelfLearningEngine()
         self.meta_labeler = meta_labeler or MetaLabeler()
         self.gate_policy = AdaptiveGatePolicy()
+        self.ai_dissector = ai_dissector or AIDissector()
+        self.realtime_optimizer = realtime_optimizer or RealtimeOptimizer()
+        self.master_confluence = master_confluence or MasterConfluenceEngine()
 
 
     def _compute_bias_and_levels(
@@ -405,6 +414,16 @@ class DecisionEngine:
         # Targeted boost for low-win symbols (GBP/JPY/BTC) when high confluence — lifts win% without hurting XAU/EUR
         # Applied in evaluate below (4.5 confluence), here just stricter gate for those symbols
 
+        # Real-time per-symbol optimizer — adapts thresholds from live win-rate (neutral in backtests)
+        try:
+            regime_str = regime.primary_regime.value if regime and hasattr(regime, "primary_regime") else "GLOBAL"
+            adj = self.realtime_optimizer.get_adjustments(context.symbol, regime_str)
+            required_win_p = max(0.40, min(0.65, required_win_p + float(adj.get("win_p_delta", 0))))
+            min_score = max(60.0, min(85.0, min_score + float(adj.get("score_delta", 0))))
+            min_rr = max(1.2, min(2.0, min_rr + float(adj.get("rr_delta", 0))))
+        except Exception:
+            pass
+
         # Check Macro MTF Confluence (H4 and D1 alignment)
         mtf_align = getattr(context, "mtf_alignment", {})
         h4_bias = mtf_align.get("H4", "NEUTRAL") if isinstance(mtf_align, dict) else "NEUTRAL"
@@ -600,6 +619,24 @@ class DecisionEngine:
             calibrated_win_p = min(0.95, calibrated_win_p + 0.015)
             final_win_p = min(0.95, final_win_p + 0.015)
             logger.info(f"[{context.symbol}] Low-win symbol extra confluence boost +0.015 (GBP/JPY/BTC 4+ pillars)")
+
+        # 4.6 AI Dissection — 7-pillar real-time confluence scoring (boost only, no gate)
+        _dissection = self.ai_dissector.dissect(context, regime, rr_ratio, ev, ai_score, calibrated_win_p)
+        _dissection_score = _dissection["dissection_score"]
+        _dissection_tier = _dissection["tier"]
+        calibrated_win_p = min(0.95, max(0.05, calibrated_win_p + float(_dissection["prob_boost"])))
+        final_win_p = min(0.95, max(0.05, final_win_p + float(_dissection["prob_boost"])))
+        if _dissection_score >= 70:
+            logger.info(f"[{context.symbol}] AI Dissection HIGH {_dissection_score:.1f} tier={_dissection_tier} boost +{_dissection['prob_boost']:.3f}")
+
+        # 4.7 Master Confluence — proven stacks from trading masters (Wyckoff+ICT+VCP+Triple) — boost only
+        _master = self.master_confluence.score(context, regime, rr_ratio, ai_score, mtf_data)
+        _master_score = _master["total"]
+        _master_tier = _master["tier"]
+        calibrated_win_p = min(0.95, max(0.05, calibrated_win_p + float(_master["prob_boost"])))
+        final_win_p = min(0.95, max(0.05, final_win_p + float(_master["prob_boost"])))
+        if _master_tier in ("ELITE", "HIGH"):
+            logger.info(f"[{context.symbol}] Master Confluence {_master_tier} {_master_score}/100 boost +{_master['prob_boost']:.3f} {_master['breakdown']}")
 
         # Recompute EV from the (now fully adjusted) blended win probability so the
         # Expected Value shown/used for gating is consistent with the displayed probability.
@@ -816,5 +853,9 @@ class DecisionEngine:
             context=context,
             pattern_sample_size=pattern_memory.get("sample_size", 0) if "pattern_memory" in locals() and pattern_memory else 0,
             meta_label_prob=meta_label_prob,
-            gate_policy_decision=gate_policy_decision
+            gate_policy_decision=gate_policy_decision,
+            dissection_score=locals().get("_dissection_score", 0.0),
+            dissection_tier=locals().get("_dissection_tier", "UNKNOWN"),
+            master_confluence_score=locals().get("_master_score", 0.0),
+            master_confluence_tier=locals().get("_master_tier", "UNKNOWN")
         )
