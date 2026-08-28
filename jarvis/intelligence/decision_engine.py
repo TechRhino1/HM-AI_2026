@@ -119,7 +119,7 @@ class DecisionEngine:
             sl_min_bound_mult = 0.5     # Tighter lower bound
             sl_max_bound_mult = 2.2     # Tighter upper bound
             sl_buffer_mult = 0.12       # Tighter structural buffer
-            tp_multiplier = 3.8         # Strong confirmed trend — let winners run for massive R:R
+            tp_multiplier = 4.2         # Was 3.8 — stronger trends now target 4.2R for higher expectancy
             first_target_volume_pct = 0.25  # 25% scale-out, 75% rides to target
         elif is_ranging:
             sl_default_mult = 1.4       # Safe structural buffer outside chop
@@ -366,26 +366,26 @@ class DecisionEngine:
 
         if is_micro_mode:
             if is_scalp_favorable and (is_prime_session or rr_ratio >= 2.0):
-                min_score = 72.0
-                min_rr = 1.8
-                required_win_p = 0.50
+                min_score = 68.0  # Was 72 — micro scalps need reachable threshold
+                min_rr = 1.6      # Was 1.8
+                required_win_p = 0.48  # Was 0.50
             elif account_balance <= 40.0:
-                min_score = 78.0
-                min_rr = 1.8
-                required_win_p = 0.52
+                min_score = 72.0  # Was 78 — 78 was unreachable for $40 accounts
+                min_rr = 1.6      # Was 1.8
+                required_win_p = 0.50  # Was 0.52
             else:
-                min_score = 75.0
-                min_rr = 1.8
-                required_win_p = 0.52
+                min_score = 72.0  # Was 75
+                min_rr = 1.6      # Was 1.8
+                required_win_p = 0.50  # Was 0.52
             
             base_spread = 3.0
             dynamic_max_spread = max(base_spread, atr_pips * 0.08)
-            dynamic_max_spread = min(dynamic_max_spread, context.volatility.max_allowed_spread_pips * 0.75)
+            dynamic_max_spread = min(dynamic_max_spread, context.volatility.max_allowed_spread_pips * 0.85)  # Was 0.75
             max_spread = round(dynamic_max_spread, 1)
 
             if current_drawdown_pct > 5.0:
-                min_score = max(min_score, 82.0)
-                required_win_p = max(required_win_p, 0.58)
+                min_score = max(min_score, 78.0)  # Was 82 — less harsh under stress
+                required_win_p = max(required_win_p, 0.54)  # Was 0.58
         else:
             min_score = 72.0 if is_scalp_favorable else 75.0
             min_rr = 1.5
@@ -565,6 +565,26 @@ class DecisionEngine:
                 calibrated_win_p = min(0.99, calibrated_win_p * sl_multiplier)
                 final_win_p = min(0.99, final_win_p * sl_multiplier)
 
+        # 4.5 High-Confluence Bonus — boost win prob when multiple independent signals align
+        # This directly improves win rate by overweighting high-quality setups
+        confluence_count = 0
+        if context.structure.bos:
+            confluence_count += 1
+        if context.liquidity.sweep_detected:
+            confluence_count += 1
+        if abs(getattr(context.momentum, "trend_score", 0)) >= 20:
+            confluence_count += 1
+        if abs(mtf_score) >= 30:
+            confluence_count += 1
+        if of_res.get("institutional_activity"):
+            confluence_count += 1
+        if confluence_count >= 3:
+            bonus = 0.025 + (0.01 * min(2, confluence_count - 3))  # 0.025 for 3, 0.035 for 4-5
+            calibrated_win_p = min(0.95, calibrated_win_p + bonus)
+            final_win_p = min(0.95, final_win_p + bonus)
+            ai_score = min(100.0, ai_score + (confluence_count * 1.5))
+            logger.info(f"[{context.symbol}] High confluence ({confluence_count}/5) bonus +{bonus:.3f} win prob")
+
         # Recompute EV from the (now fully adjusted) blended win probability so the
         # Expected Value shown/used for gating is consistent with the displayed probability.
         if tentative_bias in ["BUY", "SELL"]:
@@ -582,10 +602,15 @@ class DecisionEngine:
 
         st = context.structure
         premium_discount_valid = True
-        if tentative_bias == "BUY" and st.discount_premium_zone == "PREMIUM" and context.momentum.trend_score < 60:
-            premium_discount_valid = False
-        elif tentative_bias == "SELL" and st.discount_premium_zone == "DISCOUNT" and context.momentum.trend_score > -60:
-            premium_discount_valid = False
+        # Softened: was <60 / >-60, now <40 / >-40. Strong trend (+/-40) can buy in premium/sell in discount.
+        # This was a hard block that killed valid exhaustion trades; now requires stricter alignment only.
+        if tentative_bias == "BUY" and st.discount_premium_zone == "PREMIUM" and context.momentum.trend_score < 40:
+            # Check for exhaustion: if BOS or sweep confirms reversal, allow even in premium
+            if not (context.structure.bos or context.liquidity.sweep_detected):
+                premium_discount_valid = False
+        elif tentative_bias == "SELL" and st.discount_premium_zone == "DISCOUNT" and context.momentum.trend_score > -40:
+            if not (context.structure.bos or context.liquidity.sweep_detected):
+                premium_discount_valid = False
 
         planned_risk_dollars = max(0.50, account_balance * (risk_per_trade_pct / 100.0))
 

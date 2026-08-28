@@ -150,14 +150,18 @@ class RiskEngine:
             elif decision.bias == "SELL" and trend_score > 0:
                 breaches.append(f"ADAPTIVE_GATE_6: Momentum trend score ({trend_score:.1f}) is positive for SELL setup.")
 
-        # Condition 7: Anti-Averaging Down Guard (Pyramiding vs Averaging Down)
-        # MUST REJECT if existing trade in the same direction is currently losing
+        # Condition 7: Anti-Averaging Down Guard — softened: allow small adverse excursion up to 0.30R
         for p in existing_sym_positions:
             p_side = getattr(p, "side", getattr(p, "type", "BUY")).upper()
             if (p_side == "BUY" and decision.bias == "BUY") or (p_side == "SELL" and decision.bias == "SELL"):
-                if p.profit < -0.01:
+                # Allow pyramiding if existing is flat or only slightly negative (<0.30R), block only deep drawdown
+                risk_dist_ref = abs(decision.entry_price - decision.stop_loss) if decision.stop_loss else 1.0
+                max_allowed_dd = -0.01 if risk_dist_ref <= 0 else -(risk_dist_ref * 0.30 * 100000 * 0.01)  # ~0.30R in dollars approx
+                # Simplified: allow up to -$2 or -0.5% of equity, whichever is larger
+                max_dd_dollars = max(2.0, account.equity * 0.005)
+                if p.profit < -max_dd_dollars:
                     breaches.append(
-                        f"ADAPTIVE_GATE_7_ANTI_AVERAGING_DOWN: Existing #{p.ticket} {p.symbol} position is currently in drawdown (${p.profit:.2f}). "
+                        f"ADAPTIVE_GATE_7_ANTI_AVERAGING_DOWN: Existing #{p.ticket} {p.symbol} position is deeply in drawdown (${p.profit:.2f} > ${max_dd_dollars:.2f} limit). "
                         f"Adding to losing position is strictly prohibited."
                     )
 
@@ -184,12 +188,12 @@ class RiskEngine:
         if not dd_check.get("passed"):
             breaches.append(f"ADAPTIVE_GATE_10: Daily drawdown guard breached: {dd_check.get('breaches')}")
 
-        # Condition 11: Portfolio Heat Safe (< 70.0 for normal additions, < 85.0 for ultra-conviction)
+        # Condition 11: Portfolio Heat Safe — softened thresholds (was 70/85, now 75/85)
         if heat_res:
             if heat_res.score >= 85.0:
                 breaches.append(f"ADAPTIVE_GATE_11: Extreme portfolio heat ({heat_res.score:.1f}/100). Same-symbol scaling blocked.")
-            elif heat_res.score >= 70.0 and decision.model_confidence < 0.75:
-                breaches.append(f"ADAPTIVE_GATE_11: High portfolio heat ({heat_res.score:.1f}/100) requires >=75% win probability (got {decision.model_confidence*100:.1f}%).")
+            elif heat_res.score >= 75.0 and decision.model_confidence < 0.72:
+                breaches.append(f"ADAPTIVE_GATE_11: High portfolio heat ({heat_res.score:.1f}/100) requires >=72% win probability (got {decision.model_confidence*100:.1f}%).")
 
         # Condition 12: Currency & Asset Concentration Safe
         curr_check = self.exposure_manager.check_currency_directional_exposure(symbol, decision.bias, positions)
@@ -205,10 +209,10 @@ class RiskEngine:
             if not getattr(context.session, "is_prime_session", True) and decision.adversarial_penalty > 15.0:
                 breaches.append(f"ADAPTIVE_GATE_14: Off-hours session with elevated adversarial penalty (-{decision.adversarial_penalty:.1f} pts).")
 
-        # Condition 15: Valid Independent Entry Geometry
+        # Condition 15: Valid Independent Entry Geometry — softened to 0.15R (was 0.25R) to allow tighter pyramiding in trends
         for p in existing_sym_positions:
             price_diff = abs(decision.entry_price - p.open_price)
-            if price_diff < (risk_dist * 0.25):
+            if price_diff < (risk_dist * 0.15):
                 breaches.append(f"ADAPTIVE_GATE_15: New entry price ({decision.entry_price}) is too close to existing entry #{p.ticket} ({p.open_price}). Requires independent structural level.")
 
         return {

@@ -187,7 +187,7 @@ class TestRegressionFixes(unittest.TestCase):
         self.assertGreater(lot_5k, 0.0, "Standard account must calculate valid authorized lot size")
 
     def test_a5_is_high_vol_sizing_strengthened(self):
-        """A5: Verify is_high_vol strictly reduces lot sizing by 0.85x multiplier."""
+        """A5: Verify is_high_vol strictly reduces lot sizing by 0.92x multiplier (was 0.85, softened for profitability)."""
         sym_gold = {"name": "XAUUSD", "trade_contract_size": 100.0, "trade_tick_value": 1.0, "trade_tick_size": 0.01, "volume_min": 0.01, "volume_max": 100.0, "volume_step": 0.01}
         sym_base = {"name": "EURUSD_NON_VOL", "trade_contract_size": 100.0, "trade_tick_value": 1.0, "trade_tick_size": 0.01, "volume_min": 0.01, "volume_max": 100.0, "volume_step": 0.01}
         
@@ -198,9 +198,9 @@ class TestRegressionFixes(unittest.TestCase):
         base_size = PositionSizer.calculate_lot_size(
             account_balance=20000.0, entry_price=2400.0, sl_price=2390.0, risk_pct=1.0, symbol_info=sym_base
         )
-        # Gold should receive 0.85x reduction: 0.23 lots vs 0.25 lots
+        # Gold should receive 0.92x reduction: 0.24 lots vs 0.25 lots (was 0.23 with 0.85)
         self.assertLess(gold_size, base_size)
-        self.assertEqual(gold_size, 0.23)
+        self.assertEqual(gold_size, 0.24)
         self.assertEqual(base_size, 0.25)
 
     def test_b1_devil_advocate_spread_typical_spec(self):
@@ -709,7 +709,7 @@ class TestRegressionFixes(unittest.TestCase):
 
         self.assertLessEqual(risk_trend, risk_range, "Strong trend SL should be tighter or equal to ranging SL (P2 Adaptive SL)")
         self.assertGreater(rr_trend, rr_range, "Strong trend R:R must exceed ranging regime R:R")
-        self.assertAlmostEqual(rr_trend, 3.8, delta=0.1, msg="Strong trend must achieve ~3.8R TP multiplier")
+        self.assertAlmostEqual(rr_trend, 4.2, delta=0.1, msg="Strong trend must achieve ~4.2R TP multiplier (was 3.8, raised for profitability)")
         self.assertAlmostEqual(rr_range, 2.2, delta=0.1, msg="Ranging market must achieve ~2.2R TP multiplier")
         self.assertIsNotNone(first_target_trend)
 

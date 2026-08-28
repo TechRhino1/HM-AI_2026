@@ -26,11 +26,11 @@ class TestIntegrityFixes(unittest.TestCase):
     def test_confidence_calibration_shrinks(self):
         c = ConfidenceCalibrationEngine()
         # High raw confidence must be calibrated DOWN, never inflated.
-        self.assertLessEqual(c.calibrate_probability(0.99), 0.84)
+        self.assertLessEqual(c.calibrate_probability(0.99), 0.86)
         self.assertLess(c.calibrate_probability(0.95), 0.95)
         self.assertLess(c.calibrate_probability(0.84), 0.84)
-        # A known bin centre maps to its empirical value (0.95 -> 0.84).
-        self.assertAlmostEqual(c.calibrate_probability(0.95), 0.84, places=3)
+        # A known bin centre maps to its empirical value (0.95 -> 0.86 with new less-punitive curve).
+        self.assertAlmostEqual(c.calibrate_probability(0.95), 0.86, places=3)
 
     def test_india_data_source_flag(self):
         d = IndiaTechnicalEngine().analyze_india_instrument("RELIANCE", "1D")

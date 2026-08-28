@@ -141,7 +141,7 @@ class TestAdaptiveSameSymbolRisk(unittest.TestCase):
         self.assertGreater(res["lots"], 0.0)
 
     def test_03_anti_averaging_down_rejection_on_losing_position(self):
-        """Test that adding to a LOSING position (-profit) in the same direction is strictly REJECTED."""
+        """Test that adding to a LOSING position deeply in drawdown is REJECTED (softened: allows small -0.5% dips, blocks deep)."""
         existing_losing_pos = [
             PositionSnapshot(
                 ticket=1002,
@@ -152,7 +152,7 @@ class TestAdaptiveSameSymbolRisk(unittest.TestCase):
                 current_price=2410.0,
                 sl=2395.0,
                 tp=2450.0,
-                profit=-50.0,  # Losing position in drawdown
+                profit=-75.0,  # Deeply losing (exceeds 0.5% equity = $50 threshold)
                 swap=0.0,
                 commission=0.0,
                 open_time=datetime.now(),

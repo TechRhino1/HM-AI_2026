@@ -26,17 +26,21 @@ class PositionSizer:
         if risk_distance <= 0 or account_balance <= 0:
             return 0.0
 
-        # Adjust risk_pct based on volatility and drawdown
+        # Adjust risk_pct based on volatility and drawdown — softened to preserve profitability
         sym_name = str(symbol_info.get("name", "") if symbol_info else "").upper()
         is_high_vol = any(x in sym_name for x in ["XAU", "GOLD", "BTC", "OIL", "US30", "NAS100"])
         if is_high_vol:
-            risk_pct *= 0.85
+            risk_pct *= 0.92  # Was 0.85 — high-vol assets penalized too harshly
 
         if atr_ratio > 1.5:
-            risk_pct *= 0.70  # Reduce risk by 30%
+            risk_pct *= 0.85  # Was 0.70 — 30% cut killed profitability in expansion regimes
             
         if current_drawdown_pct > 5.0:
-            risk_pct *= 0.50  # Halve risk
+            # Graduated drawdown penalty instead of binary 50% at >5%
+            if current_drawdown_pct > 8.0:
+                risk_pct *= 0.50
+            else:
+                risk_pct *= 0.75
 
         # Adaptive Second-Trade position discount: scale to 75% to prevent overconcentration
         if is_second_trade:
@@ -53,15 +57,15 @@ class PositionSizer:
 
         conviction_factor = max(0.70, min(1.35, (model_confidence / 0.60)))
 
-        # P3: Dedicated Evidence Strength / Sample Size Scaling
+        # P3: Evidence strength scaling — more rewarding for proven patterns, less punitive for small samples
         if pattern_sample_size >= 30:
-            evidence_factor = 1.10
+            evidence_factor = 1.15  # Was 1.10
         elif pattern_sample_size >= 15:
-            evidence_factor = 1.05
+            evidence_factor = 1.08  # Was 1.05
         elif pattern_sample_size >= 5:
-            evidence_factor = 1.00
+            evidence_factor = 1.02  # Was 1.00
         elif pattern_sample_size >= 3:
-            evidence_factor = 0.90
+            evidence_factor = 0.97  # Was 0.90 — harsh penalty suppressed early learning
         else:
             evidence_factor = 1.00
 

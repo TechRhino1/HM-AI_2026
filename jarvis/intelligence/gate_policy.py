@@ -25,7 +25,7 @@ HARD_GATES = {
 
 
 class AdaptiveGatePolicy:
-    def __init__(self, max_soft_fail: int = 2, min_recent_win_rate: float = 0.5):
+    def __init__(self, max_soft_fail: int = 3, min_recent_win_rate: float = 0.45):
         self.max_soft_fail = max_soft_fail
         self.min_recent_win_rate = min_recent_win_rate
 
@@ -50,5 +50,5 @@ class AdaptiveGatePolicy:
 
     @staticmethod
     def confidence_penalty(softened_gates: List[str]) -> float:
-        """Reduce model_confidence by 0.04 per softened gate (capped)."""
-        return min(0.15, 0.04 * len(softened_gates))
+        """Reduce model_confidence by 0.03 per softened gate (capped) — was 0.04, now gentler."""
+        return min(0.12, 0.03 * len(softened_gates))

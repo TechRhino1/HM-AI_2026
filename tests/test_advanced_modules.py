@@ -52,14 +52,17 @@ class TestGatePolicy(unittest.TestCase):
         gp = AdaptiveGatePolicy()
         decision, soft = gp.decide(["Order Flow Momentum"], 0.62)
         self.assertEqual(decision, "SOFTEN")
-        # too many soft failures -> block even with good evidence
+        # 3 soft failures -> soften with new max_soft_fail=3
         decision, _ = gp.decide(["Order Flow Momentum", "Calibrated Win Prob", "AI Score"], 0.7)
+        self.assertEqual(decision, "SOFTEN")
+        # 4 soft failures -> block even with good evidence
+        decision, _ = gp.decide(["Order Flow Momentum", "Calibrated Win Prob", "AI Score", "Spread Protection"], 0.7)
         self.assertEqual(decision, "BLOCK")
 
     def test_penalty_capped(self):
         from jarvis.intelligence.gate_policy import AdaptiveGatePolicy
         gp = AdaptiveGatePolicy()
-        self.assertAlmostEqual(gp.confidence_penalty(["a", "b", "c", "d", "e"]), 0.15)
+        self.assertAlmostEqual(gp.confidence_penalty(["a", "b", "c", "d", "e"]), 0.12)
 
 
 class TestGammaExposure(unittest.TestCase):
