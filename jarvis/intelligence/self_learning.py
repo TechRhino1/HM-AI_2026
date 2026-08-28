@@ -21,13 +21,13 @@ class SelfLearningEngine:
                 if now - ts < self.cache_ttl_sec:
                     return val
 
+        conn = None
         try:
             conn = sqlite3.connect(self.db_path, timeout=5.0)
             conn.execute("PRAGMA journal_mode=WAL")
             cur = conn.cursor()
             cur.execute("SELECT expected_value FROM executed_trades WHERE regime=? ORDER BY id DESC LIMIT ?", (regime, lookback))
             rows = cur.fetchall()
-            conn.close()
             
             if len(rows) < 5:
                 res = 1.0 # Not enough data
@@ -46,6 +46,12 @@ class SelfLearningEngine:
         except Exception as e:
             logger.warning(f"Self-learning DB read failed: {e}")
             return 1.0
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     def get_pattern_win_rate_and_ev(
         self,
@@ -67,6 +73,7 @@ class SelfLearningEngine:
                 if now - ts < self.cache_ttl_sec:
                     return val
 
+        conn = None
         try:
             conn = sqlite3.connect(self.db_path, timeout=5.0)
             cur = conn.cursor()
@@ -77,7 +84,6 @@ class SelfLearningEngine:
                 ORDER BY id DESC LIMIT ?
             """, (symbol, regime, lookback))
             rows = cur.fetchall()
-            conn.close()
 
             if not rows or len(rows) < 3:
                 res = {
@@ -122,3 +128,9 @@ class SelfLearningEngine:
                 "conviction_multiplier": 1.0,
                 "empirical_edge": False
             }
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass

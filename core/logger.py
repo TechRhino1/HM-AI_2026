@@ -2,7 +2,7 @@ import os
 import json
 import sqlite3
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 class SystemLogger:
     def __init__(self, db_path="trades_log.db", log_level=logging.INFO):
@@ -21,6 +21,7 @@ class SystemLogger:
             self.logger.addHandler(ch)
 
     def _setup_database(self):
+        conn = None
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
@@ -65,9 +66,14 @@ class SystemLogger:
             )
             """)
             conn.commit()
-            conn.close()
         except Exception as e:
             self.logger.error(f"Failed to initialize SQLite database: {e}")
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     def info(self, msg):
         self.logger.info(msg)
@@ -80,6 +86,7 @@ class SystemLogger:
 
     def log_decision(self, decision: dict):
         self.info(f"DECISION [{decision.get('symbol', 'N/A')}]: Action={decision.get('action')} Score={decision.get('trade_score', 0):.1f} Regime={decision.get('regime')} ({decision.get('regime_confidence', 0):.0f}%)")
+        conn = None
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
@@ -90,7 +97,7 @@ class SystemLogger:
                 lot_size, reasons, reasons_not_to_trade
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                datetime.utcnow().isoformat(),
+                datetime.now(timezone.utc).isoformat(),
                 decision.get("symbol"),
                 decision.get("regime"),
                 decision.get("regime_confidence"),
@@ -107,12 +114,18 @@ class SystemLogger:
                 json.dumps(decision.get("reasons_not_to_trade", []))
             ))
             conn.commit()
-            conn.close()
         except Exception as e:
             self.logger.error(f"Failed to log decision to DB: {e}")
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     def log_execution(self, ticket: int, symbol: str, order_type: str, lots: float, price: float, sl: float, tp: float, magic: int, status: str, comment: str):
         self.info(f"EXECUTION [{symbol}] Ticket={ticket} Type={order_type} Lots={lots:.2f} Price={price} Status={status}")
+        conn = None
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
@@ -121,9 +134,14 @@ class SystemLogger:
                 timestamp, ticket, symbol, order_type, lots, entry_price, sl, tp, magic, status, comment
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                datetime.utcnow().isoformat(), ticket, symbol, order_type, lots, price, sl, tp, magic, status, comment
+                datetime.now(timezone.utc).isoformat(), ticket, symbol, order_type, lots, price, sl, tp, magic, status, comment
             ))
             conn.commit()
-            conn.close()
         except Exception as e:
             self.logger.error(f"Failed to log execution to DB: {e}")
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except Exception:
+                    pass

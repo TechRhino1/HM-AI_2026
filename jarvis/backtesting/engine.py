@@ -52,16 +52,18 @@ class BacktestEngine:
 
         effective_start = max(20, min(total_bars - 2, start_bar_idx))
         spec = resolve_symbol(symbol)
+        actual_slippage_delta = self.slippage_pips * spec.pip_size
         
         for i in range(effective_start, total_bars - 1):
             history_slice = df_h1.iloc[:i]
             current_bar = df_h1.iloc[i]
             next_bar = df_h1.iloc[i + 1]
 
-            # 1. Manage existing open trade
+            # 1. Manage existing open trade with institutional partial TP & dynamic trailing
             if open_trade:
                 high = float(current_bar["high"])
                 low = float(current_bar["low"])
+                atr = float(current_bar.get("atr", current_bar.get("ATR", (high - low) if (high - low) > 0 else 1.0)))
 
                 # Track MFE / MAE
                 if open_trade["type"] == "BUY":
@@ -74,15 +76,59 @@ class BacktestEngine:
                 open_trade["mfe"] = max(open_trade.get("mfe", 0.0), favorable)
                 open_trade["mae"] = max(open_trade.get("mae", 0.0), adverse)
 
-                # Check SL/TP exit
+                risk_dist = open_trade.get("risk_dist", abs(open_trade["entry"] - open_trade["sl"]))
+                if risk_dist <= 0:
+                    risk_dist = max(0.001, abs(open_trade["entry"] - open_trade["sl"]))
+
+                # A. Partial TP @ 1.5R with Breakeven Lock
+                if not open_trade.get("partial_closed", False) and open_trade["lots"] > 0.01:
+                    partial_trigger_dist = risk_dist * 1.5
+                    if open_trade["type"] == "BUY" and favorable >= partial_trigger_dist:
+                        partial_lots = round(open_trade["lots"] * 0.5, 2)
+                        if partial_lots >= 0.01:
+                            partial_exit_p = open_trade["entry"] + partial_trigger_dist
+                            pips_p = (partial_exit_p - open_trade["entry"]) / spec.pip_size
+                            pnl_p = (pips_p * spec.pip_value_per_lot * partial_lots) - (partial_lots * self.commission_per_lot)
+                            balance += pnl_p
+                            open_trade["realized_pnl"] = open_trade.get("realized_pnl", 0.0) + pnl_p
+                            open_trade["lots"] = round(open_trade["lots"] - partial_lots, 2)
+                            open_trade["partial_closed"] = True
+                            # Move SL to Breakeven + small buffer
+                            open_trade["sl"] = round(open_trade["entry"] + (risk_dist * 0.1), spec.digits)
+                    elif open_trade["type"] == "SELL" and favorable >= partial_trigger_dist:
+                        partial_lots = round(open_trade["lots"] * 0.5, 2)
+                        if partial_lots >= 0.01:
+                            partial_exit_p = open_trade["entry"] - partial_trigger_dist
+                            pips_p = (open_trade["entry"] - partial_exit_p) / spec.pip_size
+                            pnl_p = (pips_p * spec.pip_value_per_lot * partial_lots) - (partial_lots * self.commission_per_lot)
+                            balance += pnl_p
+                            open_trade["realized_pnl"] = open_trade.get("realized_pnl", 0.0) + pnl_p
+                            open_trade["lots"] = round(open_trade["lots"] - partial_lots, 2)
+                            open_trade["partial_closed"] = True
+                            # Move SL to Breakeven - small buffer
+                            open_trade["sl"] = round(open_trade["entry"] - (risk_dist * 0.1), spec.digits)
+
+                # B. Dynamic ATR Trailing Stop on Remaining Position
+                if open_trade.get("partial_closed", False):
+                    trail_dist = max(risk_dist, atr * 1.5)
+                    if open_trade["type"] == "BUY":
+                        new_sl = round(high - trail_dist, spec.digits)
+                        if new_sl > open_trade["sl"]:
+                            open_trade["sl"] = new_sl
+                    else:
+                        new_sl = round(low + trail_dist, spec.digits)
+                        if new_sl < open_trade["sl"]:
+                            open_trade["sl"] = new_sl
+
+                # C. Check SL/TP exit for remaining position
                 closed = False
                 exit_price = 0.0
                 result = ""
 
                 if open_trade["type"] == "BUY":
                     if low <= open_trade["sl"]:
-                        exit_price = open_trade["sl"] - slippage_delta
-                        result = "SL"
+                        exit_price = open_trade["sl"] - actual_slippage_delta
+                        result = "BE/TRAIL_SL" if open_trade.get("partial_closed") else "SL"
                         closed = True
                     elif high >= open_trade["tp"]:
                         exit_price = open_trade["tp"]
@@ -90,8 +136,8 @@ class BacktestEngine:
                         closed = True
                 elif open_trade["type"] == "SELL":
                     if high >= open_trade["sl"]:
-                        exit_price = open_trade["sl"] + slippage_delta
-                        result = "SL"
+                        exit_price = open_trade["sl"] + actual_slippage_delta
+                        result = "BE/TRAIL_SL" if open_trade.get("partial_closed") else "SL"
                         closed = True
                     elif low <= open_trade["tp"]:
                         exit_price = open_trade["tp"]
@@ -102,8 +148,9 @@ class BacktestEngine:
                     pips = ((exit_price - open_trade["entry"]) if open_trade["type"] == "BUY" else (open_trade["entry"] - exit_price)) / spec.pip_size
                     pnl_raw = pips * spec.pip_value_per_lot * open_trade["lots"]
                     comm = open_trade["lots"] * self.commission_per_lot
-                    pnl_net = pnl_raw - comm
-                    balance += pnl_net
+                    pnl_remaining = pnl_raw - comm
+                    pnl_net = pnl_remaining + open_trade.get("realized_pnl", 0.0)
+                    balance += pnl_remaining
                     equity = balance
 
                     trades.append({
@@ -113,7 +160,7 @@ class BacktestEngine:
                         "exit": exit_price,
                         "sl": open_trade["sl"],
                         "tp": open_trade["tp"],
-                        "lots": open_trade["lots"],
+                        "lots": open_trade.get("initial_lots", open_trade["lots"]),
                         "pnl": round(pnl_net, 2),
                         "result": result,
                         "strategy": open_trade["strategy"],
@@ -153,11 +200,26 @@ class BacktestEngine:
                     auth_res = self.risk_engine.authorize_execution(decision, account_snap, [], sym_info, spread_pips)
 
                     if auth_res["authorized"]:
-                        lots = auth_res["lots"]
                         entry_price = float(next_bar["open"])
                         price_shift = entry_price - decision.entry_price
                         sl_price = decision.stop_loss + price_shift
                         tp_price = decision.take_profit + price_shift
+                        
+                        actual_risk_dist = abs(entry_price - sl_price)
+                        if actual_risk_dist <= 0:
+                            actual_risk_dist = max(spec.pip_size * 10, decision.sl_distance)
+
+                        # Enforce hard dollar risk cap based on filled entry & SL
+                        planned_risk_dollars = balance * (self.risk_per_trade_pct / 100.0)
+                        from jarvis.data.symbol_registry import get_dollar_risk_per_price_unit
+                        unit_risk = get_dollar_risk_per_price_unit(symbol, sym_info)
+                        dollar_risk_per_lot = actual_risk_dist * unit_risk
+                        
+                        if dollar_risk_per_lot > 0:
+                            raw_lots = planned_risk_dollars / dollar_risk_per_lot
+                            lots = max(sym_info["volume_min"], min(auth_res["lots"], round(raw_lots, 2)))
+                        else:
+                            lots = auth_res["lots"]
 
                         open_trade = {
                             "type": decision.bias,
@@ -165,6 +227,10 @@ class BacktestEngine:
                             "sl": sl_price,
                             "tp": tp_price,
                             "lots": lots,
+                            "initial_lots": lots,
+                            "risk_dist": actual_risk_dist,
+                            "realized_pnl": 0.0,
+                            "partial_closed": False,
                             "strategy": decision.strategy,
                             "regime": regime.primary_regime.value,
                             "score": decision.model_confidence,
@@ -180,8 +246,8 @@ class BacktestEngine:
             pips = ((exit_price - open_trade["entry"]) if open_trade["type"] == "BUY" else (open_trade["entry"] - exit_price)) / spec.pip_size
             pnl_raw = pips * spec.pip_value_per_lot * open_trade["lots"]
             comm = open_trade["lots"] * self.commission_per_lot
-            pnl_net = pnl_raw - comm
-            balance += pnl_net
+            pnl_net = pnl_raw - comm + open_trade.get("realized_pnl", 0.0)
+            balance += (pnl_raw - comm)
 
             trades.append({
                 "symbol": symbol,
@@ -190,7 +256,7 @@ class BacktestEngine:
                 "exit": exit_price,
                 "sl": open_trade["sl"],
                 "tp": open_trade["tp"],
-                "lots": open_trade["lots"],
+                "lots": open_trade.get("initial_lots", open_trade["lots"]),
                 "pnl": round(pnl_net, 2),
                 "result": "CLOSE_AT_END",
                 "strategy": open_trade["strategy"],

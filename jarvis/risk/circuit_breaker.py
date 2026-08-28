@@ -25,41 +25,50 @@ class CircuitBreaker:
     def _init_db(self):
         if not self.db_path:
             return
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS circuit_state (
-                    id INTEGER PRIMARY KEY,
-                    consecutive_losses INTEGER,
-                    is_tripped INTEGER,
-                    tripped_timestamp REAL,
-                    trip_reason TEXT
-                )
-            ''')
-            conn.commit()
+        conn = sqlite3.connect(self.db_path)
+        try:
+            with conn:
+                conn.execute('''
+                    CREATE TABLE IF NOT EXISTS circuit_state (
+                        id INTEGER PRIMARY KEY,
+                        consecutive_losses INTEGER,
+                        is_tripped INTEGER,
+                        tripped_timestamp REAL,
+                        trip_reason TEXT
+                    )
+                ''')
+        finally:
+            conn.close()
 
     def _load_state(self):
         if not self.db_path:
             return
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute('SELECT consecutive_losses, is_tripped, tripped_timestamp, trip_reason FROM circuit_state WHERE id = 1')
-            row = cursor.fetchone()
-            if row:
-                self.consecutive_losses, is_tripped_int, self.tripped_timestamp, self.trip_reason = row
-                self.is_tripped = bool(is_tripped_int)
-            else:
-                conn.execute('INSERT INTO circuit_state (id, consecutive_losses, is_tripped, tripped_timestamp, trip_reason) VALUES (1, 0, 0, 0.0, "")')
-                conn.commit()
+        conn = sqlite3.connect(self.db_path)
+        try:
+            with conn:
+                cursor = conn.execute('SELECT consecutive_losses, is_tripped, tripped_timestamp, trip_reason FROM circuit_state WHERE id = 1')
+                row = cursor.fetchone()
+                if row:
+                    self.consecutive_losses, is_tripped_int, self.tripped_timestamp, self.trip_reason = row
+                    self.is_tripped = bool(is_tripped_int)
+                else:
+                    conn.execute('INSERT INTO circuit_state (id, consecutive_losses, is_tripped, tripped_timestamp, trip_reason) VALUES (1, 0, 0, 0.0, "")')
+        finally:
+            conn.close()
 
     def _save_state(self):
         if not self.db_path:
             return
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute('''
-                UPDATE circuit_state
-                SET consecutive_losses = ?, is_tripped = ?, tripped_timestamp = ?, trip_reason = ?
-                WHERE id = 1
-            ''', (self.consecutive_losses, int(self.is_tripped), self.tripped_timestamp, self.trip_reason))
-            conn.commit()
+        conn = sqlite3.connect(self.db_path)
+        try:
+            with conn:
+                conn.execute('''
+                    UPDATE circuit_state
+                    SET consecutive_losses = ?, is_tripped = ?, tripped_timestamp = ?, trip_reason = ?
+                    WHERE id = 1
+                ''', (self.consecutive_losses, int(self.is_tripped), self.tripped_timestamp, self.trip_reason))
+        finally:
+            conn.close()
 
     def enable(self):
         self.enabled = True

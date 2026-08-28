@@ -290,6 +290,43 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                     self._send_json({"status": "AUTHENTICATED", "valid": True, "user": user})
                 else:
                     self._send_json({"status": "UNAUTHORIZED", "valid": False, "error": "Not authenticated"}, status_code=401)
+            elif path == "/api/stream/telemetry":
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Cache-Control", "no-cache")
+                self.send_header("Connection", "keep-alive")
+                cors_origin = os.environ.get("JARVIS_CORS_ORIGIN", "*")
+                if cors_origin:
+                    self.send_header("Access-Control-Allow-Origin", cors_origin)
+                self.end_headers()
+
+                # Stream initial state snapshot
+                snap = self.state_manager.get_state_snapshot()
+                init_msg = f"event: telemetry\ndata: {json.dumps(snap, default=str)}\n\n"
+                try:
+                    self.wfile.write(init_msg.encode("utf-8"))
+                    self.wfile.flush()
+                except Exception:
+                    return
+
+                # SSE Event Loop
+                last_ver = self.state_manager.get_state_version()
+                for _ in range(60): # 60 iterations (approx 1-2 mins before clean client reconnect)
+                    time.sleep(1.0)
+                    cur_ver = self.state_manager.get_state_version()
+                    try:
+                        if cur_ver != last_ver:
+                            last_ver = cur_ver
+                            cur_snap = self.state_manager.get_state_snapshot()
+                            msg = f"event: telemetry\ndata: {json.dumps(cur_snap, default=str)}\n\n"
+                            self.wfile.write(msg.encode("utf-8"))
+                            self.wfile.flush()
+                        else:
+                            self.wfile.write(b": ping\n\n")
+                            self.wfile.flush()
+                    except Exception:
+                        break
+                return
             elif path == "/api/diagnostics":
                 snap = self.state_manager.get_state_snapshot()
                 self._send_json({
@@ -492,10 +529,12 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                 self.wfile.write(content)
                 return
 
+        static_dir = os.path.abspath(os.path.join(self.base_dir, "ui", "static"))
         rel = req_path.lstrip("/").replace("static/", "", 1)
-        found_path = os.path.join(self.base_dir, "ui", "static", rel)
-        if not (os.path.exists(found_path) and os.path.isfile(found_path)):
-            found_path = None
+        target_path = os.path.abspath(os.path.join(static_dir, rel))
+        found_path = None
+        if target_path.startswith(static_dir) and os.path.exists(target_path) and os.path.isfile(target_path):
+            found_path = target_path
 
         if found_path:
             mime_type, _ = mimetypes.guess_type(found_path)
@@ -523,8 +562,10 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
             self.send_error(404, f"Static file {req_path} not found")
 
     def _serve_template(self, template_name: str):
-        ui_path = os.path.join(self.base_dir, "ui", "templates", template_name)
-        if os.path.exists(ui_path):
+        templates_dir = os.path.abspath(os.path.join(self.base_dir, "ui", "templates"))
+        clean_name = os.path.basename(template_name)
+        ui_path = os.path.abspath(os.path.join(templates_dir, clean_name))
+        if ui_path.startswith(templates_dir) and os.path.exists(ui_path) and os.path.isfile(ui_path):
             with open(ui_path, "r", encoding="utf-8") as f:
                 content = f.read()
             content_bytes = content.encode("utf-8")

@@ -24,7 +24,12 @@ try:
 except Exception:  # pragma: no cover
     _HAVE_JOBLIB = False
 
-from sklearn.ensemble import HistGradientBoostingClassifier
+try:
+    from sklearn.ensemble import HistGradientBoostingClassifier
+    _HAVE_SKLEARN = True
+except Exception:  # pragma: no cover
+    HistGradientBoostingClassifier = None
+    _HAVE_SKLEARN = False
 
 
 def _safe_float(x, default=0.0):
@@ -144,6 +149,9 @@ class MetaLabeler:
         return np.array(X, dtype=float), np.array(y, dtype=int)
 
     def train(self, candles, horizon=20, label_frac=0.5):
+        if not _HAVE_SKLEARN or HistGradientBoostingClassifier is None:
+            logger.warning("MetaLabeler: scikit-learn is not installed; skipping train.")
+            return False
         X, y = self.build_dataset(candles, horizon=horizon, label_frac=label_frac)
         if X.shape[0] < 50 or len(set(y.tolist())) < 2:
             logger.warning("MetaLabeler: insufficient/label-degenerate data (%d samples); skipping train.", X.shape[0])

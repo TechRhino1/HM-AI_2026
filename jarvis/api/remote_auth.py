@@ -9,7 +9,11 @@ import hmac
 import hashlib
 import secrets
 import logging
-import bcrypt
+try:
+    import bcrypt
+    _HAVE_BCRYPT = True
+except Exception:  # pragma: no cover
+    _HAVE_BCRYPT = False
 from typing import Dict, Any, Optional, Tuple, List
 
 logger = logging.getLogger("JARVIS_RemoteAuth")
@@ -158,16 +162,38 @@ class RemoteAuthEngine:
 
     @classmethod
     def _hash_password(cls, password: str, salt: str = None) -> str:
-        """Returns bcrypt hash of password (salt param retained for call compatibility)."""
+        """Returns bcrypt hash if available, else standard library PBKDF2-HMAC-SHA256 hash."""
         pw = password.strip().encode("utf-8")[:72]
-        return bcrypt.hashpw(pw, bcrypt.gensalt()).decode("utf-8")
+        if _HAVE_BCRYPT:
+            try:
+                return bcrypt.hashpw(pw, bcrypt.gensalt()).decode("utf-8")
+            except Exception:
+                pass
+        salt_bytes = (salt or secrets.token_hex(16)).encode("utf-8")
+        derived = hashlib.pbkdf2_hmac("sha256", pw, salt_bytes, 100_000)
+        return f"pbkdf2:sha256:100000:{salt_bytes.hex()}:{derived.hex()}"
 
     @classmethod
     def _verify_password(cls, password: str, stored_hash: str) -> bool:
-        """Constant-time verification supporting bcrypt hashes."""
+        """Constant-time verification supporting both bcrypt and PBKDF2 hashes."""
         try:
+            pw = password.strip().encode("utf-8")[:72]
             if stored_hash.startswith("$2"):
-                return bcrypt.checkpw(password.strip().encode("utf-8")[:72], stored_hash.encode("utf-8"))
+                if _HAVE_BCRYPT:
+                    return bcrypt.checkpw(pw, stored_hash.encode("utf-8"))
+                return False
+            elif stored_hash.startswith("pbkdf2:sha256:"):
+                parts = stored_hash.split(":")
+                if len(parts) == 5:
+                    rounds = int(parts[2])
+                    salt_bytes = bytes.fromhex(parts[3])
+                    target_hash = bytes.fromhex(parts[4])
+                    derived = hashlib.pbkdf2_hmac("sha256", pw, salt_bytes, rounds)
+                    return hmac.compare_digest(derived, target_hash)
+            elif len(stored_hash) == 64:
+                # Legacy raw SHA-256 fallback
+                computed = hashlib.sha256(pw).hexdigest()
+                return hmac.compare_digest(computed, stored_hash)
         except Exception:
             return False
         return False

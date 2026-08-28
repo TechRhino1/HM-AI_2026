@@ -89,9 +89,11 @@ class JarvisOrchestrator:
         )
         self._running = False
         self._main_thread: Optional[threading.Thread] = None
+        self._watchdog_thread: Optional[threading.Thread] = None
+        self._last_heartbeat: float = time.time()
 
     def start(self):
-        """Starts the full JARVIS 4.0 engine and background workers."""
+        """Starts the full JARVIS 4.0 engine, background workers, and watchdog supervisor."""
         if not self._running:
             self._running = True
             self.state_manager.set_orchestrator_running(True)
@@ -99,7 +101,46 @@ class JarvisOrchestrator:
             self.position_monitor.start()
             self._main_thread = threading.Thread(target=self._orchestration_loop, daemon=True, name="jarvis_orchestrator")
             self._main_thread.start()
-            logger.info("JARVIS 4.0 Orchestrator started.")
+            self._watchdog_thread = threading.Thread(target=self._watchdog_loop, daemon=True, name="jarvis_watchdog")
+            self._watchdog_thread.start()
+            logger.info("JARVIS 4.0 Orchestrator and Watchdog started.")
+
+    def _watchdog_loop(self):
+        """Autonomous self-healing watchdog monitoring broker state, thread health, and stale locks."""
+        logger.info("JARVIS 4.0 Autonomous Watchdog supervisor active.")
+        while self._running:
+            try:
+                now = time.time()
+                # 1. Stale Execution Lock Recovery
+                with self._execution_lock:
+                    stale_syms = []
+                    for sym in list(self._execution_in_progress):
+                        last_exec = self._last_execution_time.get(sym, 0.0)
+                        if (now - last_exec) > 60.0:  # Lock held longer than 60s without release
+                            stale_syms.append(sym)
+                    for sym in stale_syms:
+                        logger.warning(f"Watchdog auto-releasing stale execution lock for {sym}.")
+                        self._execution_in_progress.discard(sym)
+
+                # 2. Broker Connection and Quote Health Check
+                acc = self.mt5_client.get_account_snapshot()
+                if acc and acc.login > 0:
+                    self.state_manager.update_service_health("MT5", "CONNECTED")
+                    self.state_manager.update_service_health("DATA_FEED", "STREAMING")
+                else:
+                    self.state_manager.update_service_health("MT5", "SIMULATED" if self.mode == "paper" else "RECONNECTING")
+
+                # 3. ML Predictor Brier Score Health Check
+                if int(now) % 300 < 10:
+                    brier = self.ml_predictor.get_brier_score()
+                    feat_imp = self.ml_predictor.get_feature_importance()
+                    top_feat = max(feat_imp.items(), key=lambda x: x[1])[0] if feat_imp else "N/A"
+                    logger.debug(f"Watchdog ML Heartbeat: BrierScore={brier:.3f}, TopFeature={top_feat}")
+
+            except Exception as e:
+                logger.error(f"Watchdog supervisor error: {e}", exc_info=True)
+
+            time.sleep(10.0)
 
     def stop(self):
         """Clean shutdown of all engine workers."""

@@ -48,6 +48,8 @@ class DecisionEngine:
         hypothesis_engine: Optional[HypothesisEngine] = None,
         calibrator: Optional[ConfidenceCalibrationEngine] = None,
         ml_predictor: Optional[OnlineMLPredictor] = None,
+        self_learning: Optional[SelfLearningEngine] = None,
+        meta_labeler: Optional[MetaLabeler] = None,
         min_ev_hurdle: float = 0.50,
         max_devil_penalty: float = 38.0
     ):
@@ -60,8 +62,8 @@ class DecisionEngine:
         self.min_ev_hurdle = min_ev_hurdle
         self.max_devil_penalty = max_devil_penalty
         self.order_flow = InstitutionalVolumeOrderFlowEngine()
-        self.self_learning = SelfLearningEngine()
-        self.meta_labeler = MetaLabeler()
+        self.self_learning = self_learning or SelfLearningEngine()
+        self.meta_labeler = meta_labeler or MetaLabeler()
         self.gate_policy = AdaptiveGatePolicy()
 
 

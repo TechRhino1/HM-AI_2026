@@ -9,7 +9,8 @@ from jarvis.data.schemas import (
 
 class TestAIDecisionEngine(unittest.TestCase):
     def setUp(self):
-        self.engine = DecisionEngine()
+        from jarvis.intelligence.self_learning import SelfLearningEngine
+        self.engine = DecisionEngine(self_learning=SelfLearningEngine(db_path=":memory:"))
 
     def test_high_quality_setup(self):
         ctx = MarketContext(

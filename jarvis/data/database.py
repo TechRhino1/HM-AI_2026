@@ -30,6 +30,9 @@ class SQLiteTradeDB:
                 pass
             del self._local.conn
 
+    def __del__(self):
+        self.close()
+
     def _init_db(self):
         conn = self._get_conn()
         try:

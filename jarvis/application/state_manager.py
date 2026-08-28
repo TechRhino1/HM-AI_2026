@@ -49,6 +49,15 @@ class StateManager:
             "TELEMETRY_API": "ONLINE"
         }
         self.logs: List[Dict[str, Any]] = []
+        self._state_version: int = 0
+        self.last_update = datetime.now(timezone.utc)
+
+    def get_state_version(self) -> int:
+        with self._rw_lock:
+            return self._state_version
+
+    def _bump_version(self):
+        self._state_version += 1
         self.last_update = datetime.now(timezone.utc)
 
     def set_orchestrator_running(self, running: bool):
@@ -71,24 +80,24 @@ class StateManager:
     def update_account(self, account: AccountSnapshot):
         with self._rw_lock:
             self.account = account
-            self.last_update = datetime.now(timezone.utc)
+            self._bump_version()
 
     def update_positions(self, positions: List[PositionSnapshot]):
         with self._rw_lock:
             self.positions = positions
-            self.last_update = datetime.now(timezone.utc)
+            self._bump_version()
 
     def sync_broker_state(self, account: Optional[AccountSnapshot], positions: List[PositionSnapshot]):
         with self._rw_lock:
             if account:
                 self.account = account
             self.positions = positions
-            self.last_update = datetime.now(timezone.utc)
+            self._bump_version()
 
     def update_market_context(self, symbol: str, context: MarketContext):
         with self._rw_lock:
             self.market_contexts[symbol] = context
-            self.last_update = datetime.now(timezone.utc)
+            self._bump_version()
 
     def get_market_context(self, symbol: str) -> Optional[MarketContext]:
         """Thread-safe retrieval of cached multi-timeframe market context for a symbol."""
@@ -98,12 +107,12 @@ class StateManager:
     def record_decision(self, symbol: str, decision: DecisionObject):
         with self._rw_lock:
             self.latest_decisions[symbol] = decision
-            self.last_update = datetime.now(timezone.utc)
+            self._bump_version()
 
     def update_radar(self, opportunities: List[Dict[str, Any]]):
         with self._rw_lock:
             self.radar_opportunities = opportunities
-            self.last_update = datetime.now(timezone.utc)
+            self._bump_version()
 
     def update_service_health(self, service: str, status: str):
         with self._rw_lock:

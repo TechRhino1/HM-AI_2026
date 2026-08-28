@@ -2,7 +2,7 @@ import os
 import json
 import ssl
 import urllib.request
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List
 
 class NewsIntelligenceEngine:
@@ -98,7 +98,7 @@ class NewsIntelligenceEngine:
                 "reasons_not_to_trade": reasons
             }
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         currency_map = {
             "XAUUSD": "USD",
             "GOLD.i#": "USD",
@@ -124,7 +124,9 @@ class NewsIntelligenceEngine:
                 time_str = event.get("timestamp", event.get("date", ""))
                 if time_str:
                     try:
-                        event_dt = datetime.fromisoformat(time_str.replace("Z", "+00:00")).replace(tzinfo=None)
+                        event_dt = datetime.fromisoformat(time_str.replace("Z", "+00:00"))
+                        if event_dt.tzinfo is None:
+                            event_dt = event_dt.replace(tzinfo=timezone.utc)
                         diff_mins = (event_dt - now).total_seconds() / 60.0
 
                         if -self.buffer_after_mins <= diff_mins <= self.buffer_before_mins:

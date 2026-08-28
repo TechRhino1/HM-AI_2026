@@ -7,7 +7,9 @@ import unittest
 class TestMetaLabeler(unittest.TestCase):
     def test_train_and_predict(self):
         import tempfile, os
-        from jarvis.intelligence.meta_labeler import MetaLabeler
+        from jarvis.intelligence.meta_labeler import MetaLabeler, _HAVE_SKLEARN
+        if not _HAVE_SKLEARN:
+            self.skipTest("scikit-learn not installed")
 
         np.random.seed(1)
         n = 320

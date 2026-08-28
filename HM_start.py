@@ -53,12 +53,18 @@ def get_local_wifi_ip():
         return "127.0.0.1"
 
 def _cleanup_stale_processes():
-    """Kills orphan ssh processes to avoid port forward collisions on Serveo."""
-    try:
-        if sys.platform == "win32":
-            subprocess.run(["taskkill", "/F", "/IM", "ssh.exe"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except Exception:
-        pass
+    """Safely terminates previously tracked tunnel subprocesses."""
+    proc = _TUNNEL_STATE.get("proc")
+    if proc:
+        try:
+            proc.terminate()
+            proc.wait(timeout=2.0)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+        _TUNNEL_STATE["proc"] = None
 
 def _start_background_tunnel(port: int = 8501, custom_subdomain: str = "hm2026"):
     """Starts persistent authenticated HTTPS mobile tunnel with automatic multi-provider fallback."""

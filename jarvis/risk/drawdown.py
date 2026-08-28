@@ -21,47 +21,56 @@ class DrawdownGuard:
     def _init_db(self):
         if not self.db_path:
             return
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute('''
-                CREATE TABLE IF NOT EXISTS drawdown_state (
-                    id INTEGER PRIMARY KEY,
-                    daily_start_equity REAL,
-                    peak_equity REAL,
-                    last_saved_date TEXT
-                )
-            ''')
-            conn.commit()
+        conn = sqlite3.connect(self.db_path)
+        try:
+            with conn:
+                conn.execute('''
+                    CREATE TABLE IF NOT EXISTS drawdown_state (
+                        id INTEGER PRIMARY KEY,
+                        daily_start_equity REAL,
+                        peak_equity REAL,
+                        last_saved_date TEXT
+                    )
+                ''')
+        finally:
+            conn.close()
 
     def _load_state(self):
         if not self.db_path:
             return
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute('SELECT daily_start_equity, peak_equity, last_saved_date FROM drawdown_state WHERE id = 1')
-            row = cursor.fetchone()
-            if row:
-                self.daily_start_equity, self.peak_equity, last_saved_date_str = row
-                
-                # Check for daily reset
-                current_date = datetime.now(timezone.utc).date().isoformat()
-                if last_saved_date_str != current_date:
-                    self.daily_start_equity = 0.0
-                    self._save_state()
-            else:
-                conn.execute('INSERT INTO drawdown_state (id, daily_start_equity, peak_equity, last_saved_date) VALUES (1, 0.0, 0.0, ?)',
-                            (datetime.now(timezone.utc).date().isoformat(),))
-                conn.commit()
+        conn = sqlite3.connect(self.db_path)
+        try:
+            with conn:
+                cursor = conn.execute('SELECT daily_start_equity, peak_equity, last_saved_date FROM drawdown_state WHERE id = 1')
+                row = cursor.fetchone()
+                if row:
+                    self.daily_start_equity, self.peak_equity, last_saved_date_str = row
+                    
+                    # Check for daily reset
+                    current_date = datetime.now(timezone.utc).date().isoformat()
+                    if last_saved_date_str != current_date:
+                        self.daily_start_equity = 0.0
+                        self._save_state()
+                else:
+                    conn.execute('INSERT INTO drawdown_state (id, daily_start_equity, peak_equity, last_saved_date) VALUES (1, 0.0, 0.0, ?)',
+                                (datetime.now(timezone.utc).date().isoformat(),))
+        finally:
+            conn.close()
 
     def _save_state(self):
         if not self.db_path:
             return
-        with sqlite3.connect(self.db_path) as conn:
-            current_date = datetime.now(timezone.utc).date().isoformat()
-            conn.execute('''
-                UPDATE drawdown_state
-                SET daily_start_equity = ?, peak_equity = ?, last_saved_date = ?
-                WHERE id = 1
-            ''', (self.daily_start_equity, self.peak_equity, current_date))
-            conn.commit()
+        conn = sqlite3.connect(self.db_path)
+        try:
+            with conn:
+                current_date = datetime.now(timezone.utc).date().isoformat()
+                conn.execute('''
+                    UPDATE drawdown_state
+                    SET daily_start_equity = ?, peak_equity = ?, last_saved_date = ?
+                    WHERE id = 1
+                ''', (self.daily_start_equity, self.peak_equity, current_date))
+        finally:
+            conn.close()
 
     def update_equity_benchmarks(self, current_equity: float, current_balance: float):
         changed = False
@@ -69,12 +78,16 @@ class DrawdownGuard:
         # True daily reset check in case process stays open across midnight
         current_date = datetime.now(timezone.utc).date().isoformat()
         if self.db_path:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.execute('SELECT last_saved_date FROM drawdown_state WHERE id = 1')
-                row = cursor.fetchone()
-                if row and row[0] != current_date:
-                    self.daily_start_equity = 0.0
-                    changed = True
+            conn = sqlite3.connect(self.db_path)
+            try:
+                with conn:
+                    cursor = conn.execute('SELECT last_saved_date FROM drawdown_state WHERE id = 1')
+                    row = cursor.fetchone()
+                    if row and row[0] != current_date:
+                        self.daily_start_equity = 0.0
+                        changed = True
+            finally:
+                conn.close()
 
         # Daily-loss baseline must be tracked on EQUITY consistently (not balance),
         # otherwise open positions make the daily-loss figure wrong.
