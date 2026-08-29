@@ -8,29 +8,65 @@ from jarvis.backtesting.engine import BacktestEngine
 from jarvis.backtesting.metrics import PerformanceMetricsCalculator
 from jarvis.data.symbol_registry import resolve as resolve_symbol
 
+import MetaTrader5 as mt5
+
 def run_multi_asset_backtest():
-    feed = DataFeedEngine()
-    symbols = ["XAUUSD", "BTCUSD", "EURUSD", "GBPUSD", "USDJPY"]
+    print("=" * 115)
+    print("             JARVIS AI 4.0 -- REAL MT5 HISTORICAL DATA QUANTITATIVE BACKTEST (4,380 H1 BARS)")
+    print("=" * 115)
     
-    print("=" * 115)
-    print("             JARVIS AI 4.0 -- 6-MONTH MULTI-ASSET HISTORICAL QUANTITATIVE BACKTEST (4,380 H1 BARS)")
-    print("=" * 115)
+    mt5_active = mt5.initialize()
+    if not mt5_active:
+        print(f"Warning: MT5 failed to initialize: {mt5.last_error()}. Falling back to DataFeedEngine.")
+        feed = DataFeedEngine()
+    else:
+        acc = mt5.account_info()
+        print(f"[MT5 Feed] Connected to: {acc.server} | Account #{acc.login} | Broker: {acc.company}")
+        print("-" * 115)
+        feed = None
+
+    symbol_configs = [
+        {"name": "XAUUSD", "broker_sym": "GOLD.i#"},
+        {"name": "BTCUSD", "broker_sym": "BTCUSD#"},
+        {"name": "EURUSD", "broker_sym": "EURUSD"},
+        {"name": "GBPUSD", "broker_sym": "GBPUSD"},
+        {"name": "USDJPY", "broker_sym": "USDJPY"},
+    ]
     
     summary_results = {}
     total_trades_all = 0
     total_net_pnl_all = 0.0
     
-    for sym in symbols:
-        print(f"Fetching 6-month historical data for {sym}...")
-        df = feed.fetch_rates(sym, timeframe="H1", num_bars=4380)
+    for cfg in symbol_configs:
+        sym = cfg["name"]
+        broker_sym = cfg["broker_sym"]
+        df = None
         
+        if mt5_active:
+            mt5.symbol_select(broker_sym, True)
+            rates = mt5.copy_rates_from_pos(broker_sym, mt5.TIMEFRAME_H1, 0, 4380)
+            if rates is not None and len(rates) >= 50:
+                df = pd.DataFrame(rates)
+                df["time"] = pd.to_datetime(df["time"], unit="s")
+                df.rename(columns={"tick_volume": "volume"}, inplace=True)
+                df = df[["time", "open", "high", "low", "close", "volume"]].copy()
+                t_start = df["time"].iloc[0].strftime("%Y-%m-%d")
+                t_end = df["time"].iloc[-1].strftime("%Y-%m-%d")
+                last_price = df["close"].iloc[-1]
+                print(f"Loaded {len(df)} REAL MT5 H1 bars for {sym} [{broker_sym}] from {t_start} to {t_end} (Price: {last_price})")
+
         if df is None or len(df) < 50:
-            print(f"Warning: Insufficient data for {sym}, skipping.")
-            continue
-            
+            if feed is None:
+                feed = DataFeedEngine()
+            print(f"Fetching synthetic rates for {sym}...")
+            df = feed.fetch_rates(sym, timeframe="H1", num_bars=4380)
+            t_start = "SYNTHETIC"
+            t_end = "SYNTHETIC"
+
         print(f"Running chronological event-driven simulation for {sym} ({len(df)} H1 bars)...")
+        spec = resolve_symbol(sym)
         bt = BacktestEngine(initial_balance=10000.0, risk_per_trade_pct=0.5, commission_per_lot=5.0)
-        res = bt.run_backtest(df, symbol=sym)
+        res = bt.run_backtest(df, symbol=sym, spread_pips=spec.typical_spread_pips)
         
         m = res.get("metrics", {})
         trades = res.get("trades", [])
@@ -59,7 +95,11 @@ def run_multi_asset_backtest():
         m["win_rate_pct"] = (m["winning_trades"] / max(1, m["total_trades"])) * 100.0
         m["strat_breakdown"] = strat_breakdown
         m["regime_breakdown"] = regime_breakdown
+        m["date_range"] = f"{t_start} -> {t_end}"
         summary_results[sym] = m
+
+    if mt5_active:
+        mt5.shutdown()
 
     # Print Table
     header = f"{'Metric':<32} | " + " | ".join(f"{sym:<14}" for sym in summary_results.keys())
@@ -68,6 +108,7 @@ def run_multi_asset_backtest():
     print("-" * len(header))
     
     rows = [
+        ("Historical Date Range", lambda m: str(m.get('date_range', 'N/A'))[:14]),
         ("Total Trades Executed", lambda m: f"{m.get('total_trades', 0):d}"),
         ("Winning Trades", lambda m: f"{m.get('winning_trades', 0):d}"),
         ("Losing Trades", lambda m: f"{m.get('losing_trades', 0):d}"),

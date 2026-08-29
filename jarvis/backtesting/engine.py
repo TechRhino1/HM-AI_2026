@@ -80,11 +80,11 @@ class BacktestEngine:
                 if risk_dist <= 0:
                     risk_dist = max(0.001, abs(open_trade["entry"] - open_trade["sl"]))
 
-                # A. Partial TP @ 1.5R with Breakeven Lock
+                # A. Institutional 65/35 Partial TP @ 1.0R with +0.15R BE Lock
                 if not open_trade.get("partial_closed", False) and open_trade["lots"] > 0.01:
-                    partial_trigger_dist = risk_dist * 1.5
+                    partial_trigger_dist = risk_dist * 1.0
                     if open_trade["type"] == "BUY" and favorable >= partial_trigger_dist:
-                        partial_lots = round(open_trade["lots"] * 0.5, 2)
+                        partial_lots = round(open_trade["lots"] * 0.65, 2)
                         if partial_lots >= 0.01:
                             partial_exit_p = open_trade["entry"] + partial_trigger_dist
                             pips_p = (partial_exit_p - open_trade["entry"]) / spec.pip_size
@@ -93,10 +93,10 @@ class BacktestEngine:
                             open_trade["realized_pnl"] = open_trade.get("realized_pnl", 0.0) + pnl_p
                             open_trade["lots"] = round(open_trade["lots"] - partial_lots, 2)
                             open_trade["partial_closed"] = True
-                            # Move SL to Breakeven + small buffer
-                            open_trade["sl"] = round(open_trade["entry"] + (risk_dist * 0.1), spec.digits)
+                            # Move SL to Breakeven + 0.15R buffer
+                            open_trade["sl"] = round(open_trade["entry"] + (risk_dist * 0.15), spec.digits)
                     elif open_trade["type"] == "SELL" and favorable >= partial_trigger_dist:
-                        partial_lots = round(open_trade["lots"] * 0.5, 2)
+                        partial_lots = round(open_trade["lots"] * 0.65, 2)
                         if partial_lots >= 0.01:
                             partial_exit_p = open_trade["entry"] - partial_trigger_dist
                             pips_p = (open_trade["entry"] - partial_exit_p) / spec.pip_size
@@ -105,12 +105,12 @@ class BacktestEngine:
                             open_trade["realized_pnl"] = open_trade.get("realized_pnl", 0.0) + pnl_p
                             open_trade["lots"] = round(open_trade["lots"] - partial_lots, 2)
                             open_trade["partial_closed"] = True
-                            # Move SL to Breakeven - small buffer
-                            open_trade["sl"] = round(open_trade["entry"] - (risk_dist * 0.1), spec.digits)
+                            # Move SL to Breakeven - 0.15R buffer
+                            open_trade["sl"] = round(open_trade["entry"] - (risk_dist * 0.15), spec.digits)
 
-                # B. Dynamic ATR Trailing Stop on Remaining Position
+                # B. Dynamic ATR Trailing Stop on Remaining 35% Runner Position
                 if open_trade.get("partial_closed", False):
-                    trail_dist = max(risk_dist, atr * 1.5)
+                    trail_dist = max(risk_dist * 0.8, atr * 1.4)
                     if open_trade["type"] == "BUY":
                         new_sl = round(high - trail_dist, spec.digits)
                         if new_sl > open_trade["sl"]:
@@ -174,8 +174,26 @@ class BacktestEngine:
 
             # 2. Check new trade entry if flat
             if open_trade is None:
-                mtf_dict = {"primary": history_slice}
-                context = self.context_engine.build_context(symbol, mtf_dict, current_spread_pips=spread_pips)
+                if "time" in history_slice.columns and len(history_slice) >= 24:
+                    slice_indexed = history_slice.copy()
+                    if not isinstance(slice_indexed.index, pd.DatetimeIndex):
+                        slice_indexed["time"] = pd.to_datetime(slice_indexed["time"])
+                        slice_indexed.set_index("time", inplace=True)
+                    df_h4 = slice_indexed.resample("4h").agg({
+                        "open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"
+                    }).dropna().reset_index()
+                    df_d1 = slice_indexed.resample("1D").agg({
+                        "open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"
+                    }).dropna().reset_index()
+                    mtf_dict = {"primary": history_slice, "context": df_h4, "macro": df_d1}
+                else:
+                    mtf_dict = {"primary": history_slice}
+
+                context = self.context_engine.build_context(
+                    symbol, mtf_dict,
+                    current_spread_pips=spread_pips,
+                    max_allowed_spread_pips=spec.max_spread_pips
+                )
                 regime = self.regime_classifier.classify_regime(context)
 
                 # Parallel analysts with dynamic directional hypothesis

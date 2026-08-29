@@ -74,14 +74,22 @@ class MarketContextEngine:
 
         # 5. Session Timing Context (Use bar timestamp if available, else current wall time)
         bar_timestamp = datetime.now(timezone.utc)
-        if not df_primary.empty and "timestamp" in df_primary.columns:
-            raw_ts = df_primary["timestamp"].iloc[-1]
+        ts_col = "time" if "time" in df_primary.columns else ("timestamp" if "timestamp" in df_primary.columns else None)
+        if not df_primary.empty and ts_col:
+            raw_ts = df_primary[ts_col].iloc[-1]
             if isinstance(raw_ts, datetime):
                 bar_timestamp = raw_ts if raw_ts.tzinfo else raw_ts.replace(tzinfo=timezone.utc)
             elif isinstance(raw_ts, pd.Timestamp):
                 bar_timestamp = raw_ts.to_pydatetime()
                 if not bar_timestamp.tzinfo:
                     bar_timestamp = bar_timestamp.replace(tzinfo=timezone.utc)
+            elif isinstance(raw_ts, (int, float)):
+                bar_timestamp = datetime.fromtimestamp(raw_ts, tz=timezone.utc)
+        elif not df_primary.empty and isinstance(df_primary.index, pd.DatetimeIndex):
+            raw_ts = df_primary.index[-1]
+            bar_timestamp = raw_ts.to_pydatetime()
+            if not bar_timestamp.tzinfo:
+                bar_timestamp = bar_timestamp.replace(tzinfo=timezone.utc)
 
         session = SessionEngine.get_current_session(bar_timestamp)
 

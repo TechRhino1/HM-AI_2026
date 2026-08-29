@@ -38,15 +38,15 @@ DANGEROUS_SL_ATR_MULT     = 3.0    # SL wider than 3× ATR → tighten to 2× AT
 MICRO_VOLUME_THRESH        = 0.03   # Volume <= this is treated as micro-position
 
 # Profit lock thresholds (ATR multiples of profit_pips)
-STAGE1_ATR_TRIGGER         = 0.9    # Was 1.0 — earlier BE for better win rate
-STAGE1_BE_BUFFER           = 0.12   # Was 0.15 — tighter to lock BE faster
-STAGE2_ATR_TRIGGER         = 1.4    # Was 1.6 — lock profit earlier
-STAGE2_PROFIT_LOCK         = 0.70   # Was 0.60 — lock more profit (70% ATR)
-STAGE3_ATR_TRIGGER         = 1.8    # Was 2.0 — 60% profit lock triggers earlier
-STAGE3_PROFIT_LOCK_PCT     = 0.65   # Was 0.60 — keep 65% of peak
-STD_ATR_TRIGGER            = 1.3    # Was 1.5 — standard BE earlier
-STD_BE_BUFFER              = 0.18   # Was 0.20
-SR_ATR_BUFFER              = 0.15   # Was 0.20 — tighter S/R ratchet
+STAGE1_ATR_TRIGGER         = 0.9    # Stage 1 micro-position BE trigger (0.9x ATR, earlier BE for higher win rate)
+STAGE1_BE_BUFFER           = 0.15   # Buffer above/below entry for Stage 1 BE
+STAGE2_ATR_TRIGGER         = 1.4    # Stage 2 Profit lock trigger (0.60x ATR, earlier profit lock)
+STAGE2_PROFIT_LOCK         = 0.60   # Lock 0.60x ATR profit
+STAGE3_ATR_TRIGGER         = 2.0    # Stage 3 Profit lock trigger (60% profit lock)
+STAGE3_PROFIT_LOCK_PCT     = 0.60   # Lock 60% of total unrealized profit
+STD_ATR_TRIGGER            = 1.5    # Standard-position BE trigger (1.5x ATR)
+STD_BE_BUFFER              = 0.20   # Buffer above/below entry for Standard BE
+SR_ATR_BUFFER              = 0.20   # S/R ratchet buffer
 PARTIAL_TP_TRIGGER_R       = 1.0    # Default partial TP trigger (1.0R)
 PARTIAL_CLOSE_PCT          = 0.50   # 50% scale out at partial target
 

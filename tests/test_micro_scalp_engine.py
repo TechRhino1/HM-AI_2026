@@ -44,8 +44,8 @@ def test_strategy_bandit_micro_arms():
             pass
 
 def test_position_monitor_constants():
-    assert STAGE1_ATR_TRIGGER == 1.0
-    assert STAGE2_ATR_TRIGGER == 1.6
+    assert STAGE1_ATR_TRIGGER == 0.9  # earlier BE trigger for better win rate (was 1.0)
+    assert STAGE2_ATR_TRIGGER == 1.4  # earlier profit lock (was 1.6)
     assert PARTIAL_TP_TRIGGER_R == 1.0
     assert PARTIAL_CLOSE_PCT == 0.50
 

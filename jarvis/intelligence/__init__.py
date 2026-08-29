@@ -5,6 +5,7 @@ from jarvis.intelligence.hypothesis_engine import HypothesisEngine
 from jarvis.intelligence.confidence import ConfidenceCalibrationEngine
 from jarvis.intelligence.reasoning_engine import ReasoningEngine
 from jarvis.intelligence.decision_engine import DecisionEngine
+from jarvis.intelligence.realtime_optimizer import RealtimeOptimizer
 
 __all__ = [
     "MarketRegimeClassifier",
@@ -12,5 +13,6 @@ __all__ = [
     "HypothesisEngine",
     "ConfidenceCalibrationEngine",
     "ReasoningEngine",
-    "DecisionEngine"
+    "DecisionEngine",
+    "RealtimeOptimizer"
 ]

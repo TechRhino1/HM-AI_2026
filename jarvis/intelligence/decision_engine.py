@@ -124,32 +124,40 @@ class DecisionEngine:
         is_breakout = regime.primary_regime in (MarketRegime.BREAKOUT, MarketRegime.HIGH_VOLATILITY)
 
         if is_strong_trend:
+<<<<<<< HEAD
             sl_default_mult = 1.2       # Shallow pullbacks in strong trends: tight structure-anchored SL
             sl_min_bound_mult = 0.5     # Tighter lower bound
             sl_max_bound_mult = 2.2     # Tighter upper bound
             sl_buffer_mult = 0.12       # Tighter structural buffer
             tp_multiplier = 4.2         # Was 3.8 — stronger trends now target 4.2R for higher expectancy
+=======
+            sl_default_mult = 0.85      # Shallow pullbacks in strong trends: tight structure-anchored SL
+            sl_min_bound_mult = 0.35    # Tighter lower bound
+            sl_max_bound_mult = 1.50    # Controlled upper bound
+            sl_buffer_mult = 0.10       # Tighter structural buffer
+            tp_multiplier = 3.80        # Strong confirmed trend — let winners run for massive R:R
+>>>>>>> 6a28b41 (feat: real MT5 data backtesting, MTF D1/H4 synthesis, order flow absorption defense, and institutional profit scaling)
             first_target_volume_pct = 0.25  # 25% scale-out, 75% rides to target
         elif is_ranging:
-            sl_default_mult = 1.4       # Safe structural buffer outside chop
-            sl_min_bound_mult = 0.7
-            sl_max_bound_mult = 3.0
-            sl_buffer_mult = 0.20
-            tp_multiplier = 2.2         # Target internal range liquidity
-            first_target_volume_pct = 0.50  # 50% locked in quickly inside range
+            sl_default_mult = 1.00      # Safe structural buffer outside chop
+            sl_min_bound_mult = 0.40
+            sl_max_bound_mult = 1.80
+            sl_buffer_mult = 0.15
+            tp_multiplier = 2.20        # Target internal range liquidity
+            first_target_volume_pct = 0.50
         elif is_breakout:
-            sl_default_mult = 1.4
-            sl_min_bound_mult = 0.70
-            sl_max_bound_mult = 3.0
-            sl_buffer_mult = 0.20
-            tp_multiplier = 3.2         # Breakout expansion target
-            first_target_volume_pct = 0.35
+            sl_default_mult = 0.90
+            sl_min_bound_mult = 0.35
+            sl_max_bound_mult = 1.60
+            sl_buffer_mult = 0.12
+            tp_multiplier = 3.20        # Breakout expansion target
+            first_target_volume_pct = 0.50
         else:
-            sl_default_mult = 1.8
-            sl_min_bound_mult = 0.8
-            sl_max_bound_mult = 4.0
-            sl_buffer_mult = 0.20
-            tp_multiplier = 2.5         # Default baseline institutional R:R
+            sl_default_mult = 1.00
+            sl_min_bound_mult = 0.40
+            sl_max_bound_mult = 2.00
+            sl_buffer_mult = 0.15
+            tp_multiplier = 2.80        # Default baseline institutional R:R
             first_target_volume_pct = 0.50
 
         spread_dist = max(0.0, context.ask - context.bid) if (context.ask > 0 and context.bid > 0) else (context.volatility.current_spread_pips * spec.pip_size)
@@ -396,23 +404,17 @@ class DecisionEngine:
                 min_score = max(min_score, 78.0)  # Was 82 — less harsh under stress
                 required_win_p = max(required_win_p, 0.54)  # Was 0.58
         else:
-            min_score = 72.0 if is_scalp_favorable else 75.0
-            min_rr = 1.5
-            required_win_p = 0.50 if is_scalp_favorable else 0.55
+            min_score = 75.0 if is_scalp_favorable else 78.0
+            min_rr = 1.8
+            required_win_p = 0.52 if is_scalp_favorable else 0.55
             max_spread = spec.max_spread_pips
 
         if _is_forex(context.symbol):
-            sym_u = context.symbol.upper()
-            if "EUR" in sym_u:
-                required_win_p = 0.48  # EUR best performer — keep looser
-            elif any(x in sym_u for x in ["GBP", "JPY"]):
-                required_win_p = 0.52  # GBP/JPY 50%→60% win lift — stricter filter
-                min_score = max(min_score, 76.0)
-            else:
-                required_win_p = 0.48
-
-        # Targeted boost for low-win symbols (GBP/JPY/BTC) when high confluence — lifts win% without hurting XAU/EUR
-        # Applied in evaluate below (4.5 confluence), here just stricter gate for those symbols
+            required_win_p = max(required_win_p, 0.54)
+            min_score = max(min_score, 78.0)
+        elif "BTC" in context.symbol.upper():
+            required_win_p = max(required_win_p, 0.54)
+            min_score = max(min_score, 78.0)
 
         # Real-time per-symbol optimizer — adapts thresholds from live win-rate (neutral in backtests)
         try:
@@ -429,9 +431,9 @@ class DecisionEngine:
         h4_bias = mtf_align.get("H4", "NEUTRAL") if isinstance(mtf_align, dict) else "NEUTRAL"
         d1_bias = mtf_align.get("D1", "NEUTRAL") if isinstance(mtf_align, dict) else "NEUTRAL"
         mtf_counter_trend = False
-        if tentative_bias == "BUY" and h4_bias == "BEARISH" and d1_bias == "BEARISH":
+        if tentative_bias == "BUY" and (h4_bias == "BEARISH" or d1_bias == "BEARISH"):
             mtf_counter_trend = True
-        elif tentative_bias == "SELL" and h4_bias == "BULLISH" and d1_bias == "BULLISH":
+        elif tentative_bias == "SELL" and (h4_bias == "BULLISH" or d1_bias == "BULLISH"):
             mtf_counter_trend = True
 
         if mtf_counter_trend:
@@ -441,6 +443,12 @@ class DecisionEngine:
         from jarvis.market.sessions import SessionEngine
         mkt_status = SessionEngine.get_market_trading_status(context.symbol, dt=getattr(context, "timestamp", None))
         is_mkt_open = mkt_status.get("is_open", True)
+
+        of_trap = context.order_flow.get("absorption_trap") if hasattr(context, "order_flow") and isinstance(context.order_flow, dict) else None
+        is_of_trap = (tentative_bias == "BUY" and of_trap == "BUYER_ABSORPTION_TRAP") or (tentative_bias == "SELL" and of_trap == "SELLER_ABSORPTION_TRAP")
+        is_prime_session_valid = (not _is_forex(context.symbol)) or getattr(context.session, "is_prime_session", True)
+
+        min_sl_atr_mult = 0.6 if is_micro_mode else (1.2 if "BTC" in context.symbol.upper() else 0.8)
 
         # 16-Point Comprehensive Institutional Quality Gate Matrix
         gate_checks = {
@@ -454,11 +462,13 @@ class DecisionEngine:
             "AI Multi-Score Gate": ai_score >= min_score,
             "Devil Adversarial Guard": devil_report.penalty_score <= self.max_devil_penalty,
             "Calibrated Win Prob >= 50%": calibrated_win_p >= required_win_p,
-            "Valid Stop Loss Distance": risk_dist >= (context.volatility.atr * (0.6 if is_micro_mode else 0.5)),
+            "Valid Stop Loss Distance": risk_dist >= (context.volatility.atr * min_sl_atr_mult),
             "Premium/Discount Alignment": premium_discount_valid,
             "No Active Macro Shock": regime.primary_regime != MarketRegime.EVENT_RISK,
             "Order Flow Momentum": abs(context.momentum.trend_score) >= 10 or context.structure.bos or context.liquidity.sweep_detected,
             "Macro MTF Alignment": not mtf_counter_trend or (ai_score >= 82.0 and calibrated_win_p >= 0.62),
+            "No Order Flow Absorption Trap": not is_of_trap,
+            "Forex Prime Session": is_prime_session_valid,
             "Margin Capacity Limit": account_balance >= 10.0 and planned_risk_dollars > 0
         }
 

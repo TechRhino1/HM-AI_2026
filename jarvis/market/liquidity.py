@@ -62,9 +62,9 @@ class LiquidityEngine:
         else:
             atr = float(highs[-1] - lows[-1]) or 1e-9
 
-        # Liquidity Sweep Detection on latest 8 candles:
-        # Bullish Sweep: Candle low breaks below recent swing low, but candle close is ABOVE recent swing low (Stop Hunt & Reversal)
-        # Bearish Sweep: Candle high breaks above recent swing high, but candle close is BELOW recent swing high (Stop Hunt & Reversal)
+        # Liquidity Sweep Detection on latest 2 completed candles with displacement confirmation:
+        # Bullish Sweep: Candle low breaks below recent swing low, closes back above swing low AND closes bullish (close > open)
+        # Bearish Sweep: Candle high breaks above recent swing high, closes back below swing high AND closes bearish (close < open)
         sweep_detected = False
         sweep_type = "NONE"
         sweep_level = 0.0
@@ -73,26 +73,31 @@ class LiquidityEngine:
         latest_high = float(highs[-1])
         latest_low = float(lows[-1])
         latest_close = float(closes[-1])
+        opens = df["open"].values if "open" in df.columns else closes
 
-        # Check latest 8 candles
-        for idx in range(-1, -9, -1):
+        # Check only the most recent 2 completed candles for fresh sweeps
+        for idx in [-1, -2]:
             if abs(idx) > len(highs):
                 break
             c_high = float(highs[idx])
             c_low = float(lows[idx])
             c_close = float(closes[idx])
+            c_open = float(opens[idx])
 
-            if c_low < recent_sl and c_close > recent_sl:
+            mag_low = abs(c_low - recent_sl) / atr
+            mag_high = abs(c_high - recent_sh) / atr
+
+            if c_low < recent_sl and c_close > recent_sl and c_close >= c_open and (0.15 <= mag_low <= 3.5):
                 sweep_detected = True
                 sweep_type = "BULLISH_SWEEP"
                 sweep_level = recent_sl
-                sweep_magnitude = abs(c_low - recent_sl) / atr
+                sweep_magnitude = mag_low
                 break
-            elif c_high > recent_sh and c_close < recent_sh:
+            elif c_high > recent_sh and c_close < recent_sh and c_close <= c_open and (0.15 <= mag_high <= 3.5):
                 sweep_detected = True
                 sweep_type = "BEARISH_SWEEP"
                 sweep_level = recent_sh
-                sweep_magnitude = abs(c_high - recent_sh) / atr
+                sweep_magnitude = mag_high
                 break
 
         pools = [

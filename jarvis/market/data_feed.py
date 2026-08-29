@@ -110,7 +110,9 @@ class DataFeedEngine:
 
     def _generate_realistic_rates(self, symbol: str, timeframe: str, num_bars: int) -> pd.DataFrame:
         """Generates realistic institutional market price series with trend cycles, liquidity sweeps, and volatility clusters."""
-        np.random.seed(42)  # Deterministic seed for reproducible backtests
+        import zlib
+        seed = zlib.crc32(f"{symbol.upper()}_{timeframe}".encode("utf-8"))
+        np.random.seed(seed)
         
         base_price = 2400.0 if any(k in symbol.upper() for k in ["XAU", "GOLD"]) else (
             1.0850 if "EUR" in symbol.upper() else (
