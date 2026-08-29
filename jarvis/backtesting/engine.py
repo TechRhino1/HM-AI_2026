@@ -13,6 +13,7 @@ from jarvis.risk.risk_engine import RiskEngine
 from jarvis.data.schemas import AccountSnapshot, PositionSnapshot
 from jarvis.data.symbol_registry import resolve as resolve_symbol
 from jarvis.backtesting.metrics import PerformanceMetricsCalculator
+from jarvis.risk.loss_cooldown import LossCooldownManager
 
 class BacktestEngine:
     def __init__(
@@ -53,11 +54,21 @@ class BacktestEngine:
         effective_start = max(20, min(total_bars - 2, start_bar_idx))
         spec = resolve_symbol(symbol)
         actual_slippage_delta = self.slippage_pips * spec.pip_size
+        cooldown_mgr = LossCooldownManager()
+        is_fx = getattr(spec, "asset_class", "").upper() == "FOREX"
         
         for i in range(effective_start, total_bars - 1):
             history_slice = df_h1.iloc[:i]
             current_bar = df_h1.iloc[i]
             next_bar = df_h1.iloc[i + 1]
+            
+            bar_time = current_bar.get("time") if "time" in current_bar else None
+            b_date = None
+            if bar_time is not None:
+                b_date = bar_time.date() if hasattr(bar_time, "date") else None
+                if b_date is not None and b_date != cooldown_mgr.current_date:
+                    cooldown_mgr.reset_daily(b_date)
+            cooldown_mgr.tick_bar()
 
             # 1. Manage existing open trade with institutional partial TP & dynamic trailing
             if open_trade:
@@ -80,11 +91,20 @@ class BacktestEngine:
                 if risk_dist <= 0:
                     risk_dist = max(0.001, abs(open_trade["entry"] - open_trade["sl"]))
 
-                # A. Institutional 65/35 Partial TP @ 1.0R with +0.15R BE Lock
+                # A. Asset-Adaptive Partial TP & Breakeven Lock
+                # Forex: 33% partial at 1.5R with +0.20R BE lock (lets 67% run to full 2.0R-2.5R target)
+                # Gold/Crypto: 33% partial at 1.8R with +0.25R BE lock (lets 67% run to 3.8R-4.2R target)
+                partial_trigger_mult = 1.5 if is_fx else 1.8
+                partial_vol_pct = 0.33
+                
+                # In Forex, moving SL instantly to +0.20R gets swept by spread/chop. 
+                # Better to cut risk in half (-0.5R) or just let the ATR trailing stop handle it.
+                be_lock_mult = -0.50 if is_fx else 0.10
+
                 if not open_trade.get("partial_closed", False) and open_trade["lots"] > 0.01:
-                    partial_trigger_dist = risk_dist * 1.0
+                    partial_trigger_dist = risk_dist * partial_trigger_mult
                     if open_trade["type"] == "BUY" and favorable >= partial_trigger_dist:
-                        partial_lots = round(open_trade["lots"] * 0.65, 2)
+                        partial_lots = round(open_trade["lots"] * partial_vol_pct, 2)
                         if partial_lots >= 0.01:
                             partial_exit_p = open_trade["entry"] + partial_trigger_dist
                             pips_p = (partial_exit_p - open_trade["entry"]) / spec.pip_size
@@ -93,10 +113,10 @@ class BacktestEngine:
                             open_trade["realized_pnl"] = open_trade.get("realized_pnl", 0.0) + pnl_p
                             open_trade["lots"] = round(open_trade["lots"] - partial_lots, 2)
                             open_trade["partial_closed"] = True
-                            # Move SL to Breakeven + 0.15R buffer
-                            open_trade["sl"] = round(open_trade["entry"] + (risk_dist * 0.15), spec.digits)
+                            # Move SL to Breakeven + buffer
+                            open_trade["sl"] = round(open_trade["entry"] + (risk_dist * be_lock_mult), spec.digits)
                     elif open_trade["type"] == "SELL" and favorable >= partial_trigger_dist:
-                        partial_lots = round(open_trade["lots"] * 0.65, 2)
+                        partial_lots = round(open_trade["lots"] * partial_vol_pct, 2)
                         if partial_lots >= 0.01:
                             partial_exit_p = open_trade["entry"] - partial_trigger_dist
                             pips_p = (open_trade["entry"] - partial_exit_p) / spec.pip_size
@@ -105,12 +125,12 @@ class BacktestEngine:
                             open_trade["realized_pnl"] = open_trade.get("realized_pnl", 0.0) + pnl_p
                             open_trade["lots"] = round(open_trade["lots"] - partial_lots, 2)
                             open_trade["partial_closed"] = True
-                            # Move SL to Breakeven - 0.15R buffer
-                            open_trade["sl"] = round(open_trade["entry"] - (risk_dist * 0.15), spec.digits)
+                            # Move SL to Breakeven - buffer
+                            open_trade["sl"] = round(open_trade["entry"] - (risk_dist * be_lock_mult), spec.digits)
 
-                # B. Dynamic ATR Trailing Stop on Remaining 35% Runner Position
+                # B. Dynamic ATR Trailing Stop on Remaining Runner Position (Room to breathe)
                 if open_trade.get("partial_closed", False):
-                    trail_dist = max(risk_dist * 0.8, atr * 1.4)
+                    trail_dist = max(risk_dist * 0.9, atr * 1.5) if is_fx else max(risk_dist * 1.0, atr * 1.8)
                     if open_trade["type"] == "BUY":
                         new_sl = round(high - trail_dist, spec.digits)
                         if new_sl > open_trade["sl"]:
@@ -153,6 +173,9 @@ class BacktestEngine:
                     balance += pnl_remaining
                     equity = balance
 
+                    is_win = pnl_net > 0
+                    cooldown_mgr.record_trade_result(pnl=pnl_net, is_win=is_win, symbol=symbol, current_date=b_date)
+
                     trades.append({
                         "symbol": symbol,
                         "type": open_trade["type"],
@@ -168,14 +191,18 @@ class BacktestEngine:
                         "score": open_trade["score"],
                         "mfe": round(open_trade["mfe"], 4),
                         "mae": round(open_trade["mae"], 4),
-                        "is_win": pnl_net > 0
+                        "is_win": is_win
                     })
                     open_trade = None
 
             # 2. Check new trade entry if flat
             if open_trade is None:
+                skip_trade, skip_reason = cooldown_mgr.should_skip_trade(symbol)
+                if skip_trade:
+                    continue
+
                 if "time" in history_slice.columns and len(history_slice) >= 24:
-                    slice_indexed = history_slice.copy()
+                    slice_indexed = history_slice.iloc[-300:].copy()
                     if not isinstance(slice_indexed.index, pd.DatetimeIndex):
                         slice_indexed["time"] = pd.to_datetime(slice_indexed["time"])
                         slice_indexed.set_index("time", inplace=True)
@@ -199,8 +226,14 @@ class BacktestEngine:
                 # Parallel analysts with dynamic directional hypothesis
                 tentative_bias = "BUY" if context.structure.bias == "BULLISH" else ("SELL" if context.structure.bias == "BEARISH" else ("SELL" if getattr(context.momentum, "trend_score", 0.0) < 0 else "BUY"))
                 analyst_reports, devil_report = self.analyst_cluster.run_all_parallel(context, regime, tentative_bias)
+                
+                # Fractional Kelly dynamic position sizing
+                planned_risk_pct = self.risk_per_trade_pct
+                size_mult = cooldown_mgr.get_position_size_multiplier(planned_risk_pct, balance, win_rate=0.58, payoff_ratio=1.5)
+                effective_risk_pct = max(0.20, planned_risk_pct * size_mult)
+
                 decision = self.decision_engine.evaluate(
-                    context, regime, analyst_reports, devil_report, account_balance=balance, risk_per_trade_pct=self.risk_per_trade_pct
+                    context, regime, analyst_reports, devil_report, account_balance=balance, risk_per_trade_pct=effective_risk_pct, mtf_data=mtf_dict
                 )
 
                 if decision.decision == "EXECUTE":
@@ -228,7 +261,7 @@ class BacktestEngine:
                             actual_risk_dist = max(spec.pip_size * 10, decision.sl_distance)
 
                         # Enforce hard dollar risk cap based on filled entry & SL
-                        planned_risk_dollars = balance * (self.risk_per_trade_pct / 100.0)
+                        planned_risk_dollars = balance * (effective_risk_pct / 100.0)
                         from jarvis.data.symbol_registry import get_dollar_risk_per_price_unit
                         unit_risk = get_dollar_risk_per_price_unit(symbol, sym_info)
                         dollar_risk_per_lot = actual_risk_dist * unit_risk

@@ -62,8 +62,8 @@ class MarketStructureEngine:
             bias = "BEARISH"
 
         # Premium / Discount / Equilibrium Zones
-        recent_max = float(highs[-30:].max()) if len(highs) >= 30 else float(highs.max())
-        recent_min = float(lows[-30:].min()) if len(lows) >= 30 else float(lows.min())
+        recent_max = float(highs[-200:].max()) if len(highs) >= 200 else float(highs.max())
+        recent_min = float(lows[-200:].min()) if len(lows) >= 200 else float(lows.min())
         equilibrium = (recent_max + recent_min) / 2.0
         range_span = recent_max - recent_min + 1e-9
         position_pct = ((latest_close - recent_min) / range_span) * 100.0

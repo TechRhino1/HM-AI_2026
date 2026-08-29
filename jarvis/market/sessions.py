@@ -10,8 +10,16 @@ except Exception:
 from jarvis.data.schemas import SessionContext
 
 class SessionEngine:
-    """Calculates active trading sessions, prime volume hours, and global market open/closed status."""
+    """Calculates active trading sessions, prime volume hours, killzones, and global market open/closed status."""
     
+    # Killzone definitions (UTC hours) — institutional high-probability entry windows
+    KILLZONES = {
+        "LONDON_OPEN":  (7, 10),   # 07:00-10:00 UTC — first directional move of the day
+        "NY_OPEN":      (12, 15),  # 12:00-15:00 UTC — highest volume, news reactions
+        "LONDON_CLOSE": (15, 17),  # 15:00-17:00 UTC — mean reversion / position unwinding
+    }
+    ASIAN_RANGE = (0, 7)  # 00:00-07:00 UTC — defines the daily range box
+
     @staticmethod
     def get_current_session(dt: Optional[datetime] = None) -> SessionContext:
         if dt is None:
@@ -48,6 +56,47 @@ class SessionEngine:
             utc_hour=hour,
             day_of_week=weekday
         )
+
+    @staticmethod
+    def get_active_killzone(dt: Optional[datetime] = None) -> Dict[str, Any]:
+        """Determine which killzone (if any) is currently active.
+        
+        Returns dict with:
+        - 'active_killzone': str or None — 'LONDON_OPEN', 'NY_OPEN', 'LONDON_CLOSE', or None
+        - 'is_in_killzone': bool — True if in any killzone
+        - 'is_asian_range': bool — True if in Asian range accumulation window
+        - 'killzone_minutes_remaining': int — minutes until current killzone ends
+        """
+        if dt is None:
+            dt = datetime.now(timezone.utc)
+        elif dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+
+        hour = dt.hour
+        active_kz = None
+        minutes_remaining = 0
+
+        for kz_name, (start_h, end_h) in SessionEngine.KILLZONES.items():
+            if start_h <= hour < end_h:
+                active_kz = kz_name
+                minutes_remaining = (end_h - hour) * 60 - dt.minute
+                break
+
+        is_asian = SessionEngine.ASIAN_RANGE[0] <= hour < SessionEngine.ASIAN_RANGE[1]
+
+        return {
+            "active_killzone": active_kz,
+            "is_in_killzone": active_kz is not None,
+            "is_asian_range": is_asian,
+            "killzone_minutes_remaining": minutes_remaining
+        }
+
+    @staticmethod
+    def is_forex_killzone_active(dt: Optional[datetime] = None) -> bool:
+        """Quick check: is the current time within a Forex killzone window?
+        Used as a hard filter for Forex entries — only trade during London/NY killzones."""
+        kz = SessionEngine.get_active_killzone(dt)
+        return kz["is_in_killzone"]
 
     @staticmethod
     def get_market_trading_status(symbol: str = "XAUUSD", dt: Optional[datetime] = None) -> Dict[str, Any]:

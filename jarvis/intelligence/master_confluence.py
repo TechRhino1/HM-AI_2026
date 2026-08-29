@@ -9,15 +9,26 @@ Sources researched (2026):
 - ICT Silver Bullet: sweep + displacement + FVG inside Kill Zone — 50-65% win
 - Triple Confluence: Breaker Block + FVG + HTF Order Block — "probability is absurd"
 """
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import logging
+import pandas as pd
+from jarvis.market.fair_value_gap import FairValueGapEngine
+from jarvis.market.sessions import SessionEngine
 
 logger = logging.getLogger("JARVIS_MasterConfluence")
 
 class MasterConfluenceEngine:
+    def __init__(self):
+        self.fvg_engine = FairValueGapEngine()
+
     def score(self, context, regime, rr_ratio: float, ai_score: float, mtf_data: Dict[str, Any] = None) -> Dict[str, Any]:
         breakdown: Dict[str, float] = {}
         details: Dict[str, str] = {}
+        
+        df = None
+        if mtf_data and "primary" in mtf_data:
+            df = mtf_data["primary"]
+            
         try:
             reg = str(getattr(regime, "primary_regime", "RANGE"))
             reg = reg.upper() if isinstance(regime.primary_regime, str) else getattr(regime.primary_regime, "value", "RANGE").upper()
@@ -94,18 +105,22 @@ class MasterConfluenceEngine:
             sess = getattr(context, "session", None)
             hour = int(getattr(sess, "utc_hour", 12) or 12)
             is_prime = bool(getattr(sess, "is_prime_session", False))
+            kz_info = SessionEngine.get_active_killzone(getattr(context, "timestamp", None))
             kill = 0
-            if is_prime:
-                kill += 8
+            if kz_info.get("is_in_killzone", False):
+                kill += 10
+                details["killzone"] = f"active killzone={kz_info.get('active_killzone')}"
+            elif is_prime:
+                kill += 6
                 details["killzone"] = f"prime hour={hour}"
-                if hour in (3, 10, 14): kill += 6
+            
             liq = getattr(context, "liquidity", None)
             mo = getattr(context, "momentum", None)
             disp = False
-            if mo and float(getattr(mo, "adx", 0) or 0) >= 25 and getattr(st, "bos", False):
+            if mo and float(getattr(mo, "adx", 0) or 0) >= 22 and getattr(st, "bos", False):
                 disp = True
             if getattr(liq, "sweep_detected", False) and disp:
-                kill += 6
+                kill += 8
         except Exception:
             kill = 0
         kill = min(20, kill)
@@ -115,13 +130,34 @@ class MasterConfluenceEngine:
             has_fvg = False
             has_ob = False
             has_breaker = False
-            if st:
+            
+            # Use dedicated FairValueGapEngine if primary dataframe is available
+            fvg_res = None
+            if df is not None and len(df) >= 10:
+                try:
+                    fvg_res = self.fvg_engine.analyze(df)
+                except Exception:
+                    fvg_res = None
+                    
+            if fvg_res:
+                if fvg_res.get("price_in_fvg") or fvg_res.get("active_bullish_fvg") or fvg_res.get("active_bearish_fvg"):
+                    has_fvg = True
+                    triple += 7
+                if fvg_res.get("price_in_ob") or fvg_res.get("active_bullish_ob") or fvg_res.get("active_bearish_ob"):
+                    has_ob = True
+                    triple += 7
+                if fvg_res.get("fvg_ob_confluence", False):
+                    triple += 5
+                    details["fvg_ob_confluence"] = "FVG + OB overlapping confluence zone"
+            elif st:
                 fvgs = getattr(st, "fair_value_gaps", []) or []
                 if len(fvgs) > 0: has_fvg = True; triple += 7
                 obs = getattr(st, "order_blocks", []) or []
                 if len(obs) > 0: has_ob = True; triple += 7
-                if getattr(st, "bos", False) and getattr(st, "choch", False): has_breaker = True; triple += 6
-                elif getattr(st, "bos", False): triple += 3
+
+            if getattr(st, "bos", False) and getattr(st, "choch", False): has_breaker = True; triple += 6
+            elif getattr(st, "bos", False): triple += 3
+            
             mtf_align = getattr(context, "mtf_alignment", {}) or {}
             bullish = sum(1 for v in mtf_align.values() if v == "BULLISH")
             bearish = sum(1 for v in mtf_align.values() if v == "BEARISH")
@@ -132,9 +168,9 @@ class MasterConfluenceEngine:
         triple = min(20, triple)
         breakdown["triple_confluence"] = triple
         total = sum(breakdown.values())
-        if total >= 75: tier, boost = "ELITE", 0.05
-        elif total >= 60: tier, boost = "HIGH", 0.03
-        elif total >= 45: tier, boost = "MODERATE", 0.01
-        elif total >= 30: tier, boost = "LOW", 0.00
+        if total >= 70: tier, boost = "ELITE", 0.05
+        elif total >= 55: tier, boost = "HIGH", 0.03
+        elif total >= 40: tier, boost = "MODERATE", 0.015
+        elif total >= 25: tier, boost = "LOW", 0.00
         else: tier, boost = "WEAK", 0.00
         return {"breakdown": breakdown, "total": total, "tier": tier, "prob_boost": boost, "details": details}

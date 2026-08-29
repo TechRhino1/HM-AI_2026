@@ -35,6 +35,8 @@ from jarvis.intelligence.gate_policy import AdaptiveGatePolicy, HARD_GATES
 from jarvis.intelligence.ai_dissector import AIDissector
 from jarvis.intelligence.realtime_optimizer import RealtimeOptimizer
 from jarvis.intelligence.master_confluence import MasterConfluenceEngine
+from jarvis.market.fair_value_gap import FairValueGapEngine
+from jarvis.intelligence.mean_reversion import MeanReversionEngine
 
 
 def _is_forex(symbol: str) -> bool:
@@ -74,6 +76,9 @@ class DecisionEngine:
         self.ai_dissector = ai_dissector or AIDissector()
         self.realtime_optimizer = realtime_optimizer or RealtimeOptimizer()
         self.master_confluence = master_confluence or MasterConfluenceEngine()
+        self.fvg_engine = FairValueGapEngine()
+        self.mean_reversion_engine = MeanReversionEngine()
+
 
 
     def _compute_bias_and_levels(
@@ -122,42 +127,35 @@ class DecisionEngine:
         )
         is_ranging = regime.primary_regime in (MarketRegime.RANGE, MarketRegime.LOW_VOLATILITY)
         is_breakout = regime.primary_regime in (MarketRegime.BREAKOUT, MarketRegime.HIGH_VOLATILITY)
+        is_fx = _is_forex(context.symbol)
 
         if is_strong_trend:
-<<<<<<< HEAD
-            sl_default_mult = 1.2       # Shallow pullbacks in strong trends: tight structure-anchored SL
-            sl_min_bound_mult = 0.5     # Tighter lower bound
-            sl_max_bound_mult = 2.2     # Tighter upper bound
-            sl_buffer_mult = 0.12       # Tighter structural buffer
-            tp_multiplier = 4.2         # Was 3.8 — stronger trends now target 4.2R for higher expectancy
-=======
-            sl_default_mult = 0.85      # Shallow pullbacks in strong trends: tight structure-anchored SL
-            sl_min_bound_mult = 0.35    # Tighter lower bound
-            sl_max_bound_mult = 1.50    # Controlled upper bound
-            sl_buffer_mult = 0.10       # Tighter structural buffer
-            tp_multiplier = 3.80        # Strong confirmed trend — let winners run for massive R:R
->>>>>>> 6a28b41 (feat: real MT5 data backtesting, MTF D1/H4 synthesis, order flow absorption defense, and institutional profit scaling)
-            first_target_volume_pct = 0.25  # 25% scale-out, 75% rides to target
+            sl_default_mult = 1.35 if is_fx else 0.85   # Forex needs 1.35 ATR buffer against spread noise; Gold/BTC uses tight 0.85
+            sl_min_bound_mult = 0.80 if is_fx else 0.35
+            sl_max_bound_mult = 2.20 if is_fx else 1.50
+            sl_buffer_mult = 0.20 if is_fx else 0.10
+            tp_multiplier = 2.20 if is_fx else 4.20     # Forex targets 2.2R, Gold/BTC run up to 4.2R
+            first_target_volume_pct = 0.50 if is_fx else 0.25
         elif is_ranging:
-            sl_default_mult = 1.00      # Safe structural buffer outside chop
-            sl_min_bound_mult = 0.40
-            sl_max_bound_mult = 1.80
-            sl_buffer_mult = 0.15
-            tp_multiplier = 2.20        # Target internal range liquidity
+            sl_default_mult = 1.35 if is_fx else 1.00
+            sl_min_bound_mult = 0.80 if is_fx else 0.40
+            sl_max_bound_mult = 2.20 if is_fx else 1.80
+            sl_buffer_mult = 0.20 if is_fx else 0.15
+            tp_multiplier = 2.00 if is_fx else 2.20
             first_target_volume_pct = 0.50
         elif is_breakout:
-            sl_default_mult = 0.90
-            sl_min_bound_mult = 0.35
-            sl_max_bound_mult = 1.60
-            sl_buffer_mult = 0.12
-            tp_multiplier = 3.20        # Breakout expansion target
+            sl_default_mult = 1.35 if is_fx else 0.90
+            sl_min_bound_mult = 0.80 if is_fx else 0.35
+            sl_max_bound_mult = 2.20 if is_fx else 1.60
+            sl_buffer_mult = 0.20 if is_fx else 0.12
+            tp_multiplier = 2.20 if is_fx else 3.20
             first_target_volume_pct = 0.50
         else:
-            sl_default_mult = 1.00
-            sl_min_bound_mult = 0.40
-            sl_max_bound_mult = 2.00
-            sl_buffer_mult = 0.15
-            tp_multiplier = 2.80        # Default baseline institutional R:R
+            sl_default_mult = 1.35 if is_fx else 1.00
+            sl_min_bound_mult = 0.80 if is_fx else 0.40
+            sl_max_bound_mult = 2.20 if is_fx else 2.00
+            sl_buffer_mult = 0.20 if is_fx else 0.15
+            tp_multiplier = 2.20 if is_fx else 2.80
             first_target_volume_pct = 0.50
 
         spread_dist = max(0.0, context.ask - context.bid) if (context.ask > 0 and context.bid > 0) else (context.volatility.current_spread_pips * spec.pip_size)
@@ -412,9 +410,11 @@ class DecisionEngine:
         if _is_forex(context.symbol):
             required_win_p = max(required_win_p, 0.54)
             min_score = max(min_score, 78.0)
+            min_rr = 1.8
         elif "BTC" in context.symbol.upper():
-            required_win_p = max(required_win_p, 0.54)
-            min_score = max(min_score, 78.0)
+            required_win_p = max(required_win_p, 0.52)
+            min_score = max(min_score, 76.0)
+            min_rr = 1.8
 
         # Real-time per-symbol optimizer — adapts thresholds from live win-rate (neutral in backtests)
         try:
@@ -446,9 +446,10 @@ class DecisionEngine:
 
         of_trap = context.order_flow.get("absorption_trap") if hasattr(context, "order_flow") and isinstance(context.order_flow, dict) else None
         is_of_trap = (tentative_bias == "BUY" and of_trap == "BUYER_ABSORPTION_TRAP") or (tentative_bias == "SELL" and of_trap == "SELLER_ABSORPTION_TRAP")
-        is_prime_session_valid = (not _is_forex(context.symbol)) or getattr(context.session, "is_prime_session", True)
+        kz_active = SessionEngine.is_forex_killzone_active(getattr(context, "timestamp", None))
+        is_prime_session_valid = (not _is_forex(context.symbol)) or kz_active or (ai_score >= 82.0 and calibrated_win_p >= 0.58)
 
-        min_sl_atr_mult = 0.6 if is_micro_mode else (1.2 if "BTC" in context.symbol.upper() else 0.8)
+        min_sl_atr_mult = 0.6 if is_micro_mode else (1.0 if "BTC" in context.symbol.upper() else 0.75)
 
         # 16-Point Comprehensive Institutional Quality Gate Matrix
         gate_checks = {
@@ -648,6 +649,36 @@ class DecisionEngine:
         if _master_tier in ("ELITE", "HIGH"):
             logger.info(f"[{context.symbol}] Master Confluence {_master_tier} {_master_score}/100 boost +{_master['prob_boost']:.3f} {_master['breakdown']}")
 
+        # 4.8 ICT FVG & Order Block Imbalance Analysis
+        if mtf_data and "primary" in mtf_data and not mtf_data["primary"].empty:
+            try:
+                _fvg_res = self.fvg_engine.analyze(mtf_data["primary"])
+                if _fvg_res:
+                    _in_fvg = _fvg_res.get("price_in_fvg", False)
+                    _in_ob = _fvg_res.get("price_in_ob", False)
+                    _fvg_ob_conf = _fvg_res.get("fvg_ob_confluence", False)
+                    _ote = _fvg_res.get("ote_zone", {})
+                    _in_ote_dir = (tentative_bias == "BUY" and _ote.get("direction") == "BULLISH") or (tentative_bias == "SELL" and _ote.get("direction") == "BEARISH")
+                    
+                    _fvg_boost = 0.0
+                    if _in_fvg or _in_ob:
+                        _fvg_boost += 0.015
+                        ai_score = min(100.0, ai_score + 3.0)
+                    if _fvg_ob_conf:
+                        _fvg_boost += 0.02
+                        ai_score = min(100.0, ai_score + 4.0)
+                    if _in_ote_dir:
+                        _fvg_boost += 0.015
+                        ai_score = min(100.0, ai_score + 2.0)
+                        
+                    if _fvg_boost > 0:
+                        calibrated_win_p = min(0.95, calibrated_win_p + _fvg_boost)
+                        final_win_p = min(0.95, final_win_p + _fvg_boost)
+                        logger.info(f"[{context.symbol}] ICT FVG/OB Confluence boost +{_fvg_boost:.3f} (in_fvg={_in_fvg}, in_ob={_in_ob}, fvg_ob_conf={_fvg_ob_conf})")
+            except Exception as e:
+                logger.warning(f"[{context.symbol}] FVG analysis error: {e}")
+
+
         # Recompute EV from the (now fully adjusted) blended win probability so the
         # Expected Value shown/used for gating is consistent with the displayed probability.
         if tentative_bias in ["BUY", "SELL"]:
@@ -665,15 +696,19 @@ class DecisionEngine:
 
         st = context.structure
         premium_discount_valid = True
-        # Softened: was <60 / >-60, now <40 / >-40. Strong trend (+/-40) can buy in premium/sell in discount.
-        # This was a hard block that killed valid exhaustion trades; now requires stricter alignment only.
-        if tentative_bias == "BUY" and st.discount_premium_zone == "PREMIUM" and context.momentum.trend_score < 40:
-            # Check for exhaustion: if BOS or sweep confirms reversal, allow even in premium
-            if not (context.structure.bos or context.liquidity.sweep_detected):
+        # Institutional ICT Smart Money Rule: Never BUY in Premium, Never SELL in Discount unless runaway momentum
+        if _is_forex(context.symbol) or "BTC" in context.symbol.upper():
+            if tentative_bias == "BUY" and st.discount_premium_zone == "PREMIUM" and context.momentum.trend_score < 55:
                 premium_discount_valid = False
-        elif tentative_bias == "SELL" and st.discount_premium_zone == "DISCOUNT" and context.momentum.trend_score > -40:
-            if not (context.structure.bos or context.liquidity.sweep_detected):
+            elif tentative_bias == "SELL" and st.discount_premium_zone == "DISCOUNT" and context.momentum.trend_score > -55:
                 premium_discount_valid = False
+        else:
+            if tentative_bias == "BUY" and st.discount_premium_zone == "PREMIUM" and context.momentum.trend_score < 40:
+                if not (context.structure.bos or context.liquidity.sweep_detected):
+                    premium_discount_valid = False
+            elif tentative_bias == "SELL" and st.discount_premium_zone == "DISCOUNT" and context.momentum.trend_score > -40:
+                if not (context.structure.bos or context.liquidity.sweep_detected):
+                    premium_discount_valid = False
 
         planned_risk_dollars = max(0.50, account_balance * (risk_per_trade_pct / 100.0))
 

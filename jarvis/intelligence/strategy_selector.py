@@ -7,6 +7,7 @@ Features:
 from typing import Dict, Any, List, Optional
 from jarvis.data.schemas import MarketRegime, RegimeOutput, MarketContext
 from jarvis.learning.strategy_bandit import StrategyBandit
+from jarvis.data.symbol_registry import resolve as resolve_symbol
 
 class StrategySelector:
     """Selects and ranks candidate trading strategies with dynamic context awareness & reinforcement learning."""
@@ -65,7 +66,65 @@ class StrategySelector:
         if total > 0:
             weights = {k: v / total for k, v in weights.items()}
 
-        # Evaluate Dynamic Context for standard mode
+        # =========================================================================
+        # 2.5. ASSET-CLASS SPECIFIC STRATEGY PROFILES
+        # Core insight: Gold trends, Forex mean-reverts, BTC swings.
+        # One-size-fits-all is why Forex loses with trend-following.
+        # =========================================================================
+        asset_class = "UNKNOWN"
+        if context and hasattr(context, "symbol"):
+            try:
+                spec = resolve_symbol(context.symbol)
+                asset_class = getattr(spec, "asset_class", "").upper()
+            except Exception:
+                pass
+
+        if asset_class == "FOREX" and r in [MarketRegime.RANGE, MarketRegime.LOW_VOLATILITY]:
+            # Forex in range → 75% mean reversion, 25% liquidity sweep reversal
+            weights["RANGE_MEAN_REVERSION"] = 0.75
+            weights["LIQUIDITY_SWEEP_REVERSAL"] = 0.25
+            weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.00
+            weights["TREND_FOLLOWING"] = 0.00
+            weights["TREND_PULLBACK"] = 0.00
+            weights["BREAKOUT_EXPANSION"] = 0.00
+            weights["MICRO_ACCOUNT_ADAPTIVE"] = 0.00
+            total = sum(weights.values())
+            if total > 0:
+                return {k: round(v / total, 3) for k, v in weights.items()}
+
+        elif asset_class == "FOREX" and r in [MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR]:
+            # Forex in trend → strictly trade pullbacks to institutional discount/premium & sweeps (never chase breakouts)
+            weights["TREND_PULLBACK"] = 0.60
+            weights["LIQUIDITY_SWEEP_REVERSAL"] = 0.25
+            weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.15
+            weights["TREND_FOLLOWING"] = 0.00
+            weights["RANGE_MEAN_REVERSION"] = 0.00
+            weights["BREAKOUT_EXPANSION"] = 0.00
+            weights["MICRO_ACCOUNT_ADAPTIVE"] = 0.00
+            total = sum(weights.values())
+            if total > 0:
+                return {k: round(v / total, 3) for k, v in weights.items()}
+
+        elif asset_class == "COMMODITY" and r in [MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR]:
+            # Gold in trend → heavy trend-following (Gold's natural behavior)
+            weights["TREND_FOLLOWING"] = 0.50
+            weights["TREND_PULLBACK"] = 0.30
+            weights["BREAKOUT_EXPANSION"] = 0.15
+            weights["LIQUIDITY_SWEEP_REVERSAL"] = 0.05
+            weights["RANGE_MEAN_REVERSION"] = 0.00
+            weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.00
+            weights["MICRO_ACCOUNT_ADAPTIVE"] = 0.00
+
+        elif asset_class == "CRYPTO":
+            # BTC → balanced swing/momentum with higher conviction thresholds
+            weights["TREND_FOLLOWING"] = 0.30
+            weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.25
+            weights["BREAKOUT_EXPANSION"] = 0.20
+            weights["LIQUIDITY_SWEEP_REVERSAL"] = 0.15
+            weights["TREND_PULLBACK"] = 0.10
+            weights["RANGE_MEAN_REVERSION"] = 0.00
+            weights["MICRO_ACCOUNT_ADAPTIVE"] = 0.00
+
         if context:
             st = context.structure
             mom = context.momentum
