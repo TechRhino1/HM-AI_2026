@@ -1,0 +1,704 @@
+====================================================================================================
+               HM AI 4.0 / JARVIS AI TRADING ARCHITECTURE
+               COMPREHENSIVE MASTER PROJECT DOCUMENTATION
+====================================================================================================
+Document Version : 4.0.0 (Production Release)
+System Codename  : HM-AI-2026 / JARVIS Autonomous Quantitative Trading Platform
+Architecture     : Multi-Agent Parallel Intelligence, SMC/ICT/Wyckoff Matrix, Online ML & Adaptive Risk
+Classification   : Institutional Quantitative Execution Engine
+Release Date     : August 2026
+
+====================================================================================================
+TABLE OF CONTENTS
+====================================================================================================
+ 1. SYSTEM OVERVIEW & HIGH-LEVEL ARCHITECTURE
+ 2. DIRECTORY STRUCTURE & COMPONENT CATALOG
+ 3. AGENTS, SUBAGENTS & PARALLEL ANALYST CLUSTER
+ 4. MULTI-ASSET STRATEGIES & SMC / ICT / WYCKOFF FRAMEWORK
+ 5. AI DECISION ENGINE, MASTER CONFLUENCE & DYNAMIC LEVELS ENGINE
+ 6. MACHINE LEARNING & REINFORCEMENT LEARNING SUITE
+ 7. AI SELF-LEARNING & REAL-TIME OPTIMIZER ENGINES
+ 8. RISK MANAGEMENT, CAPITAL PRESERVATION & 15-GATE SAME-SYMBOL MATRIX
+ 9. MT5 INTEGRATION & DYNAMIC BROKER SYMBOL RESOLUTION
+10. INDIA MARKETS (NSE/BSE & F&O OPTIONS DESK) & US STOCKS SCREENER
+11. WEB TERMINAL, UI, APIS, TELEMETRY & COPILOT
+12. BACKTESTING LAB, MONTE CARLO & WALK-FORWARD VALIDATION
+13. COMPREHENSIVE CODEBASE AUDIT FINDINGS CATALOG
+14. VERIFICATION, TEST SUITE & DEPLOYMENT RUNBOOKS
+
+====================================================================================================
+1. SYSTEM OVERVIEW & HIGH-LEVEL ARCHITECTURE
+====================================================================================================
+HM AI 4.0 (JARVIS) is a state-of-the-art, institutional-grade autonomous quantitative trading system
+engineered for high-precision algorithmic execution across global markets: Forex, Commodities (Gold/Oil),
+Cryptocurrencies, US Equities, and Indian Equities / F&O Options.
+
+The architecture is built upon four fundamental pillars:
+  1. Multi-Agent Parallel Intelligence: Independent domain analysts execute in parallel threads to
+     evaluate Market Structure, Momentum, Liquidity, Volatility, Macroeconomics, and Portfolio Risk,
+     with an adversarial Devil's Advocate agent challenging every prospective signal.
+  2. Proven 100-Year Market Confluence: Synthesizes Smart Money Concepts (SMC), Inner Circle Trader (ICT),
+     Wyckoff Accumulation/Distribution phases, and Mark Minervini SEPA / Volatility Contraction Patterns (VCP).
+  3. Continuous Self-Learning & Online Machine Learning: Employs Online Stochastic Gradient Descent (SGD)
+     with L2 Regularization, Multi-Armed Bandits (LinUCB + Thompson Sampling + EXP3), Fractional
+     Differentiation feature transformers, and Meta-Labelers to dynamically adapt to evolving market regimes.
+  4. Multi-Layered Capital Preservation: Enforces fractional Kelly criterion position sizing, 15-gate
+     adaptive same-symbol risk filtering, strict equity tier constraints, hardware-level emergency stop
+     guards, and consecutive loss cooldown mechanisms.
+
+High-Level Operational Flow:
+  [MT5 / Live Data Feed]
+          │
+          ▼
+  [Market Context & Multi-Timeframe Engine (D1, H4, H1, M15, M5, M1)]
+          │
+          ▼
+  [Market Regime Classifier (12 Canonical Regimes)]
+          │
+          ▼
+  [Parallel Analyst Cluster (7 Domain Analysts + Devil's Advocate)]
+          │
+          ▼
+  [AI Decision Engine & Master Confluence Scorer]
+          │
+          ▼
+  [Online ML Predictor & Meta-Labeler Confidence Validation]
+          │
+          ▼
+  [15-Gate Adaptive Risk Engine & Account Tier Sizer]
+          │
+          ▼
+  [State Synchronizer & Timeout-Guarded MT5 Execution Gateway]
+          │
+          ▼
+  [Position Monitor, Breakeven Ratchet & Dynamic Scale-Out Engine]
+          │
+          ▼
+  [Self-Learning SQLite Feedback Loop & Realtime Optimizer]
+
+====================================================================================================
+2. DIRECTORY STRUCTURE & COMPONENT CATALOG
+====================================================================================================
+Root Directory: `c:\xampp\htdocs\HM-AI_2026`
+
+HM-AI_2026/
+├── HM_start.py                     # Primary Autonomous Launcher (Engine + Web + Mobile Tunnel)
+├── HM_start.bat                    # Windows Batch Launcher Script
+├── HM_start.ps1                    # PowerShell Launcher Script
+├── jarvis.py                       # CLI Entrypoint for Backtesting, Live Sweeps & Audits
+├── pytest.ini                      # Pytest configuration (testpaths = tests)
+├── requirements.txt                # Production Python dependencies
+├── baseline_1y_backtest_report.json# Baseline 1-year backtest validation report
+├── jarvis_history.db               # SQLite database for executed trades, telemetry & self-learning
+├── jarvis_online_ml_weights.json   # Persisted SGD weights and feature biases
+├── jarvis_bandit_state.json        # Persisted Multi-Armed Bandit state
+├── jarvis_circuit_state.db         # Persistent circuit breaker storage
+├── jarvis_drawdown_state.db        # Persistent drawdown tracker database
+│
+├── jarvis/                         # Primary Production Framework Package
+│   ├── analysts/                   # Parallel Multi-Agent Analyst Cluster
+│   │   ├── base_analyst.py         # Abstract Base Analyst Interface & BaseReport
+│   │   ├── structure_analyst.py    # Market Structure & Swing Break Analyst
+│   │   ├── momentum_analyst.py     # Directional Velocity & ADX/RSI Analyst
+│   │   ├── liquidity_analyst.py    # Order Book, Sweeps & Equal H/L Analyst
+│   │   ├── volatility_analyst.py   # ATR, Bollinger & Squeeze Analyst
+│   │   ├── macro_analyst.py        # DXY, Yields, Calendar & News Analyst
+│   │   ├── risk_analyst.py         # Portfolio Heat & Exposure Gate Analyst
+│   │   ├── devil_advocate.py       # Adversarial Challenger & Trap Identifier
+│   │   └── parallel_runner.py      # ThreadPoolExecutor Concurrent Dispatcher
+│   ├── api/                        # Web Terminal & REST API Infrastructure
+│   │   ├── server.py               # HTTP/SSE Telemetry, Rates, Radar & Action Server
+│   │   ├── copilot.py              # JARVIS AI Copilot Reasoning & Natural Language Engine
+│   │   └── remote_auth.py          # Secure JWT/Session Token & Role-Based Auth Engine
+│   ├── application/                # Lifecycle, State & Orchestration
+│   │   ├── orchestrator.py         # Master System Orchestrator & Watchdog Supervisor
+│   │   ├── state_manager.py        # Central Reactive State Store (GLOBAL_STATE)
+│   │   ├── event_bus.py            # Pub/Sub Event Messaging Bus (GLOBAL_EVENT_BUS)
+│   │   └── timeout_guard.py        # Robust Timeout Protection & Synchronous Fallback
+│   ├── backtesting/                # Backtesting & Quantitative Simulation Lab
+│   │   ├── engine.py               # Event-Driven Multi-Asset Backtesting Engine
+│   │   ├── metrics.py              # Institutional Performance Metrics Calculator
+│   │   ├── monte_carlo.py          # Monte Carlo Price & Equity Curve Simulator
+│   │   └── walk_forward.py         # Walk-Forward Optimization & Validation Suite
+│   ├── config/                     # System Settings & Parameter Registry
+│   │   └── settings.py             # Global Configuration Flags, Limits & Tunables
+│   ├── data/                       # Schemas, Database & Symbol Registry
+│   │   ├── schemas.py              # Strongly-Typed Dataclasses & Enums
+│   │   ├── database.py             # Thread-Safe SQLite Trade Logger & Memory
+│   │   ├── market_data_provider.py # Real-Time / Fallback OHLCV Candle Provider
+│   │   └── symbol_registry.py      # Centralized Symbol Specification & Alias Resolver
+│   ├── execution/                  # Trade Execution & State Synchronization
+│   │   ├── mt5_client.py           # Thread-Safe MetaTrader 5 Execution Gateway
+│   │   ├── execution_engine.py     # Order Routing, Slippage Guard & Retry Logic
+│   │   ├── order_manager.py        # Order Modification, SL/TP Sanitizer & Sizing
+│   │   ├── position_monitor.py     # Live Position Tracker, Breakeven Ratchet & Partials
+│   │   └── state_synchronizer.py   # Broker State Sync & Position Reconciliation
+│   ├── india/                      # Indian Equity & F&O Options Trading Desk
+│   │   ├── india_engine.py         # Technical Breakout & Trend Scanner for NSE/BSE
+│   │   ├── india_service.py        # HTTP Service Dispatcher for Indian Market Endpoints
+│   │   ├── options_engine.py       # F&O Option Chain, Greeks & Volatility Surface
+│   │   ├── options_signal_engine.py# Options Buy/Sell Strategy Generator
+│   │   ├── gamma_exposure.py       # Dealer Gamma (GEX), Vanna & Charm Flow Engine
+│   │   ├── greeks.py               # Black-Scholes Analytical Greeks (Delta, Gamma, Vega, etc.)
+│   │   ├── pcr_max_pain.py         # Put-Call Ratio & Max Pain Strike Calculator
+│   │   ├── nse_rules.py            # NSE/BSE Trading Hours, Circuit Filters & Tick Rules
+│   │   ├── risk_engine.py          # Option Buying & Writing Risk Matrix
+│   │   └── universe.py             # Nifty 50, Bank Nifty & Top 100 F&O Stock Registry
+│   ├── intelligence/               # Core AI Decision, Confluence & Optimization
+│   │   ├── decision_engine.py      # Final Trade Quality Gate & Decision Matrix
+│   │   ├── master_confluence.py    # 100-Year Confluence Synthesizer (Wyckoff/ICT/SEPA/VCP)
+│   │   ├── dynamic_levels.py       # Mathematical Dynamic SL, TP & Scale-Out Engine
+│   │   ├── regime_engine.py        # Market Regime Classifier (12 Regimes)
+│   │   ├── self_learning.py        # SQLite Empirical Pattern Memory & EV Multiplier
+│   │   ├── realtime_optimizer.py   # Rolling Win-Rate PnL Feedback Optimizer
+│   │   ├── meta_labeler.py         # Lopez de Prado ML Meta-Labeling Model
+│   │   ├── confidence.py           # Isotonic & Empirical Confidence Calibration
+│   │   └── strategy_selector.py    # Contextual Strategy Selector & Allocation
+│   ├── learning/                   # Machine Learning Models & Transformers
+│   │   ├── online_ml_predictor.py  # 9-Dimensional Online SGD Predictor with L2 Regularization
+│   │   ├── ensemble_bandit.py      # LinUCB + Thompson Sampling + EXP3 Multi-Armed Bandit
+│   │   ├── fractional_diff.py      # Fixed-Width Window Fractional Differentiation Transformer
+│   │   ├── sample_weights.py       # Return-Attributed Sample Weighting
+│   │   ├── strategy_bandit.py      # Strategy Weight Adaptor
+│   │   ├── strategy_memory.py      # Regime-Strategy Win Matrix
+│   │   └── trade_memory.py         # Structured In-Memory Trade Record Tracker
+│   ├── market/                     # Market Microstructure & Signal Detectors
+│   │   ├── market_context.py       # Multi-Timeframe Context Aggregator
+│   │   ├── market_structure.py     # Swing High/Low, BOS & CHoCH Detector
+│   │   ├── fair_value_gap.py       # Institutional FVG & Imbalance Detector
+│   │   ├── liquidity.py            # Liquidity Sweep & Equal High/Low Detector
+│   │   ├── momentum.py             # ADX, DI+, DI-, RSI & Directional Velocity
+│   │   ├── volatility.py           # ATR, Bollinger Bands & Keltner Squeeze
+│   │   ├── correlations.py         # Cross-Asset Correlation Matrix & Heat
+│   │   ├── sessions.py             # London, New York, Asian & Killzone Schedules
+│   │   └── news.py                 # Macro Calendar & High-Impact Event Filter
+│   ├── risk/                       # Risk Management & Capital Preservation
+│   │   ├── risk_engine.py          # Master Risk Authorizer & 15-Gate Same-Symbol Validator
+│   │   ├── position_sizing.py      # Fractional Kelly & Contract-Adjusted Position Sizer
+│   │   ├── account_tier.py         # Account Tier Matrix & Micro-Account Lot Caps
+│   │   ├── loss_cooldown.py        # Consecutive Loss Pauser & Streak Cooldown Manager
+│   │   ├── circuit_breaker.py      # Daily / Max Loss Circuit Breaker with Persistence
+│   │   ├── drawdown.py             # High-Water Mark Drawdown Guard
+│   │   ├── portfolio_heat.py       # Portfolio Heat Index & Correlation Allocation
+│   │   ├── hrp_allocator.py        # Hierarchical Risk Parity Capital Allocator
+│   │   └── exposure.py             # Currency & Single-Asset Exposure Limits
+│   ├── stocks/                     # US Equities Screener & Intelligence
+│   │   ├── stock_engine.py         # Multi-Factor Equity Breakout & Monte Carlo Engine
+│   │   ├── stock_service.py        # HTTP Service Dispatcher for Stock Screener Endpoints
+│   │   ├── universe.py             # S&P 500, Nasdaq 100 & High-Beta Stock Registry
+│   │   └── news_analyzer.py        # Equity Catalyst & News Sentiment Parser
+│   └── ui/                         # Web Dashboard Static Frontend Assets
+│       ├── templates/              # HTML5 Single Page Terminal UIs (terminal.html, stocks.html, etc.)
+│       └── static/                 # Stylesheets, JS Components, Fonts & Charting Libraries
+│
+├── core/                           # Core Legacy Compatibility Infrastructure
+│   ├── data_engine.py              # Legacy Data Feed Adapter
+│   ├── jarvis_supervisor.py        # Process Supervisor & Auto-Restarter
+│   ├── logger.py                   # Central Structured Logging Formatter
+│   ├── mt5_client.py               # Core MT5 Connection Wrapper
+│   └── telegram_notifier.py        # Real-Time Telegram Alerting Bot
+│
+├── engines/                        # Specialized Analytical Calculation Engines
+│   ├── ai_decision_engine.py       # Standalone Confluence Decision Calculator
+│   ├── amd_phase_engine.py         # Accumulation-Manipulation-Distribution Classifier
+│   ├── dynamic_sl_tp.py            # Legacy Dynamic SL/TP Multiplier
+│   ├── fvg_engine.py               # Fair Value Gap Extraction Engine
+│   ├── liquidity_engine.py         # Buy-Side / Sell-Side Liquidity Pool Tracker
+│   ├── market_structure.py         # High-Low Pivots & Break of Structure
+│   ├── master_trader_engine.py     # Apex Master Trader Synthesis Engine
+│   ├── ml_optimizer_engine.py      # Machine Learning Hyperparameter Optimizer
+│   ├── ml_production_engine.py     # Production Online Model Inference Engine
+│   ├── news_engine.py              # Economic News Scraper & Calendar
+│   ├── orderflow_engine.py         # Footprint & Tick Delta Imbalance
+│   ├── regime_engine.py            # Statistical Regime Classification
+│   ├── risk_engine.py              # Core Risk Constraints Validator
+│   ├── screener_engine.py          # Real-Time Multi-Asset Screener
+│   ├── self_learning_engine.py     # Historical Edge Extractor
+│   ├── strategy_engine.py          # Base Strategy Engine
+│   ├── trade_manager.py            # Trade Modification & Lifecycle Manager
+│   ├── trade_plan_engine.py        # Pre-Execution Trade Plan Synthesizer
+│   ├── trend_engine.py             # Trend Velocity & EMA Alignment
+│   └── volatility_engine.py        # Historical & Implied Volatility Estimator
+│
+├── strategies/                     # Specialized Algorithmic Trading Strategies
+│   └── scalping_strategy.py        # High-Frequency Sub-Minute Micro-Scalper
+│
+└── tests/                          # Automated Pytest / Unittest Regression Suite (124 Tests)
+    ├── test_adaptive_same_symbol_risk.py
+    ├── test_advanced_modules.py
+    ├── test_ai_decision.py
+    ├── test_analysts.py
+    ├── test_apex_master_trader_optimization.py
+    ├── test_backtesting_lab.py
+    ├── test_dynamic_levels_and_refactoring.py
+    ├── test_end_to_end.py
+    ├── test_fvg_engine.py
+    ├── test_import_sweep.py
+    ├── test_india_options.py
+    ├── test_integrity_fixes.py
+    ├── test_jarvis_core.py
+    ├── test_loss_cooldown.py
+    ├── test_market_structure.py
+    ├── test_mean_reversion.py
+    ├── test_micro_scalp_engine.py
+    ├── test_position_monitor.py
+    ├── test_regime_engine.py
+    ├── test_regression_fixes.py
+    ├── test_risk_engine.py
+    ├── test_risk_engine_j3.py
+    ├── test_state_synchronizer.py
+    ├── test_system_production.py
+    └── test_timeout_guard.py
+
+====================================================================================================
+3. AGENTS, SUBAGENTS & PARALLEL ANALYST CLUSTER
+====================================================================================================
+HM AI 4.0 utilizes a multi-agent distributed intelligence model. Execution is divided among
+specialized autonomous agents and a parallel cluster of domain experts.
+
+3.1 Master System Agents:
+  - `master-trader` (JarvisOrchestrator): Coordinates market sweeps, initiates parallel analysis,
+    validates risk constraints, reconciles MT5 broker positions, and manages trade execution.
+  - `code-writer`: Responsible for runtime code modification, automated hotfixes, and refactoring
+    within the trading environment without breaking architectural invariants.
+  - `research`: Ingests market whitepapers, backtest datasets, and empirical historical results to
+    tune hyper-parameters and update strategy rules.
+  - `self` (Supervisor & Watchdog): Monitors thread liveness, cleans up stale execution locks, checks
+    MT5 socket connectivity, and enforces emergency fail-safe shutdowns.
+
+3.2 Parallel Analyst Cluster (`jarvis/analysts/parallel_runner.py`):
+Dispatches 7 specialized domain analysts concurrently in parallel threads using `ThreadPoolExecutor(max_workers=8)`
+with a strict 2.0-second timeout ceiling via `TimeoutGuard`.
+
+1. Structure Analyst (`StructureAnalyst`):
+   - Evaluates higher timeframe (HTF) market structure: Swing Highs, Swing Lows, Break of Structure (BOS),
+     and Change of Character (CHoCH).
+   - Generates structural bias (BULLISH / BEARISH / NEUTRAL) and identifies key support/resistance zones.
+
+2. Momentum Analyst (`MomentumAnalyst`):
+   - Analyzes directional momentum using ADX (Average Directional Index), DI+ / DI- spread, RSI divergence,
+     and EMA 20/50/200 slope alignment.
+   - Generates a continuous Trend Score (-100 to +100).
+
+3. Liquidity Analyst (`LiquidityAnalyst`):
+   - Identifies buy-side liquidity (BSL) and sell-side liquidity (SSL) pools, equal highs/lows (EQH/EQL),
+     and institutional stop hunts (liquidity sweeps).
+
+4. Volatility Analyst (`VolatilityAnalyst`):
+   - Measures ATR relative to historical median (ATR Ratio), Bollinger Band bandwidth, and Keltner Squeeze
+     states (Compression vs Expansion).
+
+5. Macro Analyst (`MacroAnalyst`):
+   - Assesses macroeconomic backdrop: US Dollar Index (DXY) momentum, 10-Year Treasury Yields, and high-impact
+     calendar events (FOMC, NFP, CPI) to prevent trading during liquidity vacuums.
+
+6. Risk Analyst (`RiskAnalyst`):
+   - Computes real-time portfolio heat, correlation clustering, currency directional exposure, and account
+     margin utilization.
+
+7. Devil's Advocate Analyst (`DevilAdvocateAnalyst`):
+   - Acts as an adversarial challenger to the tentative trade bias.
+   - Detects liquidity traps, counter-trend traps, exhaustion wicks, and excessive spread friction.
+   - Generates an adversarial penalty score (0.0 to 35.0) that directly deducts from trade quality score.
+
+====================================================================================================
+4. MULTI-ASSET STRATEGIES & SMC / ICT / WYCKOFF FRAMEWORK
+====================================================================================================
+HM AI 4.0 integrates 100 years of proven market theory into a unified algorithmic framework:
+
+4.1 Smart Money Concepts (SMC) & ICT Core Framework:
+  - Fair Value Gaps (FVG): Detects 3-candle imbalance zones (Bullish FVG: Low of candle 3 > High of candle 1;
+    Bearish FVG: High of candle 3 < Low of candle 1). Tracks premium/discount midpoint (CE - Consequent Encroachment).
+  - Order Blocks (OB): Identifies the final opposing candle before a violent displacement that causes BOS.
+  - Breaker Blocks: Identifies failed Order Blocks that transition into powerful opposing support/resistance.
+  - Killzones: Enforces prime institutional liquidity sessions:
+      * London Open Killzone: 07:00 - 10:00 UTC
+      * New York Open Killzone: 12:00 - 15:00 UTC
+      * London Close Killzone: 15:00 - 17:00 UTC
+      * Asian Range Consolidation: 00:00 - 06:00 UTC
+  - ICT Silver Bullet: High-probability 1-hour window (14:00 - 15:00 UTC) executing liquidity sweep + displacement + FVG retest.
+
+4.2 Wyckoff Method Fusion:
+  - Accumulation Phase: Preliminary Support (PS) -> Selling Climax (SC) -> Automatic Rally (AR) -> Secondary Test (ST)
+    -> Phase C Spring (False breakdown liquidity sweep) -> Sign of Strength (SOS) -> Last Point of Support (LPS).
+  - Distribution Phase: Preliminary Supply (PSY) -> Buying Climax (BC) -> Automatic Reaction (AR) -> Secondary Test (ST)
+    -> Phase C Upthrust After Distribution (UTAD) -> Sign of Weakness (SOW) -> Last Point of Supply (LPSY).
+
+4.3 Mark Minervini SEPA & Volatility Contraction Pattern (VCP):
+  - 8-Point Trend Template: Price > 50-day EMA > 150-day EMA > 200-day EMA, 200-day EMA trending upward for >= 1 month,
+    price within 25% of 52-week high, and relative strength ranking >= 70.
+  - VCP Contraction Waves: Detects progressive volume and price range contraction across consecutive swings
+    (Wave 1: ~15-25% depth -> Wave 2: ~8-12% depth -> Wave 3: ~3-5% depth with drying volume before breakout).
+
+4.4 Institutional Setup Tiers:
+  - ELITE (Score >= 70 / Win Prob >= 68%): Full confluence (Triple Confluence: FVG + OB + Breaker + Prime Killzone).
+  - HIGH (Score 55-69 / Win Prob 62-67%): Dual confluence with HTF alignment and positive EV.
+  - MODERATE (Score 40-54 / Win Prob 55-61%): Valid setup with minor adversarial drag or lower timeframe trigger.
+  - LOW / REJECTED (Score < 40 / Win Prob < 55%): Discarded by Quality Gate.
+
+====================================================================================================
+5. AI DECISION ENGINE, MASTER CONFLUENCE & DYNAMIC LEVELS ENGINE
+====================================================================================================
+5.1 Master Confluence Scorer (`MasterConfluenceEngine`):
+Synthesizes multi-factor evidence into a composite 100-point confluence score:
+  - Wyckoff + ICT Fusion (20 pts): Spring/UTAD detection + BOS/CHoCH alignment.
+  - Minervini Trend Template (20 pts): Trend Score velocity + ADX strength.
+  - Volatility Contraction Pattern (20 pts): 3-stage range compression or volatility compression proxy.
+  - ICT Killzone & AMD Phase (20 pts): Execution inside active Killzone + displacement confirmation.
+  - Triple Confluence (20 pts): Confluence of Fair Value Gap, Order Block, and Breaker Block.
+
+5.2 Mathematical Dynamic Levels Engine (`DynamicRiskAndLevelsEngine`):
+Eliminates rigid static tables in favor of continuous mathematical formulas:
+  - Dynamic Volatility Buffer:
+      $$\text{Buffer} = \text{ATR} \times \left( \alpha_{\text{base}} + \beta_{\text{vol}} \times \frac{\text{ATR}_{\text{cur}}}{\text{ATR}_{\text{median}}} + \gamma_{\text{spread}} \times \frac{\text{Spread}_{\text{cur}}}{\text{Spread}_{\text{typ}}} \right)$$
+      where $\alpha_{\text{base}} = 0.12$, $\beta_{\text{vol}} = 0.05$, $\gamma_{\text{spread}} = 0.05$.
+  - Dynamic Structural Stop Loss (SL):
+      * For BUY: $\text{SL} = \min(\text{Swing Low}, \text{OB Low}) - \text{Dynamic Buffer}$
+      * For SELL: $\text{SL} = \max(\text{Swing High}, \text{OB High}) + \text{Dynamic Buffer}$
+  - Liquidity-Anchored Take Profit (TP):
+      * Primary TP anchored to nearest opposing unmitigated Order Block / Liquidity Pool (target R:R 1.5 to 3.5+).
+  - Adaptive Scale-Out Plan:
+      * First Target (50-60% volume): Reached at +1.0R to +1.5R.
+      * Breakeven Ratchet: Automatically moves SL to Entry + Buffer upon First Target fill.
+      * Runner (40-50% volume): Trailed using 1.5x ATR dynamic trailing stop.
+
+====================================================================================================
+6. MACHINE LEARNING & REINFORCEMENT LEARNING SUITE
+====================================================================================================
+6.1 Online Adaptive Machine Learning Predictor (`OnlineMLPredictor`):
+Real-time adaptive binary classifier predicting trade success probability $P(\text{Win})$.
+  - Model: Stochastic Gradient Descent (SGD) Logistic Regression with $L_2$ Ridge Regularization.
+  - Loss Function: Binary Cross-Entropy with $L_2$ Penalty:
+      $$J(w) = -\left[ y \log \hat{y} + (1-y)\log(1-\hat{y}) \right] + \frac{\lambda}{2} \|w\|^2$$
+  - 9-Dimensional Feature Vector:
+      1. `momentum_trend_score`: Trend score (-1.0 to +1.0) aligned with trade direction.
+      2. `adx_strength`: Normalized trend strength ($\text{ADX} - 15) / 35$.
+      3. `volatility_atr_ratio`: Current ATR normalized against expected baseline.
+      4. `rsi_distance`: RSI deviation from neutral 50.0.
+      5. `spread_friction_ratio`: Spread-to-ATR friction cost (scale-invariant).
+      6. `adversarial_penalty`: Devil's Advocate penalty normalized (0.0 to 1.0).
+      7. `structure_alignment`: BOS/CHoCH structural alignment (+1.0 Bull, -1.0 Bear).
+      8. `session_prime_flag`: Binary bonus for Prime London/NY sessions.
+      9. `mtf_confluence_score`: Macro D1/H4/H1 directional alignment score.
+  - Bayesian Prior: Initialized with $\approx 55\%$ baseline win rate and institutional feature priors.
+  - Persistence: Model weights and biases automatically saved to `jarvis_online_ml_weights.json`.
+
+6.2 Multi-Armed Bandit Strategy Allocator (`EnsembleStrategyBandit`):
+Dynamically re-weights strategy allocations using an ensemble of three reinforcement learning algorithms:
+  - Thompson Sampling: Samples from Beta distribution $\text{Beta}(\alpha + 1, \beta + 1)$ for each arm.
+  - Upper Confidence Bound (LinUCB / UCB1): $\text{UCB}_i = \hat{\mu}_i + \sqrt{\frac{2 \ln N}{n_i}}$.
+  - Exponential-Weight Exploration & Exploitation (EXP3): $\text{Weight}_i = \exp\left(\min(5.0, \frac{R_i}{n_i})\right)$.
+  - Composite Selection Score: $0.4 \times \text{Thompson} + 0.4 \times \text{UCB} + 0.2 \times \text{EXP3}$.
+
+6.3 Fractional Differentiation Transformer (`FractionalDifferentiationTransformer`):
+Implements Marcos López de Prado's Fixed-Width Window Fractional Differentiation ($0 < d < 1$):
+  - Solves the Fundamental Dilemma: Price differencing ($d=1$) achieves stationarity but erases all memory;
+    raw prices ($d=0$) preserve memory but violate stationarity.
+  - Binomial Series Expansion: $(1-B)^d = \sum_{k=0}^{\infty} (-1)^k \binom{d}{k} B^k$.
+  - Generates stationary features (ADF test $p < 0.05$) while preserving $>80\%$ of long-range autocorrelation.
+
+6.4 ML Meta-Labeler (`MetaLabeler`):
+Secondary decision classifier based on Lopez de Prado's meta-labeling architecture:
+  - Primary Engine determines direction (BUY / SELL).
+  - Meta-Labeler (`HistGradientBoostingClassifier`) determines trade sizing and execution feasibility:
+    whether taking the primary trade has positive expectancy after execution drag.
+  - Prevents false-positive entries during choppy transition regimes.
+
+====================================================================================================
+7. AI SELF-LEARNING & REAL-TIME OPTIMIZER ENGINES
+====================================================================================================
+7.1 Self-Learning Engine (`SelfLearningEngine`):
+Continuous background learning system connected to SQLite historical trade database (`jarvis_history.db`):
+  - Empirical Pattern Memory: Indexes past trades by (Symbol, Regime, Session, Prime Status).
+  - Conviction Multiplier: Boosts position sizing and confidence when historical sample size >= 15
+    and empirical win rate >= 65%; penalizes setups with negative historical EV.
+  - Fast Memory Caching: Thread-safe in-memory cache with 15-second TTL to eliminate database I/O bottlenecks.
+
+7.2 Real-Time Feedback Optimizer (`RealtimeOptimizer`):
+Monitors rolling 30-trade realized PnL across active symbols and regimes:
+  - If rolling win rate < 50%: Dynamically tightens quality hurdle (+3.0 score requirement, +0.10 R:R hurdle).
+  - If rolling win rate > 65%: Relaxed slightly to capture high-velocity trend expansion.
+  - Safe DB Resource Management: Implements guaranteed connection closing via `try...finally` blocks.
+
+====================================================================================================
+8. RISK MANAGEMENT, CAPITAL PRESERVATION & 15-GATE SAME-SYMBOL MATRIX
+====================================================================================================
+8.1 Fractional Kelly Criterion Position Sizer (`PositionSizer`):
+  - Full Kelly: $f^* = \frac{b \cdot p - q}{b}$ where $p = \text{Win Prob}$, $q = 1-p$, $b = \text{Payoff Ratio}$.
+  - Quarter-Kelly ($0.25 \times f^*$): Achieves 87% of theoretical maximum compound growth while reducing
+    maximum drawdown from 64% to under 12%.
+  - Drawdown Scaling: Risk scaled down as account approaches maximum allowable drawdown.
+
+8.2 Account Tier Sizing Matrix (`AccountTier`):
+  - ULTRA_SURVIVAL (< $40): Fixed 0.01 lot size floor, single position only, minimum EV = $0.01.
+  - MICRO_GROWTH ($40 - $100): Max lot cap 0.03, strict spread check, minimum EV = $0.05.
+  - SMALL_ACCOUNT ($100 - $250): Max lot cap 0.05, 2 concurrent positions max, minimum EV = $0.15.
+  - STANDARD ($250 - $1,000): Max lot cap 0.20, full dynamic sizing, minimum EV = $0.30.
+  - INSTITUTIONAL (>= $1,000): Full Fractional Kelly, up to 5 concurrent positions, portfolio heat allocation.
+
+8.3 Consecutive Loss Cooldown Manager (`LossCooldownManager`):
+  - 2 Consecutive Losses: Halves position risk (50% size reduction).
+  - 3 Consecutive Losses: Pauses trading for 4 bars (prevents psychological and algorithmic tilt spirals).
+  - 5 Consecutive Losses: Pauses trading for 8 bars and resets daily counters.
+  - Daily Loss Cap: Halts trading if daily loss reaches 3.0% of peak equity.
+
+8.4 Master 15-Condition Same-Symbol Validation Matrix:
+Governs multi-position scaling and pyramiding on the same underlying instrument:
+  ┌────┬────────────────────────────────────┬────────────────────────────────────────────────────────┐
+  │ #  │ Gate Name                          │ Threshold / Requirement                                │
+  ├────┼────────────────────────────────────┼────────────────────────────────────────────────────────┤
+  │ 1  │ Calibrated Win Probability         │ Win Probability >= 60.0%                               │
+  │ 2  │ Expected Value (EV)                │ EV > $0.00 strictly positive                           │
+  │ 3  │ Risk / Reward Ratio                │ R:R >= 1:1.50 minimum                                  │
+  │ 4  │ Regime Viability & Confidence      │ Regime != VOLATILITY_SHOCK and Confidence >= 60%       │
+  │ 5  │ Multi-Timeframe Structure Align    │ Higher Timeframe (H4/D1) matches trade bias            │
+  │ 6  │ Momentum & Trend Score Alignment   │ Trend Score > 0 for BUY, < 0 for SELL                  │
+  │ 7  │ Anti-Averaging Down Guard          │ Existing trade profit >= -$0.01 (No adding to losers)  │
+  │ 8  │ Portfolio Risk Budget Capacity     │ Total projected portfolio risk <= 2.5% of equity       │
+  │ 9  │ Margin Utilization Ceiling         │ Margin utilization < 40.0%                             │
+  │ 10 │ Daily & Total Drawdown Guard       │ Daily DD < 4.0%, Total DD < 10.0%                      │
+  │ 11 │ Portfolio Heat Constraints         │ Portfolio Heat Score < 70.0                            │
+  │ 12 │ Currency Directional Exposure      │ Net single currency exposure <= 2 concurrent legs      │
+  │ 13 │ Spread & Slippage Feasibility      │ Current spread <= Max allowable spread                 │
+  │ 14 │ Session Active & Prime Liquidity   │ Prime Session (London/NY) or penalty <= 15.0           │
+  │ 15 │ Independent Entry Geometry         │ |Entry_new - Entry_old| >= 0.25 * Risk Distance        │
+  └────┴────────────────────────────────────┴────────────────────────────────────────────────────────┘
+
+8.5 Circuit Breakers & Emergency Shutdown:
+  - Daily Loss Circuit Breaker: Automatically terminates new entries upon 4.0% daily drawdown.
+  - Emergency Close Engine: Executes immediate market liquidation of all open tickets upon catastrophic
+    system fault, broker disconnection timeout (> 30s), or emergency button trigger (`/api/action/close_all_positions`).
+
+====================================================================================================
+9. MT5 INTEGRATION & DYNAMIC BROKER SYMBOL RESOLUTION
+====================================================================================================
+9.1 Dynamic Symbol Alias Resolution (`jarvis/data/symbol_registry.py`):
+MetaTrader 5 brokers use inconsistent symbol suffixes and names (e.g. `XAUUSD`, `GOLD`, `GOLD.i`, `XAUUSD#`).
+The centralized `SymbolSpec` registry automatically resolves broker-specific names:
+  - Normalized Master Canonical Keys: `XAUUSD`, `EURUSD`, `GBPUSD`, `USDJPY`, `BTCUSD`, `US30`, `NAS100`, `WTI`.
+  - Comprehensive Alias Map: Resolves prefixes, suffixes (`.i`, `.r`, `m`, `#`), and broker aliases seamlessly.
+  - Contract Specification Lookup: Returns contract size, pip size, pip value, typical spread, and margin requirement.
+
+9.2 Execution Gateway & MT5 Client (`jarvis/execution/mt5_client.py`):
+  - Dual Execution Mode: Seamless switching between simulated `PAPER` mode and live `MT5` execution.
+  - Thread-Safe RLock Architecture: Prevents concurrent socket collisions during rapid multi-symbol ticks.
+  - Exponential Backoff & Jitter: Auto-reconnects with delays (1s, 2s, 4s, 8s, 16s) and random jitter.
+  - Order Routing: Dispatches `TRADE_ACTION_DEAL` market orders with magic number tagging (`888999`),
+    slippage tolerance, and exact deviation controls.
+
+9.3 State Synchronizer & Watchdog Supervisor (`MT5StateSynchronizer` & `JarvisOrchestrator`):
+  - Runs a 1.0-second background polling cycle to reconcile in-memory position state with actual broker tickets.
+  - Detects broker-side SL/TP fills and publishes `trade_closed` events across the `EventBus`.
+  - In-Process Execution Guard: Prevents race-condition double entries within a 10-minute cooldown window.
+  - Watchdog Supervisor: Automatically reaps stale locks (> 30s) and restores broker socket connections.
+
+====================================================================================================
+10. INDIA MARKETS (NSE/BSE & F&O OPTIONS DESK) & US STOCKS SCREENER
+====================================================================================================
+10.1 India Markets & F&O Options Desk (`jarvis/india/`):
+Full institutional analytics suite for Indian National Stock Exchange (NSE) & Bombay Stock Exchange (BSE):
+  - Black-Scholes Greeks Engine (`OptionGreeksEngine`):
+      * Calculates Call/Put Delta ($\Delta$), Gamma ($\Gamma$), Theta ($\Theta$), Vega ($\nu$), and Rho ($\rho$).
+      * RBI Repo Rate baseline interest rate model ($\approx 6.5\% - 7.0\%$).
+      * Intrinsic vs Extrinsic premium valuation.
+  - Gamma Exposure (GEX) & Dealer Flow Engine (`compute_gex`):
+      * Computes Net Dealer Gamma, Vanna Exposure ($\partial\Delta/\partial\sigma$), and Charm ($\partial\Delta/\partial t$).
+      * Calculates the Zero-Gamma Flip Level: identifies transition between mean-reverting and momentum regimes.
+  - Put-Call Ratio (PCR) & Max Pain Strike:
+      * Evaluates Open Interest (OI) PCR and Volume PCR to locate institutional support floors and resistance walls.
+      * Calculates Max Pain strike where option writers suffer minimum cumulative payout at expiry.
+  - NSE Trading Rules & Timings:
+      * Enforces Indian market hours (09:15 - 15:30 IST), Pre-open session (09:00 - 09:08 IST), and square-off cutoffs.
+      * Transparent data source auditing: Exposes `data_source="live"` or `data_source="synthetic_fallback"`.
+
+10.2 US Equities Breakout Screener (`jarvis/stocks/`):
+Scans S&P 500, Nasdaq 100, and high-beta growth stocks for high-conviction breakout setups:
+  - Multi-Factor Breakout Scoring:
+      * Chaikin Money Flow (CMF): 20-period volume accumulation score.
+      * On-Balance Volume (OBV) Divergence: Detects institutional accumulation before price expansion.
+      * Mansfield Relative Strength: Performance relative to SPY benchmark.
+      * Dual-Squeeze Indicator: TTM Squeeze + Bollinger Bands inside Keltner Channels.
+  - 1,000-Run Monte Carlo Price Simulation:
+      * Generates forward probability cones: P10 (Bearish target), P50 (Expected target), P90 (Bullish surge target).
+  - Setup Grading: Classifies setups into institutional grades ($A+, A, B, C$).
+
+====================================================================================================
+11. WEB TERMINAL, UI, APIS, TELEMETRY & COPILOT
+====================================================================================================
+11.1 High-Performance HTTP & Server-Sent Events (SSE) Server (`jarvis/api/server.py`):
+Lightweight, thread-safe asynchronous server hosted on Port 8501:
+  - Real-Time SSE Telemetry Stream (`/api/stream/telemetry`): Streams state changes, open positions,
+    account equity, and radar opportunities at 1-second intervals.
+  - REST Radar Feed (`/api/radar`): Returns multi-asset opportunities sorted by conviction tier and EV.
+  - Historical Trade Feed (`/api/history`): Returns recent executed trades from SQLite database.
+  - Multi-Timeframe Rates & Candles (`/api/rates`, `/api/candles`): Delivers OHLCV data for charts.
+  - Economic News Calendar (`/api/news`): Real-time macro announcements and impact ratings.
+  - Trading Actions (`/api/action/manual_trade`, `/api/action/close_position`, `/api/action/close_all_positions`):
+    Protected endpoints for manual execution and emergency risk actions.
+
+11.2 JARVIS AI Copilot (`jarvis/api/copilot.py`):
+Interactive natural language trading assistant (`/api/copilot/ask`):
+  - Understands queries regarding account status, open risk, market regime, trade explanations, and strategy logic.
+  - Formulates institutional answers using real-time telemetry state and market context.
+
+11.3 Enterprise Security & Remote Authentication (`jarvis/api/remote_auth.py`):
+  - Role-Based Access Control (RBAC): Strict separation between `ADMIN`, `TRADER`, and `VIEWER` roles.
+  - Cryptographic Session Tokens: HMAC-SHA256 tokens with configurable TTL and auto-revocation.
+  - Brute-Force Rate Limiting: Blocks IP addresses exceeding 5 failed login attempts.
+  - Environment-Configured Secrets: Resolves admin credentials securely via `JARVIS_ADMIN_USER` and `JARVIS_ADMIN_PASS`.
+
+====================================================================================================
+12. BACKTESTING LAB, MONTE CARLO & WALK-FORWARD VALIDATION
+====================================================================================================
+12.1 Chronological Event-Driven Backtesting Engine (`jarvis/backtesting/engine.py`):
+  - Zero Lookahead Bias: Iterates chronologically bar-by-bar; indicators and MTF resamplings strictly
+    exclude future candles.
+  - Realistic Execution Friction: Incorporates asset-specific spreads, broker commissions ($5.00/lot),
+    and slippage modeling.
+  - Intra-Bar SL/TP Resolution: Analyzes bar High and Low to accurately resolve stop-out vs take-profit priority.
+
+12.2 Institutional Performance Metrics (`PerformanceMetricsCalculator`):
+  - Profit Factor (Gross Profits / Gross Losses).
+  - Annualized Sharpe Ratio ($R_f = 2.0\%$), Sortino Ratio (downside deviation), and Calmar Ratio.
+  - Maximum Drawdown ($) and Maximum Drawdown (%).
+  - Win Rate (%), Average R-Multiple, Expectancy ($), and Recovery Factor.
+
+12.3 Monte Carlo & Walk-Forward Suite (`monte_carlo.py`, `walk_forward.py`):
+  - Monte Carlo Permutations: Executes 1,000 randomized trade sequence shuffles to determine 95% and 99%
+    Confidence Intervals for maximum drawdown and ruin probability.
+  - Walk-Forward Optimization: Applies rolling train/test splits (e.g. 70% in-sample optimization,
+    30% out-of-sample forward test) to prevent data mining over-fitting.
+
+====================================================================================================
+13. COMPREHENSIVE CODEBASE AUDIT FINDINGS CATALOG
+====================================================================================================
+The complete audit catalog documents all identified architectural, numerical, synchronization,
+and risk issues along with their root causes, impacts, and implemented remediations:
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ AUDIT FINDING #1: ISO Timestamp NameError & Timezone Omission in SQLite Logging                   │
+├─────────────────┬────────────────────────────────────────────────────────────────────────────────┤
+│ Location        │ `jarvis/data/database.py` (`log_trade` method)                                 │
+│ Root Cause      │ Attempted to call undefined `datetime.now()` without UTC timezone specification│
+│ Impact          │ Silent database logging crash on trade fill; corrupted telemetry history       │
+│ Required Fix    │ Replaced with `datetime.now(timezone.utc).isoformat()`                         │
+│ Priority        │ P0 - Critical                                                                  │
+├─────────────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ AUDIT FINDING #2: Paper Mode Order Modification and Close Status Inconsistency                   │
+├─────────────────┬────────────────────────────────────────────────────────────────────────────────┤
+│ Location        │ `jarvis/execution/mt5_client.py` (`modify_order`, `close_position`)            │
+│ Root Cause      │ Paper execution returned arbitrary strings instead of standardized dictionary  │
+│ Impact          │ State manager failed to update paper position tickets; orphan trades           │
+│ Required Fix    │ Standardized return payload: `{"status": "MODIFIED"|"FILLED", "ticket": ...}`  │
+│ Priority        │ P1 - High                                                                      │
+├─────────────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ AUDIT FINDING #3: Position Monitor Manual Ticket Classification Regressions                     │
+├─────────────────┬────────────────────────────────────────────────────────────────────────────────┤
+│ Location        │ `jarvis/execution/position_monitor.py`                                         │
+│ Root Cause      │ Positions opened manually were overwritten with default bot magic number       │
+│ Impact          │ Manual trades were prematurely modified or closed by automated trailing logic  │
+│ Required Fix    │ Implemented magic number check; manual tickets tagged with `executor="MANUAL"` │
+│ Priority        │ P0 - Critical                                                                  │
+├─────────────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ AUDIT FINDING #4: Micro-Account Position Sizing Zero Division & Risk Blowout                     │
+├─────────────────┬────────────────────────────────────────────────────────────────────────────────┤
+│ Location        │ `jarvis/risk/position_sizing.py` (`calculate_lot_size`)                        │
+│ Root Cause      │ Raw lot calculation on <$100 accounts produced <0.01 lots; round-up risked >10%│
+│ Impact          │ Small accounts suffered catastrophic risk amplification on min-lot roundups    │
+│ Required Fix    │ Implemented strict AccountTier risk ceiling; reject trades exceeding 3.0% risk │
+│ Priority        │ P0 - Critical                                                                  │
+├─────────────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ AUDIT FINDING #5: Cross-Symbol Regime Contamination & Race Conditions                            │
+├─────────────────┬────────────────────────────────────────────────────────────────────────────────┤
+│ Location        │ `jarvis/application/orchestrator.py`                                           │
+│ Root Cause      │ Single shared regime variable shared across radar sweeps                       │
+│ Impact          │ BTCUSD high-volatility regime contaminated EURUSD Forex trading parameters     │
+│ Required Fix    │ Isolated regime state per symbol: `self._regime_state[symbol]` with thread lock│
+│ Priority        │ P0 - Critical                                                                  │
+├─────────────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ AUDIT FINDING #6: In-Process Execution Guard & Duplicate Multi-Firing Trap                       │
+├─────────────────┬────────────────────────────────────────────────────────────────────────────────┤
+│ Location        │ `jarvis/application/orchestrator.py`                                           │
+│ Root Cause      │ 1-second MT5 broker sync latency allowed rapid radar loops to fire 2x orders   │
+│ Impact          │ Duplicate positions entered on the same candle before ticket registration      │
+│ Required Fix    │ Added `_execution_in_progress` thread-safe set + 10-min same-symbol cooldown   │
+│ Priority        │ P0 - Critical                                                                  │
+├─────────────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ AUDIT FINDING #7: Macro Metric Magnitude Parsing Truncation                                      │
+├─────────────────┬────────────────────────────────────────────────────────────────────────────────┤
+│ Location        │ `jarvis/analysts/macro_analyst.py` (`_parse_metric`)                            │
+│ Root Cause      │ Strings like "2.5M" and "150K" stripped suffixes without multiplier conversion │
+│ Impact          │ "2.5M" parsed as 2.5; macro liquidity metrics distorted by factor of 1,000,000 │
+│ Required Fix    │ Added magnitude parser: "K" -> 1e3, "M" -> 1e6, "B" -> 1e9, "%" -> percentage  │
+│ Priority        │ P1 - High                                                                      │
+├─────────────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ AUDIT FINDING #8: Unbounded Overconfidence Inflation in Calibration                              │
+├─────────────────┬────────────────────────────────────────────────────────────────────────────────┤
+│ Location        │ `jarvis/intelligence/confidence.py`                                            │
+│ Root Cause      │ Isotonic curve calibration improperly boosted raw 0.90 confidence to 0.98      │
+│ Impact          │ Extreme overconfidence resulted in oversized position allocations              │
+│ Required Fix    │ Enforced monotonic shrinkage: calibrated confidence <= empirical upper bounds  │
+│ Priority        │ P1 - High                                                                      │
+├─────────────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ AUDIT FINDING #9: Unaudited Synthetic Fallback Flagging in India / US Stocks                     │
+├─────────────────┬────────────────────────────────────────────────────────────────────────────────┤
+│ Location        │ `jarvis/india/india_engine.py`, `jarvis/stocks/stock_engine.py`                │
+│ Root Cause      │ Synthetic brownian candles silently returned without indicating mock status    │
+│ Impact          │ Front-end UI presented simulated data as real live exchange market feeds       │
+│ Required Fix    │ Added explicit `data_source: "live" | "synthetic_fallback"` metadata field     │
+│ Priority        │ P1 - High                                                                      │
+├─────────────────┼────────────────────────────────────────────────────────────────────────────────┤
+│ AUDIT FINDING #10: Database Connection File Descriptor Leaks in Realtime Optimizer              │
+├─────────────────┬────────────────────────────────────────────────────────────────────────────────┤
+│ Location        │ `jarvis/intelligence/realtime_optimizer.py`                                    │
+│ Root Cause      │ SQLite connection opened inside query loop without guaranteed closing on error │
+│ Impact          │ OS file descriptor exhaustion during continuous multi-day live runs            │
+│ Required Fix    │ Wrapped database queries in `try...finally: conn.close()` blocks               │
+│ Priority        │ P1 - High                                                                      │
+└─────────────────┴────────────────────────────────────────────────────────────────────────────────┘
+
+====================================================================================================
+14. VERIFICATION, TEST SUITE & DEPLOYMENT RUNBOOKS
+====================================================================================================
+14.1 Test Suite Verification:
+The system includes 124 comprehensive unit and regression tests located in `tests/`.
+To verify 100% test passage:
+  ```powershell
+  # Run full pytest test suite from workspace root
+  python -m pytest
+  ```
+  Expected Result:
+  `124 passed in ~85-90s (0:01:27)`
+
+14.2 System Startup Runbook:
+To launch the complete autonomous trading platform, web terminal, and mobile access tunnel:
+  ```powershell
+  # Primary Autonomous Launcher
+  python HM_start.py live
+
+  # Or using Windows Batch Launcher:
+  .\HM_start.bat
+  ```
+
+This single command automatically launches:
+  1. Autonomous Multi-Asset Trading Engine & Quality Gate Decision Matrix
+  2. Master Orchestrator Watchdog & State Synchronizer
+  3. Remote Access Web Terminal & REST API Server on `http://0.0.0.0:8501`
+  4. Automatic Authenticated HTTPS Mobile Access Tunnel (via serveo.net / localhost.run)
+
+14.3 Environment Configuration (`.env`):
+Create a `.env` file in root for production settings:
+  ```ini
+  JARVIS_MODE=live
+  JARVIS_PORT=8501
+  JARVIS_HOST=0.0.0.0
+  JARVIS_ADMIN_USER=admin
+  JARVIS_ADMIN_PASS=YourSecureProductionPassword2026!
+  JARVIS_MAGIC_NUMBER=888999
+  JARVIS_MAX_RISK_PER_TRADE=0.5
+  JARVIS_CORS_ORIGIN=*
+  ```
+
+====================================================================================================
+               END OF JARVIS COMPLETE MASTER PROJECT DOCUMENTATION
+====================================================================================================

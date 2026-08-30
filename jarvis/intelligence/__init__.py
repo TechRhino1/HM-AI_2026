@@ -6,6 +6,7 @@ from jarvis.intelligence.confidence import ConfidenceCalibrationEngine
 from jarvis.intelligence.reasoning_engine import ReasoningEngine
 from jarvis.intelligence.decision_engine import DecisionEngine
 from jarvis.intelligence.realtime_optimizer import RealtimeOptimizer
+from jarvis.intelligence.dynamic_levels import DynamicRiskAndLevelsEngine
 
 __all__ = [
     "MarketRegimeClassifier",
@@ -14,5 +15,6 @@ __all__ = [
     "ConfidenceCalibrationEngine",
     "ReasoningEngine",
     "DecisionEngine",
-    "RealtimeOptimizer"
+    "RealtimeOptimizer",
+    "DynamicRiskAndLevelsEngine"
 ]

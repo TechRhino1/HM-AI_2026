@@ -12,8 +12,14 @@ class MarketRegime(str, Enum):
     TREND_BEAR = "TREND_BEAR"
     WEAK_TREND = "WEAK_TREND"
     RANGE = "RANGE"
+    CONSOLIDATION = "CONSOLIDATION"
+    COMPRESSION = "COMPRESSION"
     BREAKOUT = "BREAKOUT"
+    POST_BREAKOUT = "POST_BREAKOUT"
     REVERSAL = "REVERSAL"
+    ACCUMULATION = "ACCUMULATION"
+    DISTRIBUTION = "DISTRIBUTION"
+    LIQUIDITY_SWEEP = "LIQUIDITY_SWEEP"
     TRANSITION = "TRANSITION"
     HIGH_VOLATILITY = "HIGH_VOLATILITY"
     LOW_VOLATILITY = "LOW_VOLATILITY"
@@ -224,6 +230,7 @@ class DecisionObject:
     context: Optional[MarketContext] = None
     first_target_price: Optional[float] = None
     first_target_volume_pct: float = 0.50
+    runner_trail_distance_atr: float = 1.0
     pattern_sample_size: int = 0
     meta_label_prob: Optional[float] = None
     gate_policy_decision: str = "BLOCK"
@@ -249,6 +256,7 @@ class DecisionObject:
             "take_profit": self.take_profit,
             "first_target_price": self.first_target_price,
             "first_target_volume_pct": self.first_target_volume_pct,
+            "runner_trail_distance_atr": self.runner_trail_distance_atr,
             "pattern_sample_size": self.pattern_sample_size,
             "sl_distance": self.sl_distance,
             "tp_distance": self.tp_distance,

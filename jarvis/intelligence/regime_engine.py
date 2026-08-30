@@ -1,6 +1,8 @@
 """
-JARVIS AI 3.0 — Probabilistic Causal Market Regime Classifier.
+JARVIS AI 4.0 — Probabilistic Causal Market Regime Classifier.
 Classifies the market state into a probability distribution over distinct market regimes without future look-ahead.
+Supports: TREND_BULL, TREND_BEAR, WEAK_TREND, RANGE, CONSOLIDATION, COMPRESSION, BREAKOUT, POST_BREAKOUT,
+          REVERSAL, ACCUMULATION, DISTRIBUTION, LIQUIDITY_SWEEP, HIGH_VOLATILITY, LOW_VOLATILITY, TRANSITION.
 """
 from typing import Dict, Any, Optional
 from datetime import datetime, timezone
@@ -26,15 +28,22 @@ class MarketRegimeClassifier:
         momentum = context.momentum
         volatility = context.volatility
         liquidity = context.liquidity
+        order_flow = getattr(context, "order_flow", {}) or {}
 
-        # Probability weights bucket initialization
+        # Probability weights bucket initialization across all regimes
         scores: Dict[str, float] = {
             MarketRegime.TREND_BULL.value: 0.05,
             MarketRegime.TREND_BEAR.value: 0.05,
             MarketRegime.WEAK_TREND.value: 0.05,
             MarketRegime.RANGE.value: 0.05,
+            MarketRegime.CONSOLIDATION.value: 0.05,
+            MarketRegime.COMPRESSION.value: 0.05,
             MarketRegime.BREAKOUT.value: 0.05,
+            MarketRegime.POST_BREAKOUT.value: 0.05,
             MarketRegime.REVERSAL.value: 0.05,
+            MarketRegime.ACCUMULATION.value: 0.05,
+            MarketRegime.DISTRIBUTION.value: 0.05,
+            MarketRegime.LIQUIDITY_SWEEP.value: 0.05,
             MarketRegime.TRANSITION.value: 0.05,
             MarketRegime.HIGH_VOLATILITY.value: 0.05,
             MarketRegime.LOW_VOLATILITY.value: 0.05,
@@ -43,60 +52,71 @@ class MarketRegimeClassifier:
 
         # 1. Macro News / Event Risk
         if macro_news_risk:
-            scores[MarketRegime.EVENT_RISK.value] += 1.5
+            scores[MarketRegime.EVENT_RISK.value] += 2.0
 
         # 2. Volatility State Impact
         if volatility.state == "EXTREME":
-            scores[MarketRegime.HIGH_VOLATILITY.value] += 1.2
-            scores[MarketRegime.BREAKOUT.value] += 0.3
+            scores[MarketRegime.HIGH_VOLATILITY.value] += 1.4
+            scores[MarketRegime.BREAKOUT.value] += 0.4
         elif volatility.state == "COMPRESSION":
-            scores[MarketRegime.LOW_VOLATILITY.value] += 0.9
+            scores[MarketRegime.COMPRESSION.value] += 1.2
+            scores[MarketRegime.LOW_VOLATILITY.value] += 1.0
+            scores[MarketRegime.CONSOLIDATION.value] += 0.8
             scores[MarketRegime.RANGE.value] += 0.6
         elif volatility.state == "EXPANSION":
-            scores[MarketRegime.BREAKOUT.value] += 0.5
+            scores[MarketRegime.BREAKOUT.value] += 0.8
+            scores[MarketRegime.HIGH_VOLATILITY.value] += 0.5
 
         # 3. Structure & BOS/CHoCH Impact
         if structure.bos:
-            scores[MarketRegime.BREAKOUT.value] += 0.8
+            scores[MarketRegime.BREAKOUT.value] += 0.9
+            scores[MarketRegime.POST_BREAKOUT.value] += 0.6
             if structure.bos_type == "BULLISH":
-                scores[MarketRegime.TREND_BULL.value] += 0.6
+                scores[MarketRegime.TREND_BULL.value] += 0.7
             elif structure.bos_type == "BEARISH":
-                scores[MarketRegime.TREND_BEAR.value] += 0.6
+                scores[MarketRegime.TREND_BEAR.value] += 0.7
         elif structure.choch:
-            scores[MarketRegime.REVERSAL.value] += 0.9
-            scores[MarketRegime.TRANSITION.value] += 0.5
+            scores[MarketRegime.REVERSAL.value] += 1.2
+            scores[MarketRegime.TRANSITION.value] += 0.6
         elif structure.higher_highs and structure.higher_lows:
-            scores[MarketRegime.TREND_BULL.value] += 0.8
+            scores[MarketRegime.TREND_BULL.value] += 0.9
         elif structure.lower_highs and structure.lower_lows:
-            scores[MarketRegime.TREND_BEAR.value] += 0.8
+            scores[MarketRegime.TREND_BEAR.value] += 0.9
         else:
-            scores[MarketRegime.RANGE.value] += 0.4
+            scores[MarketRegime.RANGE.value] += 0.5
+            scores[MarketRegime.CONSOLIDATION.value] += 0.5
             scores[MarketRegime.TRANSITION.value] += 0.3
 
         # 4. Momentum & ADX Trend Strength
         t_score = momentum.trend_score
         adx = momentum.adx
         if adx >= 25:
-            # Scale score based on ADX strength (explosive momentum bonus)
             adx_multiplier = 1.0 + max(0.0, (adx - 25) / 10.0) 
-            if t_score >= 50:
-                scores[MarketRegime.TREND_BULL.value] += 1.5 * adx_multiplier
-                if t_score >= 75:
+            if t_score >= 45:
+                scores[MarketRegime.TREND_BULL.value] += 1.6 * adx_multiplier
+                if t_score >= 70:
                     scores[MarketRegime.TREND_BULL.value] += 1.0 * adx_multiplier
-            elif t_score <= -50:
-                scores[MarketRegime.TREND_BEAR.value] += 1.5 * adx_multiplier
-                if t_score <= -75:
+            elif t_score <= -45:
+                scores[MarketRegime.TREND_BEAR.value] += 1.6 * adx_multiplier
+                if t_score <= -70:
                     scores[MarketRegime.TREND_BEAR.value] += 1.0 * adx_multiplier
             else:
                 scores[MarketRegime.WEAK_TREND.value] += 0.8
         elif adx < 18:
-            scores[MarketRegime.RANGE.value] += 0.7
-            scores[MarketRegime.WEAK_TREND.value] += 0.4
+            scores[MarketRegime.RANGE.value] += 0.8
+            scores[MarketRegime.CONSOLIDATION.value] += 0.6
+            scores[MarketRegime.LOW_VOLATILITY.value] += 0.5
+            scores[MarketRegime.WEAK_TREND.value] += 0.3
 
-        # 5. Liquidity Sweeps
+        # 5. Liquidity Sweeps & Wyckoff Accumulation/Distribution
+        delta_score = float(order_flow.get("delta_score", 0.0)) if isinstance(order_flow, dict) else 0.0
         if liquidity.sweep_detected:
-            scores[MarketRegime.REVERSAL.value] += 0.7
-            scores[MarketRegime.TRANSITION.value] += 0.3
+            scores[MarketRegime.LIQUIDITY_SWEEP.value] += 1.4
+            scores[MarketRegime.REVERSAL.value] += 0.9
+            if structure.discount_premium_zone == "DISCOUNT" or delta_score > 20:
+                scores[MarketRegime.ACCUMULATION.value] += 1.1
+            elif structure.discount_premium_zone == "PREMIUM" or delta_score < -20:
+                scores[MarketRegime.DISTRIBUTION.value] += 1.1
 
         # Softmax normalization of probabilities
         exp_vals = np.exp(np.array(list(scores.values())))
@@ -115,7 +135,7 @@ class MarketRegimeClassifier:
         second_p = sorted_regimes[1][1] if len(sorted_regimes) > 1 else 0.0
         confidence = min(0.98, max(0.40, round(highest_p + (highest_p - second_p) * 0.5, 2)))
 
-        # Determine transition & persistence (per-symbol stateless or fallback to instance state)
+        # Determine transition & persistence
         if previous_regime != "USE_INTERNAL_STATE":
             if previous_regime is not None:
                 regime_transition = (previous_regime != primary_regime)
@@ -124,7 +144,6 @@ class MarketRegimeClassifier:
                 regime_transition = False
                 regime_persistence = 0
         else:
-            # Fallback for single-symbol or legacy usage
             regime_transition = False
             if self._previous_regime is not None and self._previous_regime != primary_regime:
                 regime_transition = True

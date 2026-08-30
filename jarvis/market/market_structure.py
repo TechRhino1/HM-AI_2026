@@ -79,27 +79,32 @@ class MarketStructureEngine:
         demand_zone = (round(recent_sl, 4), round(recent_sl * 1.003, 4))
         supply_zone = (round(recent_sh * 0.997, 4), round(recent_sh, 4))
 
-        # Detect Institutional Order Blocks
+        # Detect Institutional Order Blocks with displacement validation (body >= 45%)
         order_blocks = []
         for i in range(max(2, len(df) - 15), len(df) - 1):
-            # Bullish OB: Bearish candle followed by strong bullish breakout
+            range_next = max(highs[i + 1] - lows[i + 1], 1e-9)
+            # Bullish OB: Bearish candle followed by strong bullish breakout with >= 45% displacement
             if closes[i] < opens[i] and closes[i + 1] > highs[i]:
-                order_blocks.append({
-                    "type": "BULLISH_ORDER_BLOCK",
-                    "high": round(float(highs[i]), 4),
-                    "low": round(float(lows[i]), 4),
-                    "mid": round(float((highs[i] + lows[i]) / 2.0), 4),
-                    "index": i
-                })
-            # Bearish OB: Bullish candle followed by strong bearish breakdown
+                body_disp = (closes[i + 1] - opens[i + 1]) / range_next
+                if body_disp >= 0.45:
+                    order_blocks.append({
+                        "type": "BULLISH_ORDER_BLOCK",
+                        "high": round(float(highs[i]), 4),
+                        "low": round(float(lows[i]), 4),
+                        "mid": round(float((highs[i] + lows[i]) / 2.0), 4),
+                        "index": i
+                    })
+            # Bearish OB: Bullish candle followed by strong bearish breakdown with >= 45% displacement
             elif closes[i] > opens[i] and closes[i + 1] < lows[i]:
-                order_blocks.append({
-                    "type": "BEARISH_ORDER_BLOCK",
-                    "high": round(float(highs[i]), 4),
-                    "low": round(float(lows[i]), 4),
-                    "mid": round(float((highs[i] + lows[i]) / 2.0), 4),
-                    "index": i
-                })
+                body_disp = (opens[i + 1] - closes[i + 1]) / range_next
+                if body_disp >= 0.45:
+                    order_blocks.append({
+                        "type": "BEARISH_ORDER_BLOCK",
+                        "high": round(float(highs[i]), 4),
+                        "low": round(float(lows[i]), 4),
+                        "mid": round(float((highs[i] + lows[i]) / 2.0), 4),
+                        "index": i
+                    })
 
         # Detect Fair Value Gaps (FVG)
         fair_value_gaps = []

@@ -40,11 +40,13 @@ class JarvisOrchestrator:
         self,
         symbols: Optional[List[str]] = None,
         mode: str = "live",
-        magic_number: int = 888999
+        magic_number: int = 888999,
+        trade_style: str = "SWING"
     ):
 
         self.symbols = symbols or ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD"]
         self.mode = mode.lower()
+        self.trade_style = trade_style
 
         self.state_manager = GLOBAL_STATE
         self.state_manager.set_execution_mode(ExecutionMode(self.mode.upper()))
@@ -225,16 +227,17 @@ class JarvisOrchestrator:
 
     def run_cycle_for_symbol(self, symbol: str) -> Dict[str, Any]:
         """Executes a single end-to-end analytical and decision cycle for a target symbol."""
-        # 1. Fetch Multi-Timeframe Data
-        mtf_data = self.data_feed.fetch_multi_timeframe(symbol)
+        # 1. Fetch Multi-Timeframe Data based on trade_style
+        mtf_data = self.data_feed.fetch_multi_timeframe(symbol, trade_style=self.trade_style)
         _spec = _resolve_sym(symbol)
         
-        # 2. Synthesize Multi-Timeframe Market Context
+        # 2. Synthesize Multi-Timeframe Market Context with dynamic MTF weighting
         context = self.context_engine.build_context(
             symbol, 
             mtf_data,
             current_spread_pips=_spec.typical_spread_pips,
-            max_allowed_spread_pips=_spec.max_spread_pips
+            max_allowed_spread_pips=_spec.max_spread_pips,
+            trade_style=self.trade_style
         )
         self.state_manager.update_market_context(symbol, context)
 
@@ -494,7 +497,8 @@ class JarvisOrchestrator:
 
                             radar_results.append({
                                 "symbol": sym,
-                                "timeframe": "H1",
+                                "trade_style": self.trade_style,
+                                "timeframe": "D1/H4/H1" if self.trade_style == "SWING" else ("H1/M15/M5" if self.trade_style in ("DAY_TRADING", "INTRADAY", "DAY") else "H1/M5/M1"),
                                 "bias": d.bias,
                                 "action": status_label,
                                 "status_label": status_label,

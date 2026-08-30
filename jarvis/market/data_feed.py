@@ -21,6 +21,7 @@ except ImportError:
 TF_MAP = {
     "M1": mt5.TIMEFRAME_M1 if (MT5_AVAILABLE and hasattr(mt5, "TIMEFRAME_M1")) else 1,
     "M5": mt5.TIMEFRAME_M5 if (MT5_AVAILABLE and hasattr(mt5, "TIMEFRAME_M5")) else 5,
+    "M10": getattr(mt5, "TIMEFRAME_M10", 10) if MT5_AVAILABLE else 10,
     "M15": mt5.TIMEFRAME_M15 if (MT5_AVAILABLE and hasattr(mt5, "TIMEFRAME_M15")) else 15,
     "M30": mt5.TIMEFRAME_M30 if (MT5_AVAILABLE and hasattr(mt5, "TIMEFRAME_M30")) else 30,
     "H1": mt5.TIMEFRAME_H1 if (MT5_AVAILABLE and hasattr(mt5, "TIMEFRAME_H1")) else 16385,
@@ -91,17 +92,27 @@ class DataFeedEngine:
     def fetch_multi_timeframe(
         self,
         symbol: str,
+        trade_style: str = "SWING",
         timeframes: Optional[Dict[str, str]] = None,
         num_bars: int = 250
     ) -> Dict[str, pd.DataFrame]:
+        """
+        Fetches multi-timeframe OHLCV rates mapped by role.
+        Configures timeframes dynamically based on trade_style:
+        - SWING: macro=D1, context=H4, primary=H1, setup=H1, timing=M15
+        - DAY_TRADING / INTRADAY / DAY: macro=H1, context=M15, primary=M5, setup=M15, timing=M5
+        - SCALP: macro=H1, context=M15, primary=M5, setup=M5, timing=M1
+        """
         if timeframes is None:
-            timeframes = {
-                "macro": "D1",
-                "context": "H4",
-                "primary": "H1",
-                "setup": "M15",
-                "timing": "M5"
-            }
+            style = (trade_style or "SWING").upper()
+            if style == "SWING":
+                timeframes = {"macro": "D1", "context": "H4", "primary": "H1", "setup": "H1", "timing": "M15"}
+            elif style in ("DAY_TRADING", "INTRADAY", "DAY"):
+                timeframes = {"macro": "H1", "context": "M15", "primary": "M5", "setup": "M15", "timing": "M5"}
+            elif style == "SCALP":
+                timeframes = {"macro": "H1", "context": "M15", "primary": "M5", "setup": "M5", "timing": "M1"}
+            else:
+                timeframes = {"macro": "D1", "context": "H4", "primary": "H1", "setup": "H1", "timing": "M15"}
 
         result = {}
         for role, tf in timeframes.items():
@@ -140,7 +151,7 @@ class DataFeedEngine:
         returns = np.array(returns)
         prices = base_price * np.exp(np.cumsum(returns))
 
-        freq_map = {"M1": "1min", "M5": "5min", "M15": "15min", "M30": "30min", "H1": "1h", "H4": "4h", "D1": "1D"}
+        freq_map = {"M1": "1min", "M5": "5min", "M10": "10min", "M15": "15min", "M30": "30min", "H1": "1h", "H4": "4h", "D1": "1D"}
         freq = freq_map.get(timeframe, "1h")
         import datetime
         dates = pd.date_range(end=pd.Timestamp.now(tz=datetime.timezone.utc).tz_localize(None), periods=num_bars, freq=freq)

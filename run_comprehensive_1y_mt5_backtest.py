@@ -1,4 +1,4 @@
-﻿import sys
+import sys
 import os
 import json
 import logging
@@ -13,6 +13,83 @@ from jarvis.backtesting.metrics import PerformanceMetricsCalculator
 from jarvis.data.symbol_registry import resolve as resolve_symbol
 import MetaTrader5 as mt5
 
+
+def resolve_broker_symbol(mt5_instance, canonical_name: str) -> str:
+    """
+    Dynamically resolve broker-specific symbol name across varying MT5 broker naming conventions
+    (e.g., GOLD.i#, GOLD#, XAUUSDm, BTCUSD#, EURUSD, etc.).
+    First checks candidate aliases via mt5.symbol_info(), then searches mt5.symbols_get().
+    Auto-selects the resolved symbol in MT5 MarketWatch.
+    """
+    if mt5_instance is None:
+        return canonical_name
+
+    u_name = canonical_name.upper()
+
+    alias_map = {
+        "XAUUSD": ["GOLD.i#", "GOLD#", "GOLD", "XAUUSD", "XAUUSD#", "XAUUSD.i#", "XAUUSD.i", "XAUUSDm", "GOLDm", "XAUUSDraw", "GOLDraw"],
+        "GOLD": ["GOLD.i#", "GOLD#", "GOLD", "XAUUSD", "XAUUSD#", "XAUUSD.i#", "XAUUSD.i", "XAUUSDm", "GOLDm", "XAUUSDraw", "GOLDraw"],
+        "BTCUSD": ["BTCUSD#", "BTCUSD", "BTCUSD.i#", "BTCUSD.i", "BTCUSDm", "BITCOIN", "BTCUSDraw"],
+        "BTC": ["BTCUSD#", "BTCUSD", "BTCUSD.i#", "BTCUSD.i", "BTCUSDm", "BITCOIN", "BTCUSDraw"],
+        "EURUSD": ["EURUSD", "EURUSD#", "EURUSD.i#", "EURUSD.i", "EURUSDm", "EURUSD.m", "EURUSDraw"],
+        "GBPUSD": ["GBPUSD", "GBPUSD#", "GBPUSD.i#", "GBPUSD.i", "GBPUSDm", "GBPUSD.m", "GBPUSDraw"],
+        "USDJPY": ["USDJPY", "USDJPY#", "USDJPY.i#", "USDJPY.i", "USDJPYm", "USDJPY.m", "USDJPYraw"],
+    }
+
+    # Start with exact name, mapped aliases, and common suffix permutations
+    candidates = [canonical_name]
+    if u_name in alias_map:
+        for a in alias_map[u_name]:
+            if a not in candidates:
+                candidates.append(a)
+    else:
+        for suffix in ["#", ".i#", ".i", "m", ".m", "raw", ".raw"]:
+            c = f"{canonical_name}{suffix}"
+            if c not in candidates:
+                candidates.append(c)
+
+    # 1. Direct probe using mt5.symbol_info()
+    for cand in candidates:
+        try:
+            info = mt5_instance.symbol_info(cand)
+            if info is not None:
+                mt5_instance.symbol_select(cand, True)
+                return cand
+        except Exception:
+            pass
+
+    # 2. Dynamic discovery via mt5.symbols_get()
+    try:
+        all_syms = mt5_instance.symbols_get()
+        if all_syms:
+            matches = []
+            for s in all_syms:
+                s_name_u = s.name.upper()
+                if u_name in ["XAUUSD", "GOLD"]:
+                    if any(k in s_name_u for k in ["GOLD", "XAUUSD"]):
+                        matches.append(s)
+                elif u_name in ["BTCUSD", "BTC"]:
+                    if any(k in s_name_u for k in ["BTCUSD", "BTC", "BITCOIN"]):
+                        matches.append(s)
+                elif u_name in s_name_u:
+                    matches.append(s)
+
+            if matches:
+                # Rank candidates: full trading mode first, '#' suffix preference, shorter name
+                matches.sort(key=lambda s: (
+                    0 if getattr(s, "trade_mode", 0) == getattr(mt5_instance, "SYMBOL_TRADE_MODE_FULL", 4) else 1,
+                    0 if "#" in s.name else 1,
+                    len(s.name)
+                ))
+                best_match = matches[0].name
+                mt5_instance.symbol_select(best_match, True)
+                return best_match
+    except Exception:
+        pass
+
+    return canonical_name
+
+
 def run_1y_backtest():
     print("=" * 125)
     print("             JARVIS AI 4.0 -- COMPREHENSIVE 1-YEAR REAL MT5 HISTORICAL BENCHMARK (8,760 H1 BARS)")
@@ -24,7 +101,10 @@ def run_1y_backtest():
         return
 
     acc = mt5.account_info()
-    print(f"[MT5 Broker Connected] Server: {acc.server} | Account #{acc.login} | Broker: {acc.company} | Leverage: 1:{acc.leverage}")
+    if acc is not None:
+        print(f"[MT5 Broker Connected] Server: {acc.server} | Account #{acc.login} | Broker: {acc.company} | Leverage: 1:{acc.leverage}")
+    else:
+        print(f"[MT5 Broker Connected] Account info unavailable (error: {mt5.last_error()})")
     print("-" * 125)
 
     symbol_configs = [
@@ -37,20 +117,27 @@ def run_1y_backtest():
 
     all_symbol_results = {}
     all_trades = []
-    total_initial_balance = len(symbol_configs) * 10000.0
     total_final_balance = 0.0
     all_rejection_stats = {}
 
     for cfg in symbol_configs:
         sym = cfg["name"]
-        broker_sym = cfg["broker_sym"]
+        preferred_sym = cfg.get("broker_sym", sym)
+        broker_sym = resolve_broker_symbol(mt5, preferred_sym)
         mt5.symbol_select(broker_sym, True)
         
         # Pull 8,760 H1 bars (1 full calendar year)
         rates = mt5.copy_rates_from_pos(broker_sym, mt5.TIMEFRAME_H1, 0, 8760)
         if rates is None or len(rates) < 50:
-            print(f"Error: Unable to fetch MT5 rates for {sym} [{broker_sym}]")
-            continue
+            # Try resolving directly with canonical name if preferred broker_sym failed
+            if broker_sym != sym:
+                broker_sym = resolve_broker_symbol(mt5, sym)
+                mt5.symbol_select(broker_sym, True)
+                rates = mt5.copy_rates_from_pos(broker_sym, mt5.TIMEFRAME_H1, 0, 8760)
+
+            if rates is None or len(rates) < 50:
+                print(f"Error: Unable to fetch MT5 rates for {sym} [{broker_sym}]")
+                continue
 
         df = pd.DataFrame(rates)
         df["time"] = pd.to_datetime(df["time"], unit="s")
@@ -82,6 +169,7 @@ def run_1y_backtest():
         m["final_balance"] = final_bal
         m["net_profit"] = net_pnl
         m["roi_pct"] = roi_pct
+        m["total_trades"] = len(trades)
         m["rejections"] = res.get("rejection_stats", {})
 
         # Compute additional trade metrics
@@ -89,10 +177,10 @@ def run_1y_backtest():
         losses = [t for t in trades if not t.get("is_win", False)]
         m["win_count"] = len(wins)
         m["loss_count"] = len(losses)
-        m["win_rate"] = (len(wins) / len(trades) * 100.0) if trades else 0.0
+        m["win_rate"] = (len(wins) / max(1, len(trades))) * 100.0 if trades else 0.0
         
-        m["avg_win_dollar"] = (sum(t["pnl"] for t in wins) / len(wins)) if wins else 0.0
-        m["avg_loss_dollar"] = (abs(sum(t["pnl"] for t in losses)) / len(losses)) if losses else 0.0
+        m["avg_win_dollar"] = (sum(t.get("pnl", 0.0) for t in wins) / len(wins)) if wins else 0.0
+        m["avg_loss_dollar"] = (abs(sum(t.get("pnl", 0.0) for t in losses)) / len(losses)) if losses else 0.0
         m["realized_rr"] = (m["avg_win_dollar"] / m["avg_loss_dollar"]) if m["avg_loss_dollar"] > 0 else 0.0
         m["avg_planned_rr"] = (sum(t.get("planned_rr", 0.0) for t in trades) / len(trades)) if trades else 0.0
 
@@ -125,15 +213,20 @@ def run_1y_backtest():
 
     mt5.shutdown()
 
-    # Calculate Portfolio Aggregate Metrics
+    if not all_symbol_results:
+        print("ERROR: No symbol data was successfully retrieved from MT5. Exiting.")
+        return
+
+    # Calculate Portfolio Aggregate Metrics dynamically based on active results
+    total_initial_balance = len(all_symbol_results) * 10000.0
     portfolio_pnl = total_final_balance - total_initial_balance
-    portfolio_roi = (portfolio_pnl / total_initial_balance) * 100.0
+    portfolio_roi = (portfolio_pnl / total_initial_balance) * 100.0 if total_initial_balance > 0 else 0.0
     portfolio_metrics = PerformanceMetricsCalculator.calculate_metrics(all_trades, total_initial_balance)
     
     port_wins = [t for t in all_trades if t.get("is_win", False)]
     port_losses = [t for t in all_trades if not t.get("is_win", False)]
-    avg_win_p = (sum(t["pnl"] for t in port_wins) / len(port_wins)) if port_wins else 0.0
-    avg_loss_p = (abs(sum(t["pnl"] for t in port_losses)) / len(port_losses)) if port_losses else 0.0
+    avg_win_p = (sum(t.get("pnl", 0.0) for t in port_wins) / len(port_wins)) if port_wins else 0.0
+    avg_loss_p = (abs(sum(t.get("pnl", 0.0) for t in port_losses)) / len(port_losses)) if port_losses else 0.0
     realized_rr_p = (avg_win_p / avg_loss_p) if avg_loss_p > 0 else 0.0
     avg_planned_rr_p = (sum(t.get("planned_rr", 0.0) for t in all_trades) / len(all_trades)) if all_trades else 0.0
     avg_bars_p = (sum(t.get("bars_held", 1) for t in all_trades) / len(all_trades)) if all_trades else 0.0
@@ -161,14 +254,14 @@ def run_1y_backtest():
     print(header)
     print("-" * len(header))
 
-    def fmt_curr(v): return f""
-    def fmt_signed(v): return f""
-    def fmt_pct(v): return f"{v:.2f}%"
+    def fmt_curr(v): return f"${float(v):,.2f}"
+    def fmt_signed(v): return f"${float(v):+,.2f}"
+    def fmt_pct(v): return f"{float(v):.2f}%"
 
     rows = [
         ("Historical Date Span", lambda m: f"{m['start_time'][:7]}->{m['end_time'][:7]}", f"12-18 Months"),
-        ("Total Bars Simulated", lambda m: f"{m['bar_count']:,d} H1", f"{len(symbol_configs)*8760:,d} H1"),
-        ("Initial Balance ($)", lambda m: ",000.00", f""),
+        ("Total Bars Simulated", lambda m: f"{m['bar_count']:,d} H1", f"{sum(m['bar_count'] for m in all_symbol_results.values()):,d} H1"),
+        ("Initial Balance ($)", lambda m: "$10,000.00", fmt_curr(total_initial_balance)),
         ("Final Balance ($)", lambda m: fmt_curr(m['final_balance']), fmt_curr(total_final_balance)),
         ("Net Profit / Loss ($)", lambda m: fmt_signed(m['net_profit']), fmt_signed(portfolio_pnl)),
         ("1-Year ROI Growth %", lambda m: f"{m['roi_pct']:+.2f}%", f"{portfolio_roi:+.2f}%"),
@@ -199,9 +292,9 @@ def run_1y_backtest():
     print("=" * len(header))
 
     # --- STRATEGY-BY-STRATEGY BREAKDOWN ---
-    print("\n" + "=" * 115)
+    print("\n" + "=" * 118)
     print("                                STRATEGY-BY-STRATEGY PERFORMANCE BREAKDOWN")
-    print("=" * 115)
+    print("=" * 118)
     strat_groups = {}
     for t in all_trades:
         st = t.get("strategy", "UNKNOWN")
@@ -209,26 +302,26 @@ def run_1y_backtest():
             strat_groups[st] = []
         strat_groups[st].append(t)
 
-    strat_header = f"{'Strategy Name':<28} | {'Trades':<8} | {'Wins':<6} | {'Losses':<6} | {'Win Rate':<10} | {'Gross Win':<12} | {'Gross Loss':<12} | {'Net PnL':<12} | {'PF':<6} | {'Avg PnL':<10}"
+    strat_header = f"{'Strategy Name':<28} | {'Trades':<8} | {'Wins':<6} | {'Losses':<6} | {'Win Rate':<10} | {'Gross Win':<11} | {'Gross Loss':<11} | {'Net PnL':<11} | {'PF':<6} | {'Avg PnL':<9}"
     print(strat_header)
     print("-" * len(strat_header))
 
     for st, s_trades in sorted(strat_groups.items(), key=lambda x: len(x[1]), reverse=True):
         s_wins = [t for t in s_trades if t.get("is_win")]
         s_losses = [t for t in s_trades if not t.get("is_win")]
-        s_wr = (len(s_wins) / len(s_trades)) * 100.0
-        s_gross_win = sum(t["pnl"] for t in s_wins)
-        s_gross_loss = abs(sum(t["pnl"] for t in s_losses))
-        s_net = sum(t["pnl"] for t in s_trades)
+        s_wr = (len(s_wins) / max(1, len(s_trades))) * 100.0
+        s_gross_win = sum(t.get("pnl", 0.0) for t in s_wins)
+        s_gross_loss = abs(sum(t.get("pnl", 0.0) for t in s_losses))
+        s_net = sum(t.get("pnl", 0.0) for t in s_trades)
         s_pf = (s_gross_win / s_gross_loss) if s_gross_loss > 0 else (99.0 if s_gross_win > 0 else 0.0)
-        s_avg = s_net / len(s_trades)
-        print(f"{st:<28} | {len(s_trades):<8d} | {len(s_wins):<6d} | {len(s_losses):<6d} | {s_wr:>8.2f}% |  |  |  | {s_pf:>6.2f} | ")
+        s_avg = s_net / max(1, len(s_trades))
+        print(f"{st:<28} | {len(s_trades):<8d} | {len(s_wins):<6d} | {len(s_losses):<6d} | {s_wr:>8.2f}%  | ${s_gross_win:>10,.2f} | ${s_gross_loss:>10,.2f} | ${s_net:>10,.2f} | {s_pf:>6.2f} | ${s_avg:>8,.2f}")
     print("=" * len(strat_header))
 
     # --- PERFORMANCE BY MARKET REGIME ---
-    print("\n" + "=" * 115)
+    print("\n" + "=" * 118)
     print("                                PERFORMANCE BY DETECTED MARKET REGIME")
-    print("=" * 115)
+    print("=" * 118)
     reg_groups = {}
     for t in all_trades:
         r = t.get("regime", "GLOBAL")
@@ -236,26 +329,26 @@ def run_1y_backtest():
             reg_groups[r] = []
         reg_groups[r].append(t)
 
-    reg_header = f"{'Market Regime':<25} | {'Trades':<8} | {'Wins':<6} | {'Losses':<6} | {'Win Rate':<10} | {'Net PnL':<14} | {'Profit Factor':<14} | {'Avg PnL/Trade':<14}"
+    reg_header = f"{'Market Regime':<25} | {'Trades':<8} | {'Wins':<6} | {'Losses':<6} | {'Win Rate':<10} | {'Net PnL':<13} | {'Profit Factor':<14} | {'Avg PnL/Trade':<13}"
     print(reg_header)
     print("-" * len(reg_header))
 
     for r, r_trades in sorted(reg_groups.items(), key=lambda x: len(x[1]), reverse=True):
         r_wins = [t for t in r_trades if t.get("is_win")]
         r_losses = [t for t in r_trades if not t.get("is_win")]
-        r_wr = (len(r_wins) / len(r_trades)) * 100.0
-        r_gw = sum(t["pnl"] for t in r_wins)
-        r_gl = abs(sum(t["pnl"] for t in r_losses))
-        r_net = sum(t["pnl"] for t in r_trades)
+        r_wr = (len(r_wins) / max(1, len(r_trades))) * 100.0
+        r_gw = sum(t.get("pnl", 0.0) for t in r_wins)
+        r_gl = abs(sum(t.get("pnl", 0.0) for t in r_losses))
+        r_net = sum(t.get("pnl", 0.0) for t in r_trades)
         r_pf = (r_gw / r_gl) if r_gl > 0 else (99.0 if r_gw > 0 else 0.0)
-        r_avg = r_net / len(r_trades)
-        print(f"{r:<25} | {len(r_trades):<8d} | {len(r_wins):<6d} | {len(r_losses):<6d} | {r_wr:>8.2f}% |  | {r_pf:>14.2f} | ")
+        r_avg = r_net / max(1, len(r_trades))
+        print(f"{r:<25} | {len(r_trades):<8d} | {len(r_wins):<6d} | {len(r_losses):<6d} | {r_wr:>8.2f}%  | ${r_net:>12,.2f} | {r_pf:>14.2f} | ${r_avg:>12,.2f}")
     print("=" * len(reg_header))
 
     # --- MONTHLY PERFORMANCE BREAKDOWN ---
-    print("\n" + "=" * 115)
+    print("\n" + "=" * 118)
     print("                                MONTHLY PERFORMANCE BREAKDOWN")
-    print("=" * 115)
+    print("=" * 118)
     month_groups = {}
     for t in all_trades:
         t_time = t.get("open_time") or t.get("exit_time")
@@ -269,7 +362,7 @@ def run_1y_backtest():
             month_groups[m_key] = []
         month_groups[m_key].append(t)
 
-    month_header = f"{'Month (YYYY-MM)':<18} | {'Trades':<8} | {'Wins':<6} | {'Losses':<6} | {'Win Rate':<10} | {'Gross Win':<12} | {'Gross Loss':<12} | {'Net PnL':<12} | {'PF':<6}"
+    month_header = f"{'Month (YYYY-MM)':<18} | {'Trades':<8} | {'Wins':<6} | {'Losses':<6} | {'Win Rate':<10} | {'Gross Win':<11} | {'Gross Loss':<11} | {'Net PnL':<11} | {'PF':<6}"
     print(month_header)
     print("-" * len(month_header))
 
@@ -278,19 +371,19 @@ def run_1y_backtest():
         m_trades = month_groups[m_key]
         m_wins = [t for t in m_trades if t.get("is_win")]
         m_losses = [t for t in m_trades if not t.get("is_win")]
-        m_wr = (len(m_wins) / len(m_trades)) * 100.0 if m_trades else 0.0
-        m_gw = sum(t["pnl"] for t in m_wins)
-        m_gl = abs(sum(t["pnl"] for t in m_losses))
-        m_net = sum(t["pnl"] for t in m_trades)
+        m_wr = (len(m_wins) / max(1, len(m_trades))) * 100.0 if m_trades else 0.0
+        m_gw = sum(t.get("pnl", 0.0) for t in m_wins)
+        m_gl = abs(sum(t.get("pnl", 0.0) for t in m_losses))
+        m_net = sum(t.get("pnl", 0.0) for t in m_trades)
         m_pf = (m_gw / m_gl) if m_gl > 0 else (99.0 if m_gw > 0 else 0.0)
         cum_m_pnl += m_net
-        print(f"{m_key:<18} | {len(m_trades):<8d} | {len(m_wins):<6d} | {len(m_losses):<6d} | {m_wr:>8.2f}% |  |  |  | {m_pf:>6.2f}")
+        print(f"{m_key:<18} | {len(m_trades):<8d} | {len(m_wins):<6d} | {len(m_losses):<6d} | {m_wr:>8.2f}%  | ${m_gw:>10,.2f} | ${m_gl:>10,.2f} | ${m_net:>10,.2f} | {m_pf:>6.2f}")
     print("=" * len(month_header))
 
     # --- EXIT REASON DISTRIBUTION ---
-    print("\n" + "=" * 115)
+    print("\n" + "=" * 118)
     print("                                TRADE EXIT REASON DISTRIBUTION")
-    print("=" * 115)
+    print("=" * 118)
     exit_groups = {}
     for t in all_trades:
         res_k = t.get("result", "UNKNOWN")
@@ -298,24 +391,24 @@ def run_1y_backtest():
             exit_groups[res_k] = []
         exit_groups[res_k].append(t)
 
-    exit_header = f"{'Exit Reason':<22} | {'Count':<8} | {'Share %':<10} | {'Wins':<6} | {'Losses':<6} | {'Win Rate':<10} | {'Net PnL':<14} | {'Avg PnL/Trade':<14}"
+    exit_header = f"{'Exit Reason':<22} | {'Count':<8} | {'Share %':<10} | {'Wins':<6} | {'Losses':<6} | {'Win Rate':<10} | {'Net PnL':<13} | {'Avg PnL/Trade':<13}"
     print(exit_header)
     print("-" * len(exit_header))
 
     for ex, e_trades in sorted(exit_groups.items(), key=lambda x: len(x[1]), reverse=True):
         e_wins = [t for t in e_trades if t.get("is_win")]
         e_losses = [t for t in e_trades if not t.get("is_win")]
-        e_wr = (len(e_wins) / len(e_trades)) * 100.0
-        e_net = sum(t["pnl"] for t in e_trades)
-        e_share = (len(e_trades) / len(all_trades)) * 100.0
-        e_avg = e_net / len(e_trades)
-        print(f"{ex:<22} | {len(e_trades):<8d} | {e_share:>8.1f}% | {len(e_wins):<6d} | {len(e_losses):<6d} | {e_wr:>8.2f}% |  | ")
+        e_wr = (len(e_wins) / max(1, len(e_trades))) * 100.0
+        e_net = sum(t.get("pnl", 0.0) for t in e_trades)
+        e_share = (len(e_trades) / max(1, len(all_trades))) * 100.0
+        e_avg = e_net / max(1, len(e_trades))
+        print(f"{ex:<22} | {len(e_trades):<8d} | {e_share:>8.1f}%  | {len(e_wins):<6d} | {len(e_losses):<6d} | {e_wr:>8.2f}%  | ${e_net:>12,.2f} | ${e_avg:>12,.2f}")
     print("=" * len(exit_header))
 
     # --- MISSED OPPORTUNITIES & QUALITY GATE REJECTIONS ---
-    print("\n" + "=" * 115)
+    print("\n" + "=" * 118)
     print("                     TOP QUALITY GATE REJECTIONS & FILTERED OPPORTUNITIES")
-    print("=" * 115)
+    print("=" * 118)
     sorted_rejections = sorted(all_rejection_stats.items(), key=lambda x: x[1], reverse=True)
     for r_reason, count in sorted_rejections[:15]:
         print(f"  [Filtered x{count:>5d} times] {r_reason}")
@@ -329,10 +422,10 @@ def run_1y_backtest():
         "roi_pct": portfolio_roi,
         "portfolio_metrics": portfolio_metrics,
         "symbols": all_symbol_results,
-        "strategies": {st: {"trades": len(tr), "net_pnl": sum(t["pnl"] for t in tr), "win_rate": sum(1 for t in tr if t["is_win"])/len(tr)} for st, tr in strat_groups.items()},
-        "regimes": {r: {"trades": len(tr), "net_pnl": sum(t["pnl"] for t in tr), "win_rate": sum(1 for t in tr if t["is_win"])/len(tr)} for r, tr in reg_groups.items()},
-        "monthly": {m: {"trades": len(tr), "net_pnl": sum(t["pnl"] for t in tr), "win_rate": sum(1 for t in tr if t["is_win"])/len(tr)} for m, tr in month_groups.items()},
-        "exits": {ex: {"trades": len(tr), "net_pnl": sum(t["pnl"] for t in tr), "win_rate": sum(1 for t in tr if t["is_win"])/len(tr)} for ex, tr in exit_groups.items()},
+        "strategies": {st: {"trades": len(tr), "net_pnl": sum(t.get("pnl", 0.0) for t in tr), "win_rate": sum(1 for t in tr if t.get("is_win", False))/max(1, len(tr))} for st, tr in strat_groups.items()},
+        "regimes": {r: {"trades": len(tr), "net_pnl": sum(t.get("pnl", 0.0) for t in tr), "win_rate": sum(1 for t in tr if t.get("is_win", False))/max(1, len(tr))} for r, tr in reg_groups.items()},
+        "monthly": {m: {"trades": len(tr), "net_pnl": sum(t.get("pnl", 0.0) for t in tr), "win_rate": sum(1 for t in tr if t.get("is_win", False))/max(1, len(tr))} for m, tr in month_groups.items()},
+        "exits": {ex: {"trades": len(tr), "net_pnl": sum(t.get("pnl", 0.0) for t in tr), "win_rate": sum(1 for t in tr if t.get("is_win", False))/max(1, len(tr))} for ex, tr in exit_groups.items()},
         "rejections": all_rejection_stats,
         "all_trades": all_trades
     }
@@ -340,5 +433,7 @@ def run_1y_backtest():
         json.dump(report_dict, f, default=str, indent=2)
     print(f"\n[Artifact Saved] Detailed backtest report dumped to baseline_1y_backtest_report.json")
 
+
 if __name__ == "__main__":
     run_1y_backtest()
+

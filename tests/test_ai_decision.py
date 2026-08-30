@@ -47,5 +47,39 @@ class TestAIDecisionEngine(unittest.TestCase):
         self.assertEqual(res.bias, "BUY")
         self.assertGreaterEqual(res.model_confidence, 0.50)
 
+    def test_strict_quality_gate_no_soften_bypass(self):
+        ctx = MarketContext(
+            symbol="EURUSD",
+            timestamp=datetime(2026, 1, 5, 10, 0, tzinfo=timezone.utc),
+            current_price=1.0850,
+            bid=1.0850,
+            ask=1.0852,
+            structure=StructureContext(bias="NEUTRAL"),
+            liquidity=LiquidityContext(),
+            volatility=VolatilityContext(atr=0.0010, current_spread_pips=5.0),
+            momentum=MomentumContext(trend_score=0.0, rsi=50.0),
+            session=SessionContext(current_session="ASIAN", is_prime_session=False)
+        )
+        regime = RegimeOutput(
+            primary_regime=MarketRegime.LOW_VOLATILITY,
+            probabilities={"LOW_VOLATILITY": 0.50},
+            confidence=0.50
+        )
+        analyst_reports = {
+            "STRUCTURE": AnalystReport(role=AnalystRole.STRUCTURE, symbol="EURUSD", bias="NEUTRAL", confidence=0.40, score=40.0, evidence=[])
+        }
+        devil = DevilAdvocateReport(
+            symbol="EURUSD",
+            counter_bias="BEARISH",
+            penalty_score=25.0,
+            invalidation_risk_coefficient=0.90,
+            threats_detected=[]
+        )
+
+        res = self.engine.evaluate(ctx, regime, analyst_reports, devil, account_balance=10000.0)
+        # Should NOT soften to EXECUTE
+        self.assertNotEqual(res.decision, "EXECUTE")
+        self.assertEqual(res.gate_policy_decision, "BLOCK")
+
 if __name__ == "__main__":
     unittest.main()

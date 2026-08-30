@@ -34,17 +34,35 @@ class MarketContextEngine:
         symbol: str,
         mtf_data: Dict[str, pd.DataFrame],
         current_spread_pips: float = 2.0,
-        max_allowed_spread_pips: float = 35.0
+        max_allowed_spread_pips: float = 35.0,
+        trade_style: str = "SWING"
     ) -> MarketContext:
         """
-        Synthesizes multi-timeframe market data (D1, H4, H1, M15, M5) into a unified MarketContext object.
+        Synthesizes multi-timeframe market data into a unified MarketContext object.
+        Dynamically weights MTF confluence based on trade style:
+        - SWING: D1 (40%), H4 (30%), H1 (20%), M15 (10%)
+        - DAY_TRADING / INTRADAY: H1 (40%), M15 (35%), M5 (25%)
+        - SCALP: H1 (40%), M15 (30%), M5 (20%), M1 (10%)
         """
-        # Primary timeframe is H1, Setup is M15, Timing is M5, Context is H4, Macro is D1
-        df_primary = mtf_data.get("primary", mtf_data.get("H1", pd.DataFrame()))
-        df_macro = mtf_data.get("macro", mtf_data.get("D1", pd.DataFrame()))
-        df_context = mtf_data.get("context", mtf_data.get("H4", pd.DataFrame()))
-        df_setup = mtf_data.get("setup", mtf_data.get("M15", pd.DataFrame()))
-        df_timing = mtf_data.get("timing", mtf_data.get("M5", pd.DataFrame()))
+        style = (trade_style or "SWING").upper()
+        if style in ("DAY_TRADING", "INTRADAY", "DAY"):
+            df_macro = mtf_data.get("macro", mtf_data.get("H1", pd.DataFrame()))
+            df_context = mtf_data.get("context", mtf_data.get("M15", pd.DataFrame()))
+            df_primary = mtf_data.get("primary", mtf_data.get("M5", pd.DataFrame()))
+            df_setup = mtf_data.get("setup", mtf_data.get("M15", pd.DataFrame()))
+            df_timing = mtf_data.get("timing", mtf_data.get("M5", pd.DataFrame()))
+        elif style == "SCALP":
+            df_macro = mtf_data.get("macro", mtf_data.get("H1", pd.DataFrame()))
+            df_context = mtf_data.get("context", mtf_data.get("M15", pd.DataFrame()))
+            df_primary = mtf_data.get("primary", mtf_data.get("M5", pd.DataFrame()))
+            df_setup = mtf_data.get("setup", mtf_data.get("M5", pd.DataFrame()))
+            df_timing = mtf_data.get("timing", mtf_data.get("M1", pd.DataFrame()))
+        else:  # SWING (default)
+            df_macro = mtf_data.get("macro", mtf_data.get("D1", pd.DataFrame()))
+            df_context = mtf_data.get("context", mtf_data.get("H4", pd.DataFrame()))
+            df_primary = mtf_data.get("primary", mtf_data.get("H1", pd.DataFrame()))
+            df_setup = mtf_data.get("setup", mtf_data.get("H1", mtf_data.get("M15", pd.DataFrame())))
+            df_timing = mtf_data.get("timing", mtf_data.get("M15", mtf_data.get("M5", pd.DataFrame())))
 
         if df_primary.empty:
             df_primary = list(mtf_data.values())[0] if mtf_data else pd.DataFrame()
@@ -93,28 +111,63 @@ class MarketContextEngine:
 
         session = SessionEngine.get_current_session(bar_timestamp)
 
-        # 6. Multi-Timeframe Alignment Matrix & Top-Down Weighted Score
+        # 6. Multi-Timeframe Alignment Matrix & Dynamic Top-Down Weighted Score
         mtf_alignment = {}
-        if not df_macro.empty:
-            mtf_alignment["D1"] = self.structure_engine.analyze_structure(df_macro).bias
-        if not df_context.empty:
-            mtf_alignment["H4"] = self.structure_engine.analyze_structure(df_context).bias
-        mtf_alignment["H1"] = structure_primary.bias
-        if not df_setup.empty:
-            mtf_alignment["M15"] = self.structure_engine.analyze_structure(df_setup).bias
-        if not df_timing.empty:
-            mtf_alignment["M5"] = self.structure_engine.analyze_structure(df_timing).bias
-
-        # Top-down narrative weighting: D1 (40%), H4 (30%), H1 (20%), M15 (10%)
         def _score_bias(b: str) -> float:
             return 1.0 if b == "BULLISH" else (-1.0 if b == "BEARISH" else 0.0)
 
-        weighted_score = (
-            _score_bias(mtf_alignment.get("D1", "NEUTRAL")) * 0.40 +
-            _score_bias(mtf_alignment.get("H4", "NEUTRAL")) * 0.30 +
-            _score_bias(mtf_alignment.get("H1", "NEUTRAL")) * 0.20 +
-            _score_bias(mtf_alignment.get("M15", "NEUTRAL")) * 0.10
-        )
+        if style in ("DAY_TRADING", "INTRADAY", "DAY"):
+            # When trade_style == "DAY_TRADING": H1 (40%), M15 (35%), M5 (25%)
+            h1_bias = self.structure_engine.analyze_structure(df_macro).bias if not df_macro.empty else "NEUTRAL"
+            m15_bias = self.structure_engine.analyze_structure(df_context).bias if not df_context.empty else "NEUTRAL"
+            m5_bias = structure_primary.bias if not df_primary.empty else "NEUTRAL"
+            
+            mtf_alignment["H1"] = h1_bias
+            mtf_alignment["M15"] = m15_bias
+            mtf_alignment["M5"] = m5_bias
+            
+            weighted_score = (
+                _score_bias(h1_bias) * 0.40 +
+                _score_bias(m15_bias) * 0.35 +
+                _score_bias(m5_bias) * 0.25
+            )
+        elif style == "SCALP":
+            h1_bias = self.structure_engine.analyze_structure(df_macro).bias if not df_macro.empty else "NEUTRAL"
+            m15_bias = self.structure_engine.analyze_structure(df_context).bias if not df_context.empty else "NEUTRAL"
+            m5_bias = structure_primary.bias if not df_primary.empty else "NEUTRAL"
+            m1_bias = self.structure_engine.analyze_structure(df_timing).bias if not df_timing.empty else "NEUTRAL"
+            
+            mtf_alignment["H1"] = h1_bias
+            mtf_alignment["M15"] = m15_bias
+            mtf_alignment["M5"] = m5_bias
+            mtf_alignment["M1"] = m1_bias
+            
+            weighted_score = (
+                _score_bias(h1_bias) * 0.40 +
+                _score_bias(m15_bias) * 0.30 +
+                _score_bias(m5_bias) * 0.20 +
+                _score_bias(m1_bias) * 0.10
+            )
+        else:  # SWING (default): D1 (40%), H4 (30%), H1 (20%), M15 (10%)
+            d1_bias = self.structure_engine.analyze_structure(df_macro).bias if not df_macro.empty else "NEUTRAL"
+            h4_bias = self.structure_engine.analyze_structure(df_context).bias if not df_context.empty else "NEUTRAL"
+            h1_bias = structure_primary.bias if not df_primary.empty else "NEUTRAL"
+            m15_bias = self.structure_engine.analyze_structure(df_timing).bias if not df_timing.empty else (
+                self.structure_engine.analyze_structure(df_setup).bias if not df_setup.empty else "NEUTRAL"
+            )
+            
+            mtf_alignment["D1"] = d1_bias
+            mtf_alignment["H4"] = h4_bias
+            mtf_alignment["H1"] = h1_bias
+            mtf_alignment["M15"] = m15_bias
+
+            weighted_score = (
+                _score_bias(d1_bias) * 0.40 +
+                _score_bias(h4_bias) * 0.30 +
+                _score_bias(h1_bias) * 0.20 +
+                _score_bias(m15_bias) * 0.10
+            )
+
         mtf_confluence_pct = round(weighted_score * 100.0, 1)
 
         # 7. VWAP Calculation

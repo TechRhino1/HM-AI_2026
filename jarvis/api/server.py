@@ -110,11 +110,12 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                     radar_results = []
                     account = cls.state_manager.account or acc
 
+                    trade_style = getattr(cls.state_manager, "trade_style", "SWING")
                     for sym in symbols:
                         try:
-                            mtf = cls.data_feed.fetch_multi_timeframe(sym)
+                            mtf = cls.data_feed.fetch_multi_timeframe(sym, trade_style=trade_style)
                             spec = resolve_symbol(sym)
-                            ctx = ce.build_context(sym, mtf, current_spread_pips=spec.typical_spread_pips, max_allowed_spread_pips=spec.max_spread_pips)
+                            ctx = ce.build_context(sym, mtf, current_spread_pips=spec.typical_spread_pips, max_allowed_spread_pips=spec.max_spread_pips, trade_style=trade_style)
                             cls.state_manager.update_market_context(sym, ctx)
                             regime = rc.classify_regime(ctx)
                             tentative_bias = "BUY" if ctx.structure.bias == "BULLISH" else ("SELL" if ctx.structure.bias == "BEARISH" else ("SELL" if getattr(ctx.momentum, "trend_score", 0.0) < 0 else "BUY"))
@@ -146,7 +147,8 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
 
                             radar_results.append({
                                 "symbol": sym,
-                                "timeframe": "H1",
+                                "trade_style": trade_style,
+                                "timeframe": "D1/H4/H1" if trade_style == "SWING" else ("H1/M15/M5" if trade_style in ("DAY_TRADING", "INTRADAY", "DAY") else "H1/M5/M1"),
                                 "bias": d.bias,
                                 "action": status_label,
                                 "status_label": status_label,
@@ -166,6 +168,8 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                                 "gate_passed": d.quality_gate.passed,
                                 "failing_reasons": d.quality_gate.failing_reasons,
                                 "checks": d.quality_gate.checks,
+                                "mtf_alignment": ctx.mtf_alignment,
+                                "mtf_confluence": ctx.mtf_confluence_score,
                                 "waiting_reasons": getattr(d, "waiting_reasons", []),
                                 "rejection_reasons": getattr(d, "rejection_reasons", [])
                             })
@@ -270,8 +274,26 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                         "volume": float(r["volume"])
                     })
                 self._send_json({"symbol": sym, "timeframe": tf, "candles": candles})
+            elif path == "/api/rates":
+                sym = query.get("symbol", ["XAUUSD"])[0]
+                tf = query.get("tf", query.get("timeframe", ["H1"]))[0]
+                trade_style = query.get("trade_style", [None])[0]
+                bars = int(query.get("num_bars", query.get("bars", [150]))[0])
+                if trade_style:
+                    mtf = self.data_feed.fetch_multi_timeframe(sym, trade_style=trade_style, num_bars=bars)
+                    res = {}
+                    for role, df in mtf.items():
+                        res[role] = df.tail(bars).to_dict(orient="records")
+                    self._send_json({"symbol": sym, "trade_style": trade_style, "rates": res})
+                else:
+                    df = self.data_feed.fetch_rates(sym, timeframe=tf, num_bars=bars, include_current_bar=True)
+                    self._send_json({"symbol": sym, "timeframe": tf, "rates": df.to_dict(orient="records")})
             elif path == "/api/radar":
-                self._send_json({"opportunities": self.state_manager.radar_opportunities})
+                style_filter = query.get("trade_style", [None])[0]
+                opps = self.state_manager.radar_opportunities
+                if style_filter:
+                    opps = [o for o in opps if str(o.get("trade_style", "")).upper() == style_filter.upper()]
+                self._send_json({"opportunities": opps})
             elif path == "/api/history":
                 try:
                     from jarvis.data.database import TRADE_DB

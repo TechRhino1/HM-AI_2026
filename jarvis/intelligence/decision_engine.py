@@ -37,6 +37,7 @@ from jarvis.intelligence.realtime_optimizer import RealtimeOptimizer
 from jarvis.intelligence.master_confluence import MasterConfluenceEngine
 from jarvis.market.fair_value_gap import FairValueGapEngine
 from jarvis.intelligence.mean_reversion import MeanReversionEngine
+from jarvis.intelligence.dynamic_levels import DynamicRiskAndLevelsEngine
 
 
 def _is_forex(symbol: str) -> bool:
@@ -58,6 +59,7 @@ class DecisionEngine:
         ai_dissector: Optional[AIDissector] = None,
         realtime_optimizer: Optional[RealtimeOptimizer] = None,
         master_confluence: Optional[MasterConfluenceEngine] = None,
+        dynamic_levels_engine: Optional[DynamicRiskAndLevelsEngine] = None,
         min_ev_hurdle: float = 0.50,
         max_devil_penalty: float = 38.0
     ):
@@ -78,6 +80,7 @@ class DecisionEngine:
         self.master_confluence = master_confluence or MasterConfluenceEngine()
         self.fvg_engine = FairValueGapEngine()
         self.mean_reversion_engine = MeanReversionEngine()
+        self.dynamic_levels_engine = dynamic_levels_engine or DynamicRiskAndLevelsEngine()
 
 
 
@@ -93,193 +96,48 @@ class DecisionEngine:
         
         bull_votes = sum(1 for r in analyst_reports.values() if r.bias == "BULLISH")
         bear_votes = sum(1 for r in analyst_reports.values() if r.bias == "BEARISH")
+        trend_score = getattr(context.momentum, "trend_score", 0.0) if hasattr(context, "momentum") else 0.0
         
         if st.choch and st.choch_type == "BEARISH":
             tentative_bias = "SELL"
         elif st.choch and st.choch_type == "BULLISH":
             tentative_bias = "BUY"
-        elif bear_votes > bull_votes and bear_votes >= 2:
+        elif st.bos and trend_score <= -20.0:
             tentative_bias = "SELL"
-        elif bull_votes > bear_votes and bull_votes >= 2:
+        elif st.bos and trend_score >= 20.0:
             tentative_bias = "BUY"
-        elif bear_votes > bull_votes:
+        elif bear_votes >= 3 and bear_votes > bull_votes:
             tentative_bias = "SELL"
-        elif bull_votes > bear_votes:
+        elif bull_votes >= 3 and bull_votes > bear_votes:
             tentative_bias = "BUY"
-        elif st.bias == "BEARISH":
+        elif st.bias == "BEARISH" and trend_score <= -20.0:
             tentative_bias = "SELL"
-        elif st.bias == "BULLISH":
+        elif st.bias == "BULLISH" and trend_score >= 20.0:
             tentative_bias = "BUY"
-        elif getattr(context.momentum, "trend_score", 0.0) < 0:
-            tentative_bias = "SELL"
         else:
-            tentative_bias = "BUY"
+            tentative_bias = "HOLD"
 
         spec = resolve_symbol(context.symbol)
         digits = spec.digits
-        atr = vol.atr if vol.atr > 0 else (c_price * 0.005)
 
-        # §P2, §P5 & §B-1: Regime & Conviction Adaptive SL, TP & Partial Profit Scaling
-        is_strong_trend = (
-            regime.primary_regime in (MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR)
-            and getattr(regime, "confidence", 0.0) > 0.75
-            and getattr(context.momentum, "adx", 0.0) > 25.0
+        levels = self.dynamic_levels_engine.calculate_levels(
+            context=context,
+            regime=regime,
+            tentative_bias=tentative_bias,
+            account_balance=10000.0,
+            risk_per_trade_pct=0.5
         )
-        is_ranging = regime.primary_regime in (MarketRegime.RANGE, MarketRegime.LOW_VOLATILITY)
-        is_breakout = regime.primary_regime in (MarketRegime.BREAKOUT, MarketRegime.HIGH_VOLATILITY)
-        is_fx = _is_forex(context.symbol)
 
-        if is_strong_trend:
-            sl_default_mult = 1.35 if is_fx else 0.85   # Forex needs 1.35 ATR buffer against spread noise; Gold/BTC uses tight 0.85
-            sl_min_bound_mult = 0.80 if is_fx else 0.35
-            sl_max_bound_mult = 2.20 if is_fx else 1.50
-            sl_buffer_mult = 0.20 if is_fx else 0.10
-            tp_multiplier = 2.20 if is_fx else 4.20     # Forex targets 2.2R, Gold/BTC run up to 4.2R
-            first_target_volume_pct = 0.50 if is_fx else 0.25
-        elif is_ranging:
-            sl_default_mult = 1.35 if is_fx else 1.00
-            sl_min_bound_mult = 0.80 if is_fx else 0.40
-            sl_max_bound_mult = 2.20 if is_fx else 1.80
-            sl_buffer_mult = 0.20 if is_fx else 0.15
-            tp_multiplier = 2.00 if is_fx else 2.20
-            first_target_volume_pct = 0.50
-        elif is_breakout:
-            sl_default_mult = 1.35 if is_fx else 0.90
-            sl_min_bound_mult = 0.80 if is_fx else 0.35
-            sl_max_bound_mult = 2.20 if is_fx else 1.60
-            sl_buffer_mult = 0.20 if is_fx else 0.12
-            tp_multiplier = 2.20 if is_fx else 3.20
-            first_target_volume_pct = 0.50
-        else:
-            sl_default_mult = 1.35 if is_fx else 1.00
-            sl_min_bound_mult = 0.80 if is_fx else 0.40
-            sl_max_bound_mult = 2.20 if is_fx else 2.00
-            sl_buffer_mult = 0.20 if is_fx else 0.15
-            tp_multiplier = 2.20 if is_fx else 2.80
-            first_target_volume_pct = 0.50
-
-        spread_dist = max(0.0, context.ask - context.bid) if (context.ask > 0 and context.bid > 0) else (context.volatility.current_spread_pips * spec.pip_size)
-
-        if tentative_bias == "BUY":
-            entry_price = round(context.ask, digits)
-            # Structural SL with regime-adaptive buffer and bounds
-            if st.demand_zone[0] > 0 and entry_price > st.demand_zone[0]:
-                struct_sl_dist = entry_price - (st.demand_zone[0] - (atr * sl_buffer_mult))
-                if (sl_min_bound_mult * atr) <= struct_sl_dist <= (sl_max_bound_mult * atr):
-                    sl_dist = struct_sl_dist
-                else:
-                    sl_dist = atr * sl_default_mult
-            else:
-                sl_dist = atr * sl_default_mult
-
-            sl_price = round(entry_price - sl_dist, digits)
-            risk_dist = abs(entry_price - sl_price)
-
-            flat_tp_dist = risk_dist * tp_multiplier
-            struct_target_dist = 0.0
-            if st.supply_zone[0] > entry_price:
-                struct_target_dist = st.supply_zone[0] - entry_price
-            elif hasattr(st, "key_levels") and st.key_levels:
-                res_levels = [kl["price"] for kl in st.key_levels if kl.get("price", 0) > entry_price]
-                if res_levels:
-                    struct_target_dist = min(res_levels) - entry_price
-
-            if is_strong_trend:
-                # In strong trends, honor further structural targets up to 5.0R
-                if struct_target_dist >= (risk_dist * 1.5):
-                    tp_dist = min(struct_target_dist, risk_dist * 5.0)
-                else:
-                    tp_dist = flat_tp_dist
-            else:
-                if struct_target_dist >= (risk_dist * 1.5) and struct_target_dist <= flat_tp_dist:
-                    tp_dist = struct_target_dist
-                else:
-                    tp_dist = flat_tp_dist
-
-            tp_price = round(entry_price + tp_dist, digits)
-            rr_ratio = round(tp_dist / (risk_dist + 1e-9), 2)
-
-            # §B-2 / §B-3: First target for partial scaling (near structure or 1.0R)
-            if 0 < struct_target_dist < tp_dist and struct_target_dist >= (risk_dist * 0.8):
-                first_target_price = round(entry_price + struct_target_dist, digits)
-            else:
-                first_target_price = round(entry_price + (risk_dist * 1.0), digits)
-
-        elif tentative_bias == "SELL":
-            entry_price = round(context.bid, digits)
-            # Structural SL with regime-adaptive buffer, spread offset and bounds
-            if st.supply_zone[1] > 0 and st.supply_zone[1] > entry_price:
-                struct_sl_dist = (st.supply_zone[1] + (atr * sl_buffer_mult) + spread_dist) - entry_price
-                if (sl_min_bound_mult * atr) <= struct_sl_dist <= (sl_max_bound_mult * atr + spread_dist):
-                    sl_dist = struct_sl_dist
-                else:
-                    sl_dist = atr * sl_default_mult + spread_dist
-            else:
-                sl_dist = atr * sl_default_mult + spread_dist
-
-            sl_price = round(entry_price + sl_dist, digits)
-            risk_dist = abs(sl_price - entry_price)
-
-            flat_tp_dist = risk_dist * tp_multiplier
-            struct_target_dist = 0.0
-            if st.demand_zone[1] > 0 and st.demand_zone[1] < entry_price:
-                struct_target_dist = entry_price - st.demand_zone[1]
-            elif hasattr(st, "key_levels") and st.key_levels:
-                sup_levels = [kl["price"] for kl in st.key_levels if 0 < kl.get("price", 0) < entry_price]
-                if sup_levels:
-                    struct_target_dist = entry_price - max(sup_levels)
-
-            if is_strong_trend:
-                # In strong trends, honor further structural targets up to 5.0R
-                if struct_target_dist >= (risk_dist * 1.5):
-                    tp_dist = min(struct_target_dist, risk_dist * 5.0)
-                else:
-                    tp_dist = flat_tp_dist
-            else:
-                if struct_target_dist >= (risk_dist * 1.5) and struct_target_dist <= flat_tp_dist:
-                    tp_dist = struct_target_dist
-                else:
-                    tp_dist = flat_tp_dist
-
-            tp_price = round(entry_price - tp_dist, digits)
-            rr_ratio = round(tp_dist / (risk_dist + 1e-9), 2)
-
-            # §B-2 / §B-3: First target for partial scaling (near structure or 1.0R)
-            if 0 < struct_target_dist < tp_dist and struct_target_dist >= (risk_dist * 0.8):
-                first_target_price = round(entry_price - struct_target_dist, digits)
-            else:
-                first_target_price = round(entry_price - (risk_dist * 1.0), digits)
-        else:
-            # When bias is HOLD / MONITOR, compute a valid structural reference bracket
-            # based on prevailing structure/momentum rather than setting SL=TP=entry.
-            is_bear_tilt = (st.bias == "BEARISH") or (getattr(context.momentum, "trend_score", 0.0) < 0)
-            if is_bear_tilt:
-                entry_price = round(context.bid, digits)
-                sl_dist = atr * sl_default_mult
-                if st.supply_zone[1] > entry_price:
-                    candidate_dist = (st.supply_zone[1] + (atr * sl_buffer_mult)) - entry_price
-                    if (sl_min_bound_mult * atr) <= candidate_dist <= (sl_max_bound_mult * atr):
-                        sl_dist = candidate_dist
-                sl_price = round(entry_price + sl_dist, digits)
-                risk_dist = abs(sl_price - entry_price)
-                tp_dist = risk_dist * tp_multiplier
-                tp_price = round(entry_price - tp_dist, digits)
-            else:
-                entry_price = round(context.ask, digits)
-                sl_dist = atr * sl_default_mult
-                if st.demand_zone[0] > 0 and entry_price > st.demand_zone[0]:
-                    candidate_dist = entry_price - (st.demand_zone[0] - (atr * sl_buffer_mult))
-                    if (sl_min_bound_mult * atr) <= candidate_dist <= (sl_max_bound_mult * atr):
-                        sl_dist = candidate_dist
-                sl_price = round(entry_price - sl_dist, digits)
-                risk_dist = abs(entry_price - sl_price)
-                tp_dist = risk_dist * tp_multiplier
-                tp_price = round(entry_price + tp_dist, digits)
-
-            rr_ratio = round(tp_dist / (risk_dist + 1e-9), 2)
-            first_target_price = None
-
-        return tentative_bias, entry_price, sl_price, tp_price, risk_dist, rr_ratio, first_target_price, first_target_volume_pct
+        return (
+            tentative_bias,
+            levels["entry_price"],
+            levels["sl_price"],
+            levels["tp_price"],
+            levels["risk_dist"],
+            levels["rr_ratio"],
+            levels["first_target_price"],
+            levels["first_target_volume_pct"]
+        )
 
     def _compute_blended_probability(
         self,
@@ -360,7 +218,8 @@ class DecisionEngine:
         tentative_bias: str = "HOLD",
         calibrated_win_p: float = 0.0,
         risk_dist: float = 0.0,
-        planned_risk_dollars: float = 0.0
+        planned_risk_dollars: float = 0.0,
+        strategy: str = ""
     ) -> TradeQualityGateResult:
         is_micro_mode = is_micro_account(account_balance)
         effective_min_ev = get_effective_min_ev(account_balance, planned_risk_dollars)
@@ -371,64 +230,89 @@ class DecisionEngine:
 
         is_prime_session = bool(getattr(context.session, "is_prime_session", False)) if hasattr(context, "session") else False
 
-        # Dynamic Scalp Confluence & Quality Factor
-        is_scalp_favorable = (
-            rr_ratio >= 1.8
-            and spread <= (spec.max_spread_pips * 0.7)
-            and not context.volatility.is_excessive_spread
-            and (abs(context.momentum.trend_score) >= 10 or context.structure.bos or context.liquidity.sweep_detected)
-        )
+        sym_name = str(context.symbol).upper()
+        is_jpy = "JPY" in sym_name
+        is_crypto = ("BTC" in sym_name) or spec.is_crypto
+        is_gold = ("XAU" in sym_name) or ("GOLD" in sym_name) or (getattr(spec, "asset_class", "") == "COMMODITY")
+        is_fx = _is_forex(context.symbol) and not is_jpy
 
-        if is_micro_mode:
-            if is_scalp_favorable and (is_prime_session or rr_ratio >= 2.0):
-                min_score = 68.0  # Was 72 — micro scalps need reachable threshold
-                min_rr = 1.6      # Was 1.8
-                required_win_p = 0.48  # Was 0.50
-            elif account_balance <= 40.0:
-                min_score = 72.0  # Was 78 — 78 was unreachable for $40 accounts
-                min_rr = 1.6      # Was 1.8
-                required_win_p = 0.50  # Was 0.52
-            else:
-                min_score = 72.0  # Was 75
-                min_rr = 1.6      # Was 1.8
-                required_win_p = 0.50  # Was 0.52
-            
-            base_spread = 3.0
-            dynamic_max_spread = max(base_spread, atr_pips * 0.08)
-            dynamic_max_spread = min(dynamic_max_spread, context.volatility.max_allowed_spread_pips * 0.85)  # Was 0.75
-            max_spread = round(dynamic_max_spread, 1)
+        # 1. Dynamic Confluence Count
+        confluence_count = 0
+        if bool(getattr(context.structure, "bos", False)):
+            confluence_count += 1
+        if bool(getattr(context.liquidity, "sweep_detected", False)):
+            confluence_count += 1
+        if abs(getattr(context.momentum, "trend_score", 0.0)) >= 20.0:
+            confluence_count += 1
+        if abs(getattr(context, "mtf_confluence_score", 0.0)) >= 30.0:
+            confluence_count += 1
 
-            if current_drawdown_pct > 5.0:
-                min_score = max(min_score, 78.0)  # Was 82 — less harsh under stress
-                required_win_p = max(required_win_p, 0.54)  # Was 0.58
+        # 2. Dynamic Kelly Win Probability Hurdle: Required_Win_P = 1.0 / (1.0 + Target_RR) + SlippageSafetyMargin (bounded [0.50, 0.68])
+        typ_spread_pips = spec.typical_spread_pips if getattr(spec, "typical_spread_pips", 0) > 0 else 1.5
+        spread_ratio = spread / max(typ_spread_pips, 0.1)
+        kelly_base = 1.0 / (1.0 + max(0.5, rr_ratio))
+
+        spread_penalty = 0.02 * min(2.0, max(0.0, spread_ratio - 1.0))
+        if is_fx:
+            base_safety_margin = 0.287  # Forex requires 62% win prob at 2.0R
+        elif is_gold or is_crypto or is_jpy:
+            base_safety_margin = 0.265  # Gold/Crypto/JPY requires 60% win prob at 2.0R
+        elif is_micro_mode:
+            base_safety_margin = 0.145  # Micro mode requires 48% win prob at 2.0R
         else:
-            min_score = 75.0 if is_scalp_favorable else 78.0
+            base_safety_margin = 0.245
+
+        dynamic_kelly_p = kelly_base + base_safety_margin + spread_penalty
+        floor_win_p = 0.48 if is_micro_mode else 0.50
+        required_win_p = max(floor_win_p, min(0.68, round(dynamic_kelly_p, 2)))
+        if is_micro_mode and current_drawdown_pct > 5.0:
+            required_win_p = max(required_win_p, 0.52)
+
+        # 3. Dynamic AI Minimum Score: 70.0 + 5.0 * 1_{TRANSITION} + 6.0 * max(0, Spread/TypSpread - 1) - 4.0 * 1_{Confluence >= 4}
+        is_transition_reg = (regime.primary_regime in (MarketRegime.TRANSITION, MarketRegime.REVERSAL)) or getattr(regime, "regime_transition", False)
+        spread_excess = max(0.0, spread_ratio - 1.0)
+        confluence_adj = 4.0 if confluence_count >= 4 else 0.0
+        base_score = 68.0 if is_micro_mode else (78.0 if is_fx else 76.0)
+        dynamic_score = base_score + (5.0 if is_transition_reg else 0.0) + (6.0 * spread_excess) - confluence_adj
+        min_score = max(65.0, min(85.0, dynamic_score))
+
+        # Risk-Reward minimum & SL multiplier
+        if is_micro_mode:
+            min_rr = 1.5
+            min_sl_atr_mult = 0.40
+            max_spread = min(3.0, spec.max_spread_pips * 0.8)
+            if current_drawdown_pct > 5.0:
+                min_score = max(min_score, 74.0)
+        elif is_gold:
             min_rr = 1.8
-            required_win_p = 0.52 if is_scalp_favorable else 0.55
+            min_sl_atr_mult = 0.50
+            max_spread = spec.max_spread_pips
+        elif is_crypto:
+            min_rr = 1.8
+            min_sl_atr_mult = 0.65
+            max_spread = spec.max_spread_pips
+        elif is_jpy:
+            min_rr = 1.8
+            min_sl_atr_mult = 0.60
+            max_spread = spec.max_spread_pips
+        else:  # Forex Majors
+            min_rr = 1.7
+            min_sl_atr_mult = 0.60
             max_spread = spec.max_spread_pips
 
-        if _is_forex(context.symbol):
-            required_win_p = max(required_win_p, 0.62)
-            min_score = max(min_score, 85.0)
-            min_rr = 2.2
-        elif "BTC" in context.symbol.upper():
-            required_win_p = max(required_win_p, 0.52)
-            min_score = max(min_score, 74.0)
-            min_rr = 2.0
-
-        # Real-time per-symbol optimizer — adapts thresholds from live win-rate (neutral in backtests)
+        # Real-time per-symbol optimizer adjustments
         try:
             regime_str = regime.primary_regime.value if regime and hasattr(regime, "primary_regime") else "GLOBAL"
             adj = self.realtime_optimizer.get_adjustments(context.symbol, regime_str)
-            required_win_p = max(0.40, min(0.65, required_win_p + float(adj.get("win_p_delta", 0))))
-            min_score = max(60.0, min(85.0, min_score + float(adj.get("score_delta", 0))))
-            min_rr = max(1.2, min(2.0, min_rr + float(adj.get("rr_delta", 0))))
+            floor_win_p_opt = 0.45 if is_micro_mode else 0.58
+            floor_score_opt = 65.0 if is_micro_mode else 76.0
+            required_win_p = max(floor_win_p_opt, min(0.65, required_win_p + float(adj.get("win_p_delta", 0))))
+            min_score = max(floor_score_opt, min(85.0, min_score + float(adj.get("score_delta", 0))))
+            min_rr = max(1.5, min(2.0, min_rr + float(adj.get("rr_delta", 0))))
         except Exception:
             pass
 
-        # Check Macro MTF Confluence (H4 and D1 alignment)
-        # Institutional Rule: Never short against a Macro Bull trend or buy against a Macro Bear trend
-        # unless confirmed by an explicit structural CHoCH or multi-tier liquidity sweep.
+        # 4. Macro MTF Confluence Guard
         mtf_align = getattr(context, "mtf_alignment", {})
         h4_bias = mtf_align.get("H4", "NEUTRAL") if isinstance(mtf_align, dict) else "NEUTRAL"
         d1_bias = mtf_align.get("D1", "NEUTRAL") if isinstance(mtf_align, dict) else "NEUTRAL"
@@ -436,18 +320,23 @@ class DecisionEngine:
         has_reversal_structure = bool(getattr(context.structure, "choch", False) or getattr(context.liquidity, "sweep_detected", False))
         mtf_counter_trend = False
         if tentative_bias == "BUY" and (h4_bias == "BEARISH" or d1_bias == "BEARISH"):
-            if not (has_reversal_structure and ai_score >= 85.0 and calibrated_win_p >= 0.65):
+            if not (has_reversal_structure and ai_score >= 82.0 and calibrated_win_p >= 0.60):
                 mtf_counter_trend = True
         elif tentative_bias == "SELL" and (h4_bias == "BULLISH" or d1_bias == "BULLISH"):
-            if not (has_reversal_structure and ai_score >= 85.0 and calibrated_win_p >= 0.65):
+            if not (has_reversal_structure and ai_score >= 82.0 and calibrated_win_p >= 0.60):
                 mtf_counter_trend = True
 
-        # Trend Exhaustion Guard (Avoid buying top of climax / shorting bottom of selloff)
+        # 5. Dynamic RSI Exhaustion Bounds based on ADX and regime: 70 +- 10 * TrendPower
+        adx_val = getattr(context.momentum, "adx", 20.0)
+        trend_power = min(1.0, max(0.0, (adx_val - 20.0) / 25.0))
+        rsi_upper = 70.0 + (10.0 * trend_power)
+        rsi_lower = 30.0 - (10.0 * trend_power)
         rsi_val = getattr(context.momentum, "rsi", 50.0)
         is_exhausted = False
-        if tentative_bias == "BUY" and rsi_val > 76.0 and regime.primary_regime != MarketRegime.BREAKOUT:
+        is_breakout_reg = regime.primary_regime in (MarketRegime.BREAKOUT, MarketRegime.POST_BREAKOUT, MarketRegime.HIGH_VOLATILITY)
+        if tentative_bias == "BUY" and rsi_val > rsi_upper and not is_breakout_reg:
             is_exhausted = True
-        elif tentative_bias == "SELL" and rsi_val < 24.0 and regime.primary_regime != MarketRegime.BREAKOUT:
+        elif tentative_bias == "SELL" and rsi_val < rsi_lower and not is_breakout_reg:
             is_exhausted = True
 
         from jarvis.market.sessions import SessionEngine
@@ -457,15 +346,35 @@ class DecisionEngine:
         of_trap = context.order_flow.get("absorption_trap") if hasattr(context, "order_flow") and isinstance(context.order_flow, dict) else None
         is_of_trap = (tentative_bias == "BUY" and of_trap == "BUYER_ABSORPTION_TRAP") or (tentative_bias == "SELL" and of_trap == "SELLER_ABSORPTION_TRAP")
         kz_active = SessionEngine.is_forex_killzone_active(getattr(context, "timestamp", None))
-        is_prime_session_valid = (not _is_forex(context.symbol)) or kz_active or (ai_score >= 82.0 and calibrated_win_p >= 0.58)
+        
+        if is_crypto or is_gold:
+            is_prime_session_valid = True
+        elif is_jpy:
+            is_prime_session_valid = kz_active or (context.session.is_prime_session if hasattr(context, "session") and context.session else False) or (spread <= spec.typical_spread_pips * 1.5)
+        else:
+            is_prime_session_valid = kz_active or (context.session.is_prime_session if hasattr(context, "session") and context.session else False) or (regime.primary_regime in (MarketRegime.RANGE, MarketRegime.LOW_VOLATILITY, MarketRegime.CONSOLIDATION) and spread <= spec.typical_spread_pips * 1.5) or (ai_score >= 80.0 and calibrated_win_p >= 0.56)
 
-        min_sl_atr_mult = 0.6 if is_micro_mode else (1.0 if "BTC" in context.symbol.upper() else 0.75)
+        # 6. Gold (XAUUSD) Trend Following Gate: Require sweep confirmation or pullback to discount/premium
+        gold_trend_following_valid = True
+        effective_strat = strategy or getattr(context, "strategy", "")
+        if is_gold and effective_strat == "TREND_FOLLOWING":
+            st_zone = context.structure.discount_premium_zone
+            sweep_confirmed = bool(context.liquidity.sweep_detected)
+            if tentative_bias == "BUY" and not (sweep_confirmed or st_zone in ("DISCOUNT", "EQUILIBRIUM")):
+                gold_trend_following_valid = False
+            elif tentative_bias == "SELL" and not (sweep_confirmed or st_zone in ("PREMIUM", "EQUILIBRIUM")):
+                gold_trend_following_valid = False
 
-        # 16-Point Comprehensive Institutional Quality Gate Matrix
+        # Institutional Quality Gate Matrix
+        regime_viable = regime.primary_regime != MarketRegime.EVENT_RISK
+        if regime.primary_regime == MarketRegime.WEAK_TREND:
+            if not (ai_score >= 80.0 and calibrated_win_p >= 0.60):
+                regime_viable = False
+
         gate_checks = {
             "Market Session Open": is_mkt_open,
             "Drawdown Safety Guard": current_drawdown_pct <= 10.0,
-            "Regime Viability": regime.primary_regime != MarketRegime.EVENT_RISK,
+            "Regime Viability": regime_viable,
             "Directional Bias": tentative_bias in ["BUY", "SELL"],
             "Risk/Reward >= 1.5": rr_ratio >= min_rr,
             "Positive Expected Value": ev > 0 and ev >= effective_min_ev,
@@ -481,6 +390,7 @@ class DecisionEngine:
             "Trend Not Exhausted": not is_exhausted,
             "No Order Flow Absorption Trap": not is_of_trap,
             "Forex Prime Session": is_prime_session_valid,
+            "Gold Trend Following Alignment": gold_trend_following_valid,
             "Margin Capacity Limit": account_balance >= 10.0 and planned_risk_dollars > 0
         }
 
@@ -658,9 +568,9 @@ class DecisionEngine:
         calibrated_win_p = min(0.95, max(0.05, calibrated_win_p + float(_master["prob_boost"])))
         final_win_p = min(0.95, max(0.05, final_win_p + float(_master["prob_boost"])))
         
-        # HARD GATE: Minimum 65/100 Master Confluence required for Forex entry, 55 for others
+        # HARD GATE: Minimum 70/100 Master Confluence required for Forex entry, 65 for others
         # This eliminates low-quality setups that lack institutional confluence
-        _min_confluence = 65 if _is_forex(context.symbol) else 55
+        _min_confluence = 70 if _is_forex(context.symbol) else 65
         master_confluence_valid = _master_score >= _min_confluence
         
         if _master_tier in ("ELITE", "HIGH"):
@@ -696,34 +606,91 @@ class DecisionEngine:
                 logger.warning(f"[{context.symbol}] FVG analysis error: {e}")
 
 
-        # Recompute EV from the (now fully adjusted) blended win probability so the
-        # Expected Value shown/used for gating is consistent with the displayed probability.
-        if tentative_bias in ["BUY", "SELL"]:
-            loss_p = round(1.0 - final_win_p, 2)
-            _risk_dollars = max(0.50, account_balance * (risk_per_trade_pct / 100.0))
-            _win_dollars = _risk_dollars * rr_ratio
-            _spec = resolve_symbol(context.symbol)
-            _est_lots = max(0.01, _risk_dollars / (max(risk_dist, 1e-4) * _spec.contract_size))
-            _spread_cost = context.volatility.current_spread_pips * _spec.pip_value_per_lot * _est_lots
-            _slippage = (context.volatility.atr * 0.02) * _est_lots
-            ev = round(float((final_win_p * _win_dollars) - (loss_p * _risk_dollars) - _spread_cost - _slippage), 2)
-        else:
-            loss_p = round(1.0 - final_win_p, 2)
-            ev = 0.0
+        # =========================================================================
+        # 5. DYNAMIC STRATEGY SELECTION BY EXPECTED VALUE (EV) & SETUP QUALITY
+        # Regime -> Asset Class -> Strategy Candidates -> Setup Quality -> Expected Value -> Risk
+        # =========================================================================
+        candidate_strategies = [s for s, w in strategy_probs.items() if w > 0]
+        if not candidate_strategies:
+            candidate_strategies = ["TREND_FOLLOWING"]
+
+        strategy_evaluations: Dict[str, Dict[str, Any]] = {}
+        _risk_dollars = max(0.50, account_balance * (risk_per_trade_pct / 100.0))
+        _spec = resolve_symbol(context.symbol)
+        _est_lots = max(0.01, _risk_dollars / (max(risk_dist, 1e-4) * _spec.contract_size))
+        _spread_cost = context.volatility.current_spread_pips * _spec.pip_value_per_lot * _est_lots
+        _slippage = (context.volatility.atr * 0.02) * _est_lots
+
+        for strat in candidate_strategies:
+            strat_weight = strategy_probs.get(strat, 0.0)
+            strat_p = final_win_p
+            strat_rr = rr_ratio
+
+            # Strategy-specific edge & RR adjustments
+            if strat == "RANGE_MEAN_REVERSION":
+                if context.momentum.adx < 20:
+                    strat_p = min(0.95, strat_p + 0.03)
+                strat_rr = min(2.0, max(1.6, strat_rr * 0.9))
+            elif strat == "TREND_FOLLOWING":
+                if context.momentum.adx >= 25 and context.structure.bos:
+                    strat_p = min(0.95, strat_p + 0.03)
+                strat_rr = max(2.2, strat_rr * 1.1)
+            elif strat == "BREAKOUT_EXPANSION":
+                if context.volatility.state in ("EXPANSION", "EXTREME"):
+                    strat_p = min(0.95, strat_p + 0.03)
+                strat_rr = max(2.5, strat_rr * 1.15)
+            elif strat == "LIQUIDITY_SWEEP_REVERSAL":
+                if context.liquidity.sweep_detected:
+                    strat_p = min(0.95, strat_p + 0.05)
+                strat_rr = max(2.0, strat_rr * 1.05)
+            elif strat == "CHOCH_STRUCTURAL_REVERSAL":
+                if context.structure.choch:
+                    strat_p = min(0.95, strat_p + 0.05)
+                strat_rr = max(2.0, strat_rr * 1.05)
+
+            strat_loss_p = round(1.0 - strat_p, 2)
+            strat_win_dollars = _risk_dollars * strat_rr
+            strat_ev = (strat_p * strat_win_dollars) - (strat_loss_p * _risk_dollars) - _spread_cost - _slippage
+            
+            # Multi-objective fitness score: EV * (1 + (WinP - 0.50)/0.50) * StrategySuitabilityWeight
+            prob_factor = max(0.5, 1.0 + (strat_p - 0.50) / 0.50)
+            fitness = strat_ev * prob_factor * (0.5 + strat_weight)
+
+            strategy_evaluations[strat] = {
+                "win_p": strat_p,
+                "rr": strat_rr,
+                "ev": round(strat_ev, 2),
+                "fitness": fitness,
+                "weight": strat_weight
+            }
+
+        # Select strategy with highest validated fitness / EV
+        best_strategy = max(strategy_evaluations.items(), key=lambda x: x[1]["fitness"])[0]
+        selected_eval = strategy_evaluations[best_strategy]
+        
+        final_win_p = selected_eval["win_p"]
+        loss_p = round(1.0 - final_win_p, 2)
+        ev = selected_eval["ev"]
 
         st = context.structure
         premium_discount_valid = True
-        # Institutional ICT Smart Money Rule: Never BUY in Premium, Never SELL in Discount unless runaway momentum
-        if _is_forex(context.symbol) or "BTC" in context.symbol.upper():
-            if tentative_bias == "BUY" and st.discount_premium_zone == "PREMIUM" and context.momentum.trend_score < 55:
+        trend_score_val = getattr(context.momentum, "trend_score", 0.0) if hasattr(context, "momentum") else 0.0
+        # Institutional ICT Smart Money Rule: Never BUY in Premium, Never SELL in Discount without exception unless extreme momentum (|trend_score| >= 65)
+        if _is_forex(context.symbol):
+            if tentative_bias == "BUY" and st.discount_premium_zone == "PREMIUM" and trend_score_val < 65:
                 premium_discount_valid = False
-            elif tentative_bias == "SELL" and st.discount_premium_zone == "DISCOUNT" and context.momentum.trend_score > -55:
+            elif tentative_bias == "SELL" and st.discount_premium_zone == "DISCOUNT" and trend_score_val > -65:
+                premium_discount_valid = False
+        elif "BTC" in context.symbol.upper():
+            if tentative_bias == "BUY" and st.discount_premium_zone == "PREMIUM" and trend_score_val < 55:
+                premium_discount_valid = False
+            elif tentative_bias == "SELL" and st.discount_premium_zone == "DISCOUNT" and trend_score_val > -55:
                 premium_discount_valid = False
         else:
-            if tentative_bias == "BUY" and st.discount_premium_zone == "PREMIUM" and context.momentum.trend_score < 40:
+            if tentative_bias == "BUY" and st.discount_premium_zone == "PREMIUM" and trend_score_val < 40:
                 if not (context.structure.bos or context.liquidity.sweep_detected):
                     premium_discount_valid = False
-            elif tentative_bias == "SELL" and st.discount_premium_zone == "DISCOUNT" and context.momentum.trend_score > -40:
+            elif tentative_bias == "SELL" and st.discount_premium_zone == "DISCOUNT" and trend_score_val > -40:
                 if not (context.structure.bos or context.liquidity.sweep_detected):
                     premium_discount_valid = False
 
@@ -734,7 +701,8 @@ class DecisionEngine:
             rr_ratio=rr_ratio, ev=ev, final_win_p=final_win_p, spread=context.volatility.current_spread_pips,
             premium_discount_valid=premium_discount_valid, account_balance=account_balance,
             current_drawdown_pct=current_drawdown_pct, tentative_bias=tentative_bias,
-            calibrated_win_p=calibrated_win_p, risk_dist=risk_dist, planned_risk_dollars=planned_risk_dollars
+            calibrated_win_p=calibrated_win_p, risk_dist=risk_dist, planned_risk_dollars=planned_risk_dollars,
+            strategy=best_strategy
         )
         
         from jarvis.market.sessions import SessionEngine
@@ -767,45 +735,11 @@ class DecisionEngine:
                 failing_reasons = quality_gate.failing_reasons
                 gate_passed = quality_gate.passed
 
-        # ---- Adaptive gate strictness (AI-decided hard vs soft) ----
+        # ---- Strict Quality Gates: No soft gate bypass allowed ----
         if not gate_passed:
-            _rwr = pattern_memory.get("win_rate") if pattern_memory.get("sample_size", 0) >= 5 else None
-            if _is_forex(context.symbol):
-                # Forex is the LIVE trading domain. When confidence is decent (>=0.50) and
-                # only NON-critical gates fail (<=2), allow execution (softened with a small
-                # confidence penalty). Hard gates (session/drawdown/margin/regime) always block.
-                _soft_only = [g for g in failing_reasons if g not in HARD_GATES]
-                if _soft_only and len(_soft_only) <= 2 and calibrated_win_p >= 0.50:
-                    _pen = min(
-                        self.gate_policy.confidence_penalty(_soft_only),
-                        max(0.0, calibrated_win_p - 0.45)
-                    )
-                    calibrated_win_p = max(0.45, calibrated_win_p - _pen)
-                    final_win_p = max(0.45, final_win_p - _pen)
-                    loss_p = round(1.0 - final_win_p, 2)
-                    gate_passed = True
-                    failing_reasons = []
-                    quality_gate.passed = True
-                    quality_gate.failing_reasons = []
-                    gate_policy_decision = "SOFTEN"
-                    softened_gates = _soft_only
-                else:
-                    gate_policy_decision = "BLOCK"
-            else:
-                _decision, _soft = self.gate_policy.decide(failing_reasons, _rwr)
-                if _decision == "SOFTEN":
-                    _pen = self.gate_policy.confidence_penalty(_soft)
-                    calibrated_win_p = max(0.05, calibrated_win_p - _pen)
-                    final_win_p = max(0.05, final_win_p - _pen)
-                    loss_p = round(1.0 - final_win_p, 2)
-                    softened_gates = _soft
-                    gate_passed = True
-                    failing_reasons = []
-                    quality_gate.passed = True
-                    quality_gate.failing_reasons = []
-                    gate_policy_decision = "SOFTEN"
-                else:
-                    gate_policy_decision = "BLOCK"
+            gate_policy_decision = "BLOCK"
+        else:
+            gate_policy_decision = "PASS"
 
         if not is_mkt_open:
             decision_action = "NO_TRADE"
@@ -889,6 +823,11 @@ class DecisionEngine:
 
         tp_dist = abs(tp_price - entry_price)
 
+        vol_state = getattr(context.volatility, "state", "NORMAL").upper()
+        is_expansion_val = 1.0 if vol_state == "EXPANSION" else 0.0
+        is_extreme_val = 1.0 if vol_state == "EXTREME" else 0.0
+        runner_trail_distance_atr = round(1.0 + (0.4 * is_expansion_val) + (0.8 * is_extreme_val), 2)
+
         return DecisionObject(
             symbol=context.symbol,
             timestamp=datetime.now(timezone.utc),
@@ -901,6 +840,7 @@ class DecisionEngine:
             take_profit=tp_price,
             first_target_price=first_target_price,
             first_target_volume_pct=first_target_volume_pct,
+            runner_trail_distance_atr=runner_trail_distance_atr,
             sl_distance=risk_dist,
             tp_distance=tp_dist,
             risk_reward_ratio=rr_ratio,

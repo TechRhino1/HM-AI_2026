@@ -55,11 +55,56 @@ class BacktestEngine:
         spec = resolve_symbol(symbol)
         actual_slippage_delta = self.slippage_pips * spec.pip_size
         cooldown_mgr = LossCooldownManager()
-        is_fx = getattr(spec, "asset_class", "").upper() == "FOREX"
+        
+        sym_upper = symbol.upper()
+        is_jpy = "JPY" in sym_upper
+        is_crypto = spec.is_crypto or ("BTC" in sym_upper)
+        is_gold = ("XAU" in sym_upper) or ("GOLD" in sym_upper) or (getattr(spec, "asset_class", "") == "COMMODITY")
+        is_fx = getattr(spec, "asset_class", "").upper() == "FOREX" and not is_jpy
         rejection_stats = {}
+
+        # Pre-compute Full Multi-Timeframe (H4 & D1) Resamplings Once Upfront (Before the Bar Loop)
+        full_df_indexed = df_h1.copy()
+        if "time" in full_df_indexed.columns:
+            if not isinstance(full_df_indexed["time"].iloc[0], pd.Timestamp):
+                full_df_indexed["time"] = pd.to_datetime(full_df_indexed["time"])
+                df_h1 = df_h1.copy()
+                df_h1["time"] = full_df_indexed["time"]
+            if not isinstance(full_df_indexed.index, pd.DatetimeIndex):
+                full_df_indexed.set_index("time", inplace=True)
+            
+            agg_dict = {"open": "first", "high": "max", "low": "min", "close": "last"}
+            if "volume" in full_df_indexed.columns:
+                agg_dict["volume"] = "sum"
+            elif "tick_volume" in full_df_indexed.columns:
+                agg_dict["tick_volume"] = "sum"
+
+            full_df_h4 = full_df_indexed.resample("4h").agg(agg_dict).dropna().reset_index()
+            full_df_d1 = full_df_indexed.resample("1D").agg(agg_dict).dropna().reset_index()
+            if "index" in full_df_h4.columns and "time" not in full_df_h4.columns:
+                full_df_h4.rename(columns={"index": "time"}, inplace=True)
+            if "index" in full_df_d1.columns and "time" not in full_df_d1.columns:
+                full_df_d1.rename(columns={"index": "time"}, inplace=True)
+        elif isinstance(full_df_indexed.index, pd.DatetimeIndex):
+            agg_dict = {"open": "first", "high": "max", "low": "min", "close": "last"}
+            if "volume" in full_df_indexed.columns:
+                agg_dict["volume"] = "sum"
+            elif "tick_volume" in full_df_indexed.columns:
+                agg_dict["tick_volume"] = "sum"
+
+            full_df_h4 = full_df_indexed.resample("4h").agg(agg_dict).dropna().reset_index()
+            full_df_d1 = full_df_indexed.resample("1D").agg(agg_dict).dropna().reset_index()
+            if "index" in full_df_h4.columns and "time" not in full_df_h4.columns:
+                full_df_h4.rename(columns={"index": "time"}, inplace=True)
+            if "index" in full_df_d1.columns and "time" not in full_df_d1.columns:
+                full_df_d1.rename(columns={"index": "time"}, inplace=True)
+        else:
+            full_df_h4 = None
+            full_df_d1 = None
         
         for i in range(effective_start, total_bars - 1):
-            history_slice = df_h1.iloc[:i]
+            window_start = max(0, i - 300)
+            history_slice = df_h1.iloc[window_start:i]
             current_bar = df_h1.iloc[i]
             next_bar = df_h1.iloc[i + 1]
             
@@ -95,9 +140,11 @@ class BacktestEngine:
                 if risk_dist <= 0:
                     risk_dist = max(0.001, abs(open_trade["entry"] - open_trade["sl"]))
 
-                # D. Time Stop: Force close after 24 bars if trade hasn't moved 0.5R in favor
-                # Prevents capital lock-up on stale, directionless trades
-                if open_trade["bars_held"] >= 24 and open_trade["mfe"] < (risk_dist * 0.5):
+                trade_strat = open_trade.get("strategy", "")
+                max_hold_bars = 16 if trade_strat == "RANGE_MEAN_REVERSION" else (36 if trade_strat in ("TREND_FOLLOWING", "BREAKOUT_EXPANSION") else 24)
+
+                # D. Time Stop: Force close after max_hold_bars if trade hasn't moved 0.35R in favor
+                if open_trade["bars_held"] >= max_hold_bars and open_trade["mfe"] < (risk_dist * 0.35):
                     exit_price = float(current_bar["close"])
                     pips = ((exit_price - open_trade["entry"]) if open_trade["type"] == "BUY" else (open_trade["entry"] - exit_price)) / spec.pip_size
                     pnl_raw = pips * spec.pip_value_per_lot * open_trade["lots"]
@@ -112,11 +159,11 @@ class BacktestEngine:
                         "symbol": symbol, "type": open_trade["type"],
                         "open_time": open_trade.get("open_time"),
                         "exit_time": bar_time,
-                        "bars_held": open_trade.get("bars_held", 24),
+                        "bars_held": open_trade.get("bars_held", max_hold_bars),
                         "entry": open_trade["entry"], "exit": exit_price,
                         "sl": open_trade["sl"], "tp": open_trade["tp"],
                         "lots": open_trade.get("initial_lots", open_trade["lots"]),
-                        "pnl": round(pnl_net, 2), "result": "TIME_STOP_24BAR",
+                        "pnl": round(pnl_net, 2), "result": f"TIME_STOP_{max_hold_bars}BAR",
                         "strategy": open_trade["strategy"], "regime": open_trade["regime"],
                         "score": open_trade["score"],
                         "planned_rr": open_trade.get("planned_rr", 0.0),
@@ -127,66 +174,58 @@ class BacktestEngine:
                     open_trade = None
                     continue
 
-                # Multi-Tier Institutional Profit-Protection Ratchet
-                # Stage 1: Move SL to Breakeven (+0.05R) as soon as trade reaches +1.0R favorable excursion
-                if not open_trade.get("be_locked", False) and not open_trade.get("partial_closed", False):
-                    if favorable >= (risk_dist * 1.0):
-                        if open_trade["type"] == "BUY":
-                            be_sl = round(open_trade["entry"] + (risk_dist * 0.05), spec.digits)
-                            if be_sl > open_trade["sl"]:
-                                open_trade["sl"] = be_sl
-                                open_trade["be_locked"] = True
-                        else:
-                            be_sl = round(open_trade["entry"] - (risk_dist * 0.05), spec.digits)
-                            if be_sl < open_trade["sl"]:
-                                open_trade["sl"] = be_sl
-                                open_trade["be_locked"] = True
+                # High-Yield Dynamic Scale-Out & Trade Management Ratchet
+                first_target = open_trade.get("first_target_price")
+                partial_vol_pct = open_trade.get("first_target_volume_pct", 0.50)
+                profit_floor_r = 0.10  # Guaranteed +0.10R profit floor for runner
 
-                # Stage 2: Take 40% Partial Profit at +1.5R and ratchet SL to +0.30R profit floor
+                # Stage 1 (Primary Cash Bank): Take Partial Profit using dynamic first target & partial volume pct
                 if not open_trade.get("partial_closed", False) and open_trade["lots"] > 0.01:
-                    partial_trigger_dist = risk_dist * 1.5
-                    partial_vol_pct = 0.40
-                    if open_trade["type"] == "BUY" and favorable >= partial_trigger_dist:
-                        partial_lots = round(open_trade["lots"] * partial_vol_pct, 2)
-                        if partial_lots >= 0.01:
-                            partial_exit_p = open_trade["entry"] + partial_trigger_dist
-                            pips_p = (partial_exit_p - open_trade["entry"]) / spec.pip_size
-                            pnl_p = (pips_p * spec.pip_value_per_lot * partial_lots) - (partial_lots * self.commission_per_lot)
-                            balance += pnl_p
-                            open_trade["realized_pnl"] = open_trade.get("realized_pnl", 0.0) + pnl_p
-                            open_trade["lots"] = round(open_trade["lots"] - partial_lots, 2)
-                            open_trade["partial_closed"] = True
-                            open_trade["be_locked"] = True
-                            # Move SL to +0.30R profit lock
-                            open_trade["sl"] = max(open_trade["sl"], round(open_trade["entry"] + (risk_dist * 0.30), spec.digits))
-                    elif open_trade["type"] == "SELL" and favorable >= partial_trigger_dist:
-                        partial_lots = round(open_trade["lots"] * partial_vol_pct, 2)
-                        if partial_lots >= 0.01:
-                            partial_exit_p = open_trade["entry"] - partial_trigger_dist
-                            pips_p = (open_trade["entry"] - partial_exit_p) / spec.pip_size
-                            pnl_p = (pips_p * spec.pip_value_per_lot * partial_lots) - (partial_lots * self.commission_per_lot)
-                            balance += pnl_p
-                            open_trade["realized_pnl"] = open_trade.get("realized_pnl", 0.0) + pnl_p
-                            open_trade["lots"] = round(open_trade["lots"] - partial_lots, 2)
-                            open_trade["partial_closed"] = True
-                            open_trade["be_locked"] = True
-                            # Move SL to +0.30R profit lock
-                            open_trade["sl"] = min(open_trade["sl"], round(open_trade["entry"] - (risk_dist * 0.30), spec.digits))
+                    is_target_hit = False
+                    partial_exit_p = 0.0
+                    if first_target is not None and first_target > 0:
+                        if open_trade["type"] == "BUY" and high >= first_target:
+                            is_target_hit = True
+                            partial_exit_p = first_target
+                        elif open_trade["type"] == "SELL" and low <= first_target:
+                            is_target_hit = True
+                            partial_exit_p = first_target
+                    else:
+                        partial_trigger_dist = risk_dist * (1.10 if is_fx else 1.00)
+                        if favorable >= partial_trigger_dist:
+                            is_target_hit = True
+                            partial_exit_p = (open_trade["entry"] + partial_trigger_dist) if open_trade["type"] == "BUY" else (open_trade["entry"] - partial_trigger_dist)
 
-                # Stage 3: Dynamic ATR Trailing Stop on Remaining Runner Position (+2.0R+)
+                    if is_target_hit:
+                        partial_lots = round(open_trade["lots"] * partial_vol_pct, 2)
+                        if partial_lots >= 0.01:
+                            pips_p = ((partial_exit_p - open_trade["entry"]) if open_trade["type"] == "BUY" else (open_trade["entry"] - partial_exit_p)) / spec.pip_size
+                            pnl_p = (pips_p * spec.pip_value_per_lot * partial_lots) - (partial_lots * self.commission_per_lot)
+                            balance += pnl_p
+                            open_trade["realized_pnl"] = open_trade.get("realized_pnl", 0.0) + pnl_p
+                            open_trade["lots"] = round(open_trade["lots"] - partial_lots, 2)
+                            open_trade["partial_closed"] = True
+                            open_trade["be_locked"] = True
+                            if open_trade["type"] == "BUY":
+                                runner_floor_sl = round(open_trade["entry"] + (risk_dist * profit_floor_r), spec.digits)
+                                open_trade["sl"] = max(open_trade["sl"], runner_floor_sl)
+                            else:
+                                runner_floor_sl = round(open_trade["entry"] - (risk_dist * profit_floor_r), spec.digits)
+                                open_trade["sl"] = min(open_trade["sl"], runner_floor_sl)
+
+                # Stage 2 (Dynamic Runner Trail): Trail remaining runner using runner_trail_distance_atr
                 if open_trade.get("partial_closed", False):
-                    trail_dist = max(risk_dist * 0.8, atr * 1.2) if is_fx else max(risk_dist * 1.0, atr * 1.5)
+                    trail_dist = atr * open_trade.get("runner_trail_distance_atr", 1.2)
+                    runner_lock_r = 1.8 if (is_fx or is_jpy) else 2.5
                     if open_trade["type"] == "BUY":
                         new_sl = round(high - trail_dist, spec.digits)
-                        # If price has expanded past 2.2R, guarantee at least +0.8R lock on runner
-                        if favorable >= (risk_dist * 2.2):
+                        if favorable >= (risk_dist * runner_lock_r):
                             new_sl = max(new_sl, round(open_trade["entry"] + (risk_dist * 0.80), spec.digits))
                         if new_sl > open_trade["sl"]:
                             open_trade["sl"] = new_sl
                     else:
                         new_sl = round(low + trail_dist, spec.digits)
-                        # If price has expanded past 2.2R, guarantee at least +0.8R lock on runner
-                        if favorable >= (risk_dist * 2.2):
+                        if favorable >= (risk_dist * runner_lock_r):
                             new_sl = min(new_sl, round(open_trade["entry"] - (risk_dist * 0.80), spec.digits))
                         if new_sl < open_trade["sl"]:
                             open_trade["sl"] = new_sl
@@ -258,18 +297,10 @@ class BacktestEngine:
                     rejection_stats[skip_reason] = rejection_stats.get(skip_reason, 0) + 1
                     continue
 
-                if "time" in history_slice.columns and len(history_slice) >= 24:
-                    slice_indexed = history_slice.iloc[-300:].copy()
-                    if not isinstance(slice_indexed.index, pd.DatetimeIndex):
-                        slice_indexed["time"] = pd.to_datetime(slice_indexed["time"])
-                        slice_indexed.set_index("time", inplace=True)
-                    df_h4 = slice_indexed.resample("4h").agg({
-                        "open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"
-                    }).dropna().reset_index()
-                    df_d1 = slice_indexed.resample("1D").agg({
-                        "open": "first", "high": "max", "low": "min", "close": "last", "volume": "sum"
-                    }).dropna().reset_index()
-                    mtf_dict = {"primary": history_slice, "context": df_h4, "macro": df_d1}
+                if full_df_h4 is not None and bar_time is not None:
+                    h4_slice = full_df_h4[full_df_h4["time"] <= bar_time].iloc[-100:]
+                    d1_slice = full_df_d1[full_df_d1["time"] <= bar_time].iloc[-50:]
+                    mtf_dict = {"primary": history_slice, "context": h4_slice, "macro": d1_slice}
                 else:
                     mtf_dict = {"primary": history_slice}
 
@@ -349,7 +380,10 @@ class BacktestEngine:
                             "planned_rr": decision.risk_reward_ratio,
                             "master_score": getattr(decision, "master_confluence_score", 0.0),
                             "mfe": 0.0,
-                            "mae": 0.0
+                            "mae": 0.0,
+                            "first_target_price": getattr(decision, "first_target_price", None),
+                            "first_target_volume_pct": getattr(decision, "first_target_volume_pct", 0.50),
+                            "runner_trail_distance_atr": getattr(decision, "runner_trail_distance_atr", 1.2)
                         }
                     else:
                         auth_reason = auth_res.get("reason", "Risk Engine Auth Failed")
