@@ -1,96 +1,135 @@
-# Production-Grade Adaptive AI MT5 Trading System
+﻿# JARVIS AI 4.0 — Institutional Quantitative MT5 Trading System
 
-An institutional-grade, multi-factor adaptive automated trading architecture built for MetaTrader 5 (MT5). The system dynamically detects market regimes, performs multi-timeframe price structure analysis, calculates AI trade scores (0–100), and enforces strict capital preservation rules.
-
----
-
-## Key Features
-
-1. **Market Regime Classification:** Classifies market state into `STRONG_TREND_BULLISH`, `STRONG_TREND_BEARISH`, `RANGE_BOUND`, `CONSOLIDATION_COMPRESSION`, `BREAKOUT_EXPANSION`, `ACCUMULATION_DISTRIBUTION`, `HIGH_VOLATILITY_SHOCK`, or `UNCLEAR_INDETERMINATE` with calculated confidence %.
-2. **Multi-Timeframe Structure Analysis:** Detects Break of Structure (BOS), Change of Character (CHoCH), Order Blocks (Supply/Demand), and Liquidity Pools (Equal Highs/Lows).
-3. **Multi-Factor AI Scoring (0–100):** Evaluates Market Structure (20%), Trend Momentum (15%), Multi-Timeframe Alignment (15%), Volatility (10%), Liquidity (10%), News/Fundamental Risk (10%), and Risk-Reward (10%). Requires minimum 75/100 score (85/100 under news risk) for trade execution.
-4. **Institutional Risk Manager:** Dynamic position sizing based on account equity and exact pip risk. Enforces `MAX_DAILY_LOSS` (2.0%), `MAX_OPEN_POSITIONS` (3), `MAX_SPREAD` limits, and account drawdown guards.
-5. **News Intelligence & Offline Fallback:** Monitors high-impact economic calendar events (FOMC, CPI, NFP) and blocks trades 30 minutes before and after events. If news feeds are offline, it safely defaults to `NEWS_DATA_UNAVAILABLE` and automatically elevates the required trade score threshold.
-6. **Active Trade Management:** Automated Break-Even adjustment at 1.5 ATR profit, structure-based Trailing Stops, and emergency exits on opposing regime shifts.
-7. **Event-Driven Backtester & Walk-Forward Suite:** Supports bar-by-bar historical backtesting with realistic spread, slippage, and quantitative metrics (Sharpe Ratio, Sortino Ratio, Profit Factor, Max Drawdown).
+An institutional-grade, multi-factor adaptive algorithmic trading architecture built for MetaTrader 5 (MT5). The system integrates Smart Money Concepts (ICT/SMC), Wyckoff accumulation/distribution frameworks, Minervini Trend Templates, Volatility Contraction Patterns (VCP), and dynamic Fractional Kelly risk management to achieve high-expectancy trade execution.
 
 ---
 
-## Architecture Diagram
+## 🏛️ Master Trader Architecture & Core Innovations
 
-```
- RAW MARKET DATA (MT5 / OHLCV)
-         │
-         ▼
- MULTI-TIMEFRAME ENGINE (D1 / H4 / H1 / M15 / M5)
-         │
- ┌───────┴──────────────┬───────────────────┬───────────────────┐
- │                      │                   │                   │
- ▼                      ▼                   ▼                   ▼
-MARKET STRUCTURE   TREND ENGINE      VOLATILITY ENGINE   LIQUIDITY ENGINE
-(BOS, CHoCH, S/D) (EMA, ADX, Slope)   (ATR %, Ratio)    (Sweeps, EQH/EQL)
- └───────┬──────────────┴───────────────────┴───────────────────┘
-         │
-         ▼
- MARKET REGIME ENGINE  <────  NEWS INTELLIGENCE ENGINE
- (State + Confidence %)        (Calendar + Offline Fallback)
-         │
-         ▼
- ADAPTIVE STRATEGY SELECTOR
- (Trend Pullback, Range Reversion, Breakout, Liquidity Sweep)
-         │
-         ▼
- AI DECISION ENGINE (Multi-factor Trade Score 0-100)
-         │
-         ▼
- INSTITUTIONAL RISK MANAGER (Daily Drawdown, Exposure, Lot Sizing)
-         │
-         ▼
- MT5 EXECUTION ENGINE (Market Orders, Trailing SL, Telemetry Dashboard)
-```
+### 1. ICT Fair Value Gap (FVG) & Order Block (OB) Imbalance Engine
+- **Fair Value Gap Detection:** Identifies 3-candle price imbalance zones (unmitigated liquidity voids) across multiple timeframes.
+- **Order Block Mapping:** Locates high-volume displacement candles that create confirmed Breaks of Structure (BOS).
+- **Optimal Trade Entry (OTE):** Calculates precision Fibonacci retracement entries (62.0%, 70.5% sweet spot, and 79.0%) aligned with institutional dealing ranges.
+- **Imbalance Mitigation Tracking:** Actively filters out invalidated or mitigated zones in real time.
 
----
+### 2. Multi-Timeframe Institutional Dealing Range & Premium/Discount Filtering
+- **True HTF Equilibrium:** Computes institutional dealing ranges over 200-bar macroeconomic lookbacks.
+- **Directional Zone Enforcement:** Hard-blocks BUY entries in Premium zones (top 50% of range) and SELL entries in Discount zones (bottom 50% of range) unless supported by confirmed liquidity sweep reversals.
 
-## Installation & Setup
+### 3. Session Killzone Timing Engine
+- **Forex Session Gating:** Restricts Forex entries strictly to high-liquidity institutional windows:
+  - **London Open Killzone:** 07:00 – 10:00 UTC (initial directional expansion)
+  - **New York Open Killzone:** 12:00 – 15:00 UTC (highest volume & overlap)
+  - **London Close Window:** 15:00 – 17:00 UTC (mean reversion & position unwinding)
+  - **Asian Range Reference Box:** 00:00 – 07:00 UTC (defines liquidity boundary sweeps)
 
-1. **Clone/Navigate to Project Folder:**
-   ```bash
-   cd C:\Users\musu9\.gemini\antigravity\scratch\mt5_adaptive_ai_trader
-   ```
+### 4. Advanced Regime & Confluence Stack
+- **Wyckoff / ICT Fusion:** Recognizes Wyckoff Springs, Upthrusts, Accumulation/Distribution phases, and Change of Character (CHoCH).
+- **Minervini Trend Template & VCP:** Measures multi-stage volatility contractions and multi-timeframe moving average slope alignment.
+- **Hard Confluence Gate:** Enforces institutional quality hurdles (Score >= 65/100 for Forex, >= 55/100 for Commodities & Crypto).
 
-2. **Install Dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+### 5. Professional Trade Management & Execution Protocol
+- **Asset-Adaptive Partial Exits:** 
+  - Takes 33% profit at 1.5R (Forex) or 1.8R (Gold/Crypto).
+  - Automatically moves Stop Loss to true Breakeven (0.0R) to eliminate downside risk on remaining position.
+- **Dynamic ATR Chandelier Trailing Stop:** Trails remaining runner positions with a 1.5x ATR buffer from recent swing extremes, allowing macro trends to run without premature suffocation.
+- **24-Bar Time Stop:** Force-closes stale, non-moving trades after 24 hours on H1 if 0.5R favorable excursion is not achieved, preventing capital lock-up.
 
-3. **Configure Settings:**
-   - Edit `config/settings.json` for risk thresholds, magic number, and mode.
-   - Edit `config/symbol_profiles.json` for per-symbol spread & ATR parameters.
+### 6. Consecutive Loss Circuit Breakers & Fractional Kelly Position Sizing
+- **Streak Protection:**
+  - 2 consecutive losses -> automatically cuts position risk by 50%.
+  - 3 consecutive losses -> activates a 4-bar mandatory cooling-off period.
+  - Daily Drawdown >= 3.0% -> halts all new executions for the remainder of the trading day.
+- **Dynamic Kelly Allocation:** Dynamically scales trade size using Quarter-Kelly optimal sizing adjusted for high-water mark drawdown.
+
+### 7. Asset-Class Specific Strategy Specialization
+- **Commodities (XAUUSD/Gold):** High-momentum trend following and break-of-structure expansion with structure-anchored stops.
+- **Forex Majors (EURUSD, GBPUSD, USDJPY):** Range mean reversion (Bollinger Band 20, 2.0 SD with ADX < 22) and killzone liquidity sweep reversals.
+- **Crypto (BTCUSD):** High-volatility swing momentum and multi-timeframe FVG pullbacks.
 
 ---
 
-## Execution Options
+## 📐 Architecture Diagram
 
-### 1. Run Unit Tests
-Validate risk calculations, regime classification, and AI scoring:
-```bash
-python -m unittest discover -s tests -p "test_*.py"
-```
+`
+                RAW MARKET DATA (MT5 Feed / Tick & Bar OHLCV)
+                                     │
+                                     ▼
+                MULTI-TIMEFRAME ENGINE (D1 / H4 / H1 / M15 / M5)
+                                     │
+         ┌───────────────────────────┼───────────────────────────┐
+         ▼                           ▼                           ▼
+  ICT FVG & OB ENGINE         MARKET STRUCTURE           ORDER FLOW & SESSIONS
+ (Imbalance, Mitigation,     (200-Bar P/D Range,        (Killzones, Volume Delta,
+   OTE 62%-79% Zones)         BOS, CHoCH, Swings)         Absorption Traps)
+         └───────────────────────────┬───────────────────────────┘
+                                     │
+                                     ▼
+                      MASTER CONFLUENCE SCORING ENGINE
+                 (Wyckoff + Minervini VCP + ICT Triple Confluence)
+                                     │
+                                     ▼
+                         AI DECISION & QUALITY GATE
+              (Hard Confluence >= 65, Session Gating, EV & R:R)
+                                     │
+                                     ▼
+                     DYNAMIC RISK & LOSS COOLDOWN MANAGER
+                (Fractional Kelly, 3-Loss Circuit Breaker, 3% DD)
+                                     │
+                                     ▼
+                     EXECUTION & ACTIVE TRADE MANAGEMENT
+              (Partials at 1.5R/1.8R, True BE, ATR Trail, 24-Bar Time Stop)
+`
 
-### 2. Run Historical Backtest
-Run historical backtest on XAUUSD:
-```bash
-python main.py --symbol XAUUSD --backtest
-```
+---
 
-### 3. Run Single Telemetry Sweep (Dry-Run / Simulation Mode)
-Inspect current market regime, confidence %, and trade decision:
-```bash
-python main.py --symbol XAUUSD --once
-```
+## 🛠️ Project Structure
 
-### 4. Run Continuous Automated Loop (Live MT5 Mode)
-Ensure MT5 terminal is open and logged into your account:
-```bash
-python main.py --symbol XAUUSD --mode live
-```
+`
+HM-AI-2026/
+├── jarvis/
+│   ├── analysts/               # Specialized AI analyst agents (Structure, Flow, Momentum, etc.)
+│   ├── backtesting/            # Event-driven backtesting engine & performance analytics
+│   ├── core/                   # Configuration, symbol registry, and regime classifiers
+│   ├── data/                   # Data schemas, database models, and symbol resolvers
+│   ├── intelligence/           # Decision engine, master confluence, mean reversion, strategy selector
+│   ├── market/                 # FVG engine, session engine, market context, liquidity sweeps
+│   └── risk/                   # Loss cooldown manager, circuit breakers, position sizing
+├── tests/                      # Automated pytest unit and integration test suite
+├── run_multiasset_6m_backtest.py # Real 6-month MT5 historical backtest benchmark suite
+└── README.md                   # System documentation
+`
+
+---
+
+## 🚀 Installation & Usage
+
+### 1. Environment Setup
+`ash
+# Clone the repository
+git clone https://github.com/TechRhino1/HM-AI_2026.git
+cd HM-AI-2026
+
+# Install dependencies
+pip install -r requirements.txt
+`
+
+### 2. Run Test Suite
+Verify that all 109 system tests pass:
+`ash
+python -m pytest tests/ -v
+`
+
+### 3. Run Real MT5 6-Month Multi-Asset Backtest
+Ensure your MetaTrader 5 terminal is open and logged into your broker:
+`ash
+python -u run_multiasset_6m_backtest.py
+`
+
+---
+
+## 📊 Backtest Benchmarks (Real MT5 6-Month Historical Data)
+
+- **Test Period:** 4,380 H1 bars per symbol (~6 months of real broker tick history).
+- **Core Assets:** Gold (XAUUSD), Bitcoin (BTCUSD), Euro (EURUSD), British Pound (GBPUSD), Japanese Yen (USDJPY).
+- **Risk Configuration:** 0.5% base risk per trade, .00/lot commission, live historical spread simulation.

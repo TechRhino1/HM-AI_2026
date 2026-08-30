@@ -76,6 +76,9 @@ class BacktestEngine:
                 low = float(current_bar["low"])
                 atr = float(current_bar.get("atr", current_bar.get("ATR", (high - low) if (high - low) > 0 else 1.0)))
 
+                # Increment bar holding counter
+                open_trade["bars_held"] = open_trade.get("bars_held", 0) + 1
+
                 # Track MFE / MAE
                 if open_trade["type"] == "BUY":
                     favorable = high - open_trade["entry"]
@@ -91,15 +94,42 @@ class BacktestEngine:
                 if risk_dist <= 0:
                     risk_dist = max(0.001, abs(open_trade["entry"] - open_trade["sl"]))
 
+                # D. Time Stop: Force close after 24 bars if trade hasn't moved 0.5R in favor
+                # Prevents capital lock-up on stale, directionless trades
+                if open_trade["bars_held"] >= 24 and open_trade["mfe"] < (risk_dist * 0.5):
+                    exit_price = float(current_bar["close"])
+                    pips = ((exit_price - open_trade["entry"]) if open_trade["type"] == "BUY" else (open_trade["entry"] - exit_price)) / spec.pip_size
+                    pnl_raw = pips * spec.pip_value_per_lot * open_trade["lots"]
+                    comm = open_trade["lots"] * self.commission_per_lot
+                    pnl_remaining = pnl_raw - comm
+                    pnl_net = pnl_remaining + open_trade.get("realized_pnl", 0.0)
+                    balance += pnl_remaining
+                    equity = balance
+                    is_win = pnl_net > 0
+                    cooldown_mgr.record_trade_result(pnl=pnl_net, is_win=is_win, symbol=symbol, current_date=b_date)
+                    trades.append({
+                        "symbol": symbol, "type": open_trade["type"],
+                        "entry": open_trade["entry"], "exit": exit_price,
+                        "sl": open_trade["sl"], "tp": open_trade["tp"],
+                        "lots": open_trade.get("initial_lots", open_trade["lots"]),
+                        "pnl": round(pnl_net, 2), "result": "TIME_STOP_24BAR",
+                        "strategy": open_trade["strategy"], "regime": open_trade["regime"],
+                        "score": open_trade["score"],
+                        "mfe": round(open_trade["mfe"], 4), "mae": round(open_trade["mae"], 4),
+                        "is_win": is_win
+                    })
+                    open_trade = None
+                    continue
+
                 # A. Asset-Adaptive Partial TP & Breakeven Lock
                 # Forex: 33% partial at 1.5R with +0.20R BE lock (lets 67% run to full 2.0R-2.5R target)
                 # Gold/Crypto: 33% partial at 1.8R with +0.25R BE lock (lets 67% run to 3.8R-4.2R target)
                 partial_trigger_mult = 1.5 if is_fx else 1.8
                 partial_vol_pct = 0.33
                 
-                # In Forex, moving SL instantly to +0.20R gets swept by spread/chop. 
-                # Better to cut risk in half (-0.5R) or just let the ATR trailing stop handle it.
-                be_lock_mult = -0.50 if is_fx else 0.10
+                # In Forex, use true breakeven (0.0R) so runners can't become losers.
+                # Non-Forex gets +0.10R to protect against wider spreads.
+                be_lock_mult = 0.0 if is_fx else 0.10
 
                 if not open_trade.get("partial_closed", False) and open_trade["lots"] > 0.01:
                     partial_trigger_dist = risk_dist * partial_trigger_mult

@@ -408,13 +408,13 @@ class DecisionEngine:
             max_spread = spec.max_spread_pips
 
         if _is_forex(context.symbol):
-            required_win_p = max(required_win_p, 0.54)
-            min_score = max(min_score, 78.0)
-            min_rr = 1.8
+            required_win_p = max(required_win_p, 0.62)
+            min_score = max(min_score, 85.0)
+            min_rr = 2.2
         elif "BTC" in context.symbol.upper():
-            required_win_p = max(required_win_p, 0.52)
-            min_score = max(min_score, 76.0)
-            min_rr = 1.8
+            required_win_p = max(required_win_p, 0.55)
+            min_score = max(min_score, 78.0)
+            min_rr = 2.0
 
         # Real-time per-symbol optimizer — adapts thresholds from live win-rate (neutral in backtests)
         try:
@@ -640,12 +640,18 @@ class DecisionEngine:
         if _dissection_score >= 70:
             logger.info(f"[{context.symbol}] AI Dissection HIGH {_dissection_score:.1f} tier={_dissection_tier} boost +{_dissection['prob_boost']:.3f}")
 
-        # 4.7 Master Confluence — proven stacks from trading masters (Wyckoff+ICT+VCP+Triple) — boost only
+        # 4.7 Master Confluence — proven stacks from trading masters (Wyckoff+ICT+VCP+Triple) — boost + HARD GATE
         _master = self.master_confluence.score(context, regime, rr_ratio, ai_score, mtf_data)
         _master_score = _master["total"]
         _master_tier = _master["tier"]
         calibrated_win_p = min(0.95, max(0.05, calibrated_win_p + float(_master["prob_boost"])))
         final_win_p = min(0.95, max(0.05, final_win_p + float(_master["prob_boost"])))
+        
+        # HARD GATE: Minimum 65/100 Master Confluence required for Forex entry, 55 for others
+        # This eliminates low-quality setups that lack institutional confluence
+        _min_confluence = 65 if _is_forex(context.symbol) else 55
+        master_confluence_valid = _master_score >= _min_confluence
+        
         if _master_tier in ("ELITE", "HIGH"):
             logger.info(f"[{context.symbol}] Master Confluence {_master_tier} {_master_score}/100 boost +{_master['prob_boost']:.3f} {_master['breakdown']}")
 
@@ -662,14 +668,14 @@ class DecisionEngine:
                     
                     _fvg_boost = 0.0
                     if _in_fvg or _in_ob:
-                        _fvg_boost += 0.015
-                        ai_score = min(100.0, ai_score + 3.0)
+                        _fvg_boost += 0.04
+                        ai_score = min(100.0, ai_score + 6.0)
                     if _fvg_ob_conf:
-                        _fvg_boost += 0.02
-                        ai_score = min(100.0, ai_score + 4.0)
+                        _fvg_boost += 0.06
+                        ai_score = min(100.0, ai_score + 8.0)
                     if _in_ote_dir:
-                        _fvg_boost += 0.015
-                        ai_score = min(100.0, ai_score + 2.0)
+                        _fvg_boost += 0.04
+                        ai_score = min(100.0, ai_score + 5.0)
                         
                     if _fvg_boost > 0:
                         calibrated_win_p = min(0.95, calibrated_win_p + _fvg_boost)
@@ -725,7 +731,12 @@ class DecisionEngine:
         is_mkt_open = mkt_status.get("is_open", True)
 
         gate_passed = quality_gate.passed
-        failing_reasons = quality_gate.failing_reasons
+        failing_reasons = list(quality_gate.failing_reasons)
+
+        # Hard Master Confluence Gate — reject low-confluence setups
+        if not master_confluence_valid:
+            gate_passed = False
+            failing_reasons.append(f"Master Confluence Below Minimum ({_master_score}/100 < {_min_confluence})")
 
         # ---- ML Meta-Label confirmation gate (safe: neutral until a model is trained) ----
         meta_label_prob = None
