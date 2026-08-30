@@ -80,7 +80,7 @@ class StrategySelector:
                 pass
 
         if asset_class == "FOREX" and r in [MarketRegime.RANGE, MarketRegime.LOW_VOLATILITY]:
-            # Forex in range → 75% mean reversion, 25% liquidity sweep reversal
+            # Forex in range → baseline 75% mean reversion, 25% liquidity sweep reversal
             weights["RANGE_MEAN_REVERSION"] = 0.75
             weights["LIQUIDITY_SWEEP_REVERSAL"] = 0.25
             weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.00
@@ -88,22 +88,16 @@ class StrategySelector:
             weights["TREND_PULLBACK"] = 0.00
             weights["BREAKOUT_EXPANSION"] = 0.00
             weights["MICRO_ACCOUNT_ADAPTIVE"] = 0.00
-            total = sum(weights.values())
-            if total > 0:
-                return {k: round(v / total, 3) for k, v in weights.items()}
 
         elif asset_class == "FOREX" and r in [MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR]:
-            # Forex in trend → strictly trade pullbacks to institutional discount/premium & sweeps (never chase breakouts)
-            weights["TREND_PULLBACK"] = 0.60
+            # Forex in trend → baseline pullbacks & sweeps (never chase breakouts)
+            weights["TREND_PULLBACK"] = 0.55
             weights["LIQUIDITY_SWEEP_REVERSAL"] = 0.25
-            weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.15
+            weights["CHOCH_STRUCTURAL_REVERSAL"] = 0.20
             weights["TREND_FOLLOWING"] = 0.00
             weights["RANGE_MEAN_REVERSION"] = 0.00
             weights["BREAKOUT_EXPANSION"] = 0.00
             weights["MICRO_ACCOUNT_ADAPTIVE"] = 0.00
-            total = sum(weights.values())
-            if total > 0:
-                return {k: round(v / total, 3) for k, v in weights.items()}
 
         elif asset_class == "COMMODITY" and r in [MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR]:
             # Gold in trend → heavy trend-following (Gold's natural behavior)

@@ -412,8 +412,8 @@ class DecisionEngine:
             min_score = max(min_score, 85.0)
             min_rr = 2.2
         elif "BTC" in context.symbol.upper():
-            required_win_p = max(required_win_p, 0.55)
-            min_score = max(min_score, 78.0)
+            required_win_p = max(required_win_p, 0.52)
+            min_score = max(min_score, 74.0)
             min_rr = 2.0
 
         # Real-time per-symbol optimizer — adapts thresholds from live win-rate (neutral in backtests)
@@ -427,18 +427,28 @@ class DecisionEngine:
             pass
 
         # Check Macro MTF Confluence (H4 and D1 alignment)
+        # Institutional Rule: Never short against a Macro Bull trend or buy against a Macro Bear trend
+        # unless confirmed by an explicit structural CHoCH or multi-tier liquidity sweep.
         mtf_align = getattr(context, "mtf_alignment", {})
         h4_bias = mtf_align.get("H4", "NEUTRAL") if isinstance(mtf_align, dict) else "NEUTRAL"
         d1_bias = mtf_align.get("D1", "NEUTRAL") if isinstance(mtf_align, dict) else "NEUTRAL"
+        
+        has_reversal_structure = bool(getattr(context.structure, "choch", False) or getattr(context.liquidity, "sweep_detected", False))
         mtf_counter_trend = False
         if tentative_bias == "BUY" and (h4_bias == "BEARISH" or d1_bias == "BEARISH"):
-            mtf_counter_trend = True
+            if not (has_reversal_structure and ai_score >= 85.0 and calibrated_win_p >= 0.65):
+                mtf_counter_trend = True
         elif tentative_bias == "SELL" and (h4_bias == "BULLISH" or d1_bias == "BULLISH"):
-            mtf_counter_trend = True
+            if not (has_reversal_structure and ai_score >= 85.0 and calibrated_win_p >= 0.65):
+                mtf_counter_trend = True
 
-        if mtf_counter_trend:
-            min_score = max(min_score, 82.0)
-            required_win_p = max(required_win_p, 0.62)
+        # Trend Exhaustion Guard (Avoid buying top of climax / shorting bottom of selloff)
+        rsi_val = getattr(context.momentum, "rsi", 50.0)
+        is_exhausted = False
+        if tentative_bias == "BUY" and rsi_val > 76.0 and regime.primary_regime != MarketRegime.BREAKOUT:
+            is_exhausted = True
+        elif tentative_bias == "SELL" and rsi_val < 24.0 and regime.primary_regime != MarketRegime.BREAKOUT:
+            is_exhausted = True
 
         from jarvis.market.sessions import SessionEngine
         mkt_status = SessionEngine.get_market_trading_status(context.symbol, dt=getattr(context, "timestamp", None))
@@ -467,7 +477,8 @@ class DecisionEngine:
             "Premium/Discount Alignment": premium_discount_valid,
             "No Active Macro Shock": regime.primary_regime != MarketRegime.EVENT_RISK,
             "Order Flow Momentum": abs(context.momentum.trend_score) >= 10 or context.structure.bos or context.liquidity.sweep_detected,
-            "Macro MTF Alignment": not mtf_counter_trend or (ai_score >= 82.0 and calibrated_win_p >= 0.62),
+            "Macro MTF Alignment": not mtf_counter_trend,
+            "Trend Not Exhausted": not is_exhausted,
             "No Order Flow Absorption Trap": not is_of_trap,
             "Forex Prime Session": is_prime_session_valid,
             "Margin Capacity Limit": account_balance >= 10.0 and planned_risk_dollars > 0

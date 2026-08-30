@@ -56,6 +56,7 @@ class BacktestEngine:
         actual_slippage_delta = self.slippage_pips * spec.pip_size
         cooldown_mgr = LossCooldownManager()
         is_fx = getattr(spec, "asset_class", "").upper() == "FOREX"
+        rejection_stats = {}
         
         for i in range(effective_start, total_bars - 1):
             history_slice = df_h1.iloc[:i]
@@ -109,30 +110,42 @@ class BacktestEngine:
                     cooldown_mgr.record_trade_result(pnl=pnl_net, is_win=is_win, symbol=symbol, current_date=b_date)
                     trades.append({
                         "symbol": symbol, "type": open_trade["type"],
+                        "open_time": open_trade.get("open_time"),
+                        "exit_time": bar_time,
+                        "bars_held": open_trade.get("bars_held", 24),
                         "entry": open_trade["entry"], "exit": exit_price,
                         "sl": open_trade["sl"], "tp": open_trade["tp"],
                         "lots": open_trade.get("initial_lots", open_trade["lots"]),
                         "pnl": round(pnl_net, 2), "result": "TIME_STOP_24BAR",
                         "strategy": open_trade["strategy"], "regime": open_trade["regime"],
                         "score": open_trade["score"],
+                        "planned_rr": open_trade.get("planned_rr", 0.0),
+                        "master_score": open_trade.get("master_score", 0.0),
                         "mfe": round(open_trade["mfe"], 4), "mae": round(open_trade["mae"], 4),
                         "is_win": is_win
                     })
                     open_trade = None
                     continue
 
-                # A. Asset-Adaptive Partial TP & Breakeven Lock
-                # Forex: 33% partial at 1.5R with +0.20R BE lock (lets 67% run to full 2.0R-2.5R target)
-                # Gold/Crypto: 33% partial at 1.8R with +0.25R BE lock (lets 67% run to 3.8R-4.2R target)
-                partial_trigger_mult = 1.5 if is_fx else 1.8
-                partial_vol_pct = 0.33
-                
-                # In Forex, use true breakeven (0.0R) so runners can't become losers.
-                # Non-Forex gets +0.10R to protect against wider spreads.
-                be_lock_mult = 0.0 if is_fx else 0.10
+                # Multi-Tier Institutional Profit-Protection Ratchet
+                # Stage 1: Move SL to Breakeven (+0.05R) as soon as trade reaches +1.0R favorable excursion
+                if not open_trade.get("be_locked", False) and not open_trade.get("partial_closed", False):
+                    if favorable >= (risk_dist * 1.0):
+                        if open_trade["type"] == "BUY":
+                            be_sl = round(open_trade["entry"] + (risk_dist * 0.05), spec.digits)
+                            if be_sl > open_trade["sl"]:
+                                open_trade["sl"] = be_sl
+                                open_trade["be_locked"] = True
+                        else:
+                            be_sl = round(open_trade["entry"] - (risk_dist * 0.05), spec.digits)
+                            if be_sl < open_trade["sl"]:
+                                open_trade["sl"] = be_sl
+                                open_trade["be_locked"] = True
 
+                # Stage 2: Take 40% Partial Profit at +1.5R and ratchet SL to +0.30R profit floor
                 if not open_trade.get("partial_closed", False) and open_trade["lots"] > 0.01:
-                    partial_trigger_dist = risk_dist * partial_trigger_mult
+                    partial_trigger_dist = risk_dist * 1.5
+                    partial_vol_pct = 0.40
                     if open_trade["type"] == "BUY" and favorable >= partial_trigger_dist:
                         partial_lots = round(open_trade["lots"] * partial_vol_pct, 2)
                         if partial_lots >= 0.01:
@@ -143,8 +156,9 @@ class BacktestEngine:
                             open_trade["realized_pnl"] = open_trade.get("realized_pnl", 0.0) + pnl_p
                             open_trade["lots"] = round(open_trade["lots"] - partial_lots, 2)
                             open_trade["partial_closed"] = True
-                            # Move SL to Breakeven + buffer
-                            open_trade["sl"] = round(open_trade["entry"] + (risk_dist * be_lock_mult), spec.digits)
+                            open_trade["be_locked"] = True
+                            # Move SL to +0.30R profit lock
+                            open_trade["sl"] = max(open_trade["sl"], round(open_trade["entry"] + (risk_dist * 0.30), spec.digits))
                     elif open_trade["type"] == "SELL" and favorable >= partial_trigger_dist:
                         partial_lots = round(open_trade["lots"] * partial_vol_pct, 2)
                         if partial_lots >= 0.01:
@@ -155,22 +169,29 @@ class BacktestEngine:
                             open_trade["realized_pnl"] = open_trade.get("realized_pnl", 0.0) + pnl_p
                             open_trade["lots"] = round(open_trade["lots"] - partial_lots, 2)
                             open_trade["partial_closed"] = True
-                            # Move SL to Breakeven - buffer
-                            open_trade["sl"] = round(open_trade["entry"] - (risk_dist * be_lock_mult), spec.digits)
+                            open_trade["be_locked"] = True
+                            # Move SL to +0.30R profit lock
+                            open_trade["sl"] = min(open_trade["sl"], round(open_trade["entry"] - (risk_dist * 0.30), spec.digits))
 
-                # B. Dynamic ATR Trailing Stop on Remaining Runner Position (Room to breathe)
+                # Stage 3: Dynamic ATR Trailing Stop on Remaining Runner Position (+2.0R+)
                 if open_trade.get("partial_closed", False):
-                    trail_dist = max(risk_dist * 0.9, atr * 1.5) if is_fx else max(risk_dist * 1.0, atr * 1.8)
+                    trail_dist = max(risk_dist * 0.8, atr * 1.2) if is_fx else max(risk_dist * 1.0, atr * 1.5)
                     if open_trade["type"] == "BUY":
                         new_sl = round(high - trail_dist, spec.digits)
+                        # If price has expanded past 2.2R, guarantee at least +0.8R lock on runner
+                        if favorable >= (risk_dist * 2.2):
+                            new_sl = max(new_sl, round(open_trade["entry"] + (risk_dist * 0.80), spec.digits))
                         if new_sl > open_trade["sl"]:
                             open_trade["sl"] = new_sl
                     else:
                         new_sl = round(low + trail_dist, spec.digits)
+                        # If price has expanded past 2.2R, guarantee at least +0.8R lock on runner
+                        if favorable >= (risk_dist * 2.2):
+                            new_sl = min(new_sl, round(open_trade["entry"] - (risk_dist * 0.80), spec.digits))
                         if new_sl < open_trade["sl"]:
                             open_trade["sl"] = new_sl
 
-                # C. Check SL/TP exit for remaining position
+                # Stage 4: Check SL/TP exit for remaining position
                 closed = False
                 exit_price = 0.0
                 result = ""
@@ -178,7 +199,7 @@ class BacktestEngine:
                 if open_trade["type"] == "BUY":
                     if low <= open_trade["sl"]:
                         exit_price = open_trade["sl"] - actual_slippage_delta
-                        result = "BE/TRAIL_SL" if open_trade.get("partial_closed") else "SL"
+                        result = "BE/TRAIL_SL" if (open_trade.get("partial_closed") or open_trade.get("be_locked")) else "SL"
                         closed = True
                     elif high >= open_trade["tp"]:
                         exit_price = open_trade["tp"]
@@ -187,7 +208,7 @@ class BacktestEngine:
                 elif open_trade["type"] == "SELL":
                     if high >= open_trade["sl"]:
                         exit_price = open_trade["sl"] + actual_slippage_delta
-                        result = "BE/TRAIL_SL" if open_trade.get("partial_closed") else "SL"
+                        result = "BE/TRAIL_SL" if (open_trade.get("partial_closed") or open_trade.get("be_locked")) else "SL"
                         closed = True
                     elif low <= open_trade["tp"]:
                         exit_price = open_trade["tp"]
@@ -209,6 +230,9 @@ class BacktestEngine:
                     trades.append({
                         "symbol": symbol,
                         "type": open_trade["type"],
+                        "open_time": open_trade.get("open_time"),
+                        "exit_time": bar_time,
+                        "bars_held": open_trade.get("bars_held", 1),
                         "entry": open_trade["entry"],
                         "exit": exit_price,
                         "sl": open_trade["sl"],
@@ -219,6 +243,8 @@ class BacktestEngine:
                         "strategy": open_trade["strategy"],
                         "regime": open_trade["regime"],
                         "score": open_trade["score"],
+                        "planned_rr": open_trade.get("planned_rr", 0.0),
+                        "master_score": open_trade.get("master_score", 0.0),
                         "mfe": round(open_trade["mfe"], 4),
                         "mae": round(open_trade["mae"], 4),
                         "is_win": is_win
@@ -229,6 +255,7 @@ class BacktestEngine:
             if open_trade is None:
                 skip_trade, skip_reason = cooldown_mgr.should_skip_trade(symbol)
                 if skip_trade:
+                    rejection_stats[skip_reason] = rejection_stats.get(skip_reason, 0) + 1
                     continue
 
                 if "time" in history_slice.columns and len(history_slice) >= 24:
@@ -302,8 +329,12 @@ class BacktestEngine:
                         else:
                             lots = auth_res["lots"]
 
+                        open_time_val = next_bar.get("time") if "time" in next_bar else bar_time
+
                         open_trade = {
                             "type": decision.bias,
+                            "open_time": open_time_val,
+                            "bars_held": 0,
                             "entry": entry_price,
                             "sl": sl_price,
                             "tp": tp_price,
@@ -315,9 +346,20 @@ class BacktestEngine:
                             "strategy": decision.strategy,
                             "regime": regime.primary_regime.value,
                             "score": decision.model_confidence,
+                            "planned_rr": decision.risk_reward_ratio,
+                            "master_score": getattr(decision, "master_confluence_score", 0.0),
                             "mfe": 0.0,
                             "mae": 0.0
                         }
+                    else:
+                        auth_reason = auth_res.get("reason", "Risk Engine Auth Failed")
+                        rejection_stats[auth_reason] = rejection_stats.get(auth_reason, 0) + 1
+                else:
+                    for r in getattr(decision, "rejection_reasons", []):
+                        rejection_stats[r] = rejection_stats.get(r, 0) + 1
+                    if not getattr(decision, "rejection_reasons", []):
+                        for r in getattr(decision, "waiting_reasons", []):
+                            rejection_stats[r] = rejection_stats.get(r, 0) + 1
 
         # Mark-to-market close of any remaining open position on final bar
         if open_trade is not None:
@@ -333,6 +375,9 @@ class BacktestEngine:
             trades.append({
                 "symbol": symbol,
                 "type": open_trade["type"],
+                "open_time": open_trade.get("open_time"),
+                "exit_time": final_bar.get("time") if "time" in final_bar else None,
+                "bars_held": open_trade.get("bars_held", 1),
                 "entry": open_trade["entry"],
                 "exit": exit_price,
                 "sl": open_trade["sl"],
@@ -343,6 +388,8 @@ class BacktestEngine:
                 "strategy": open_trade["strategy"],
                 "regime": open_trade["regime"],
                 "score": open_trade["score"],
+                "planned_rr": open_trade.get("planned_rr", 0.0),
+                "master_score": open_trade.get("master_score", 0.0),
                 "mfe": round(open_trade["mfe"], 4),
                 "mae": round(open_trade["mae"], 4),
                 "is_win": pnl_net > 0
@@ -354,5 +401,6 @@ class BacktestEngine:
             "symbol": symbol,
             "metrics": metrics,
             "trades": trades,
-            "final_balance": round(balance, 2)
+            "final_balance": round(balance, 2),
+            "rejection_stats": rejection_stats
         }
