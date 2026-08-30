@@ -41,7 +41,7 @@ class TestIntegrityFixes(unittest.TestCase):
     def test_stock_data_source_flag(self):
         s = StockIntelligenceEngine().analyze_stock("AAPL", "1D")
         self.assertIn("data_source", s)
-        self.assertIn(s["data_source"], ("live", "synthetic_fallback"))
+        self.assertIn(s["data_source"], ("mt5_live", "live", "synthetic_fallback"))
         self.assertEqual(len(s["candles"]), 120)
 
 

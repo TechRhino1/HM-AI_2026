@@ -37,7 +37,7 @@ class StockIntelligenceEngine:
         """
         real = fetch_real_candles(symbol, timeframe=timeframe, num_bars=num_bars, market="US")
         if real:
-            self._last_data_source = "live"
+            self._last_data_source = "mt5_live"
             return real
         self._last_data_source = "synthetic_fallback"
 
@@ -202,14 +202,14 @@ class StockIntelligenceEngine:
         lows = df["low"].values
         volumes = df["volume"].values
 
-        current_price = round(float(closes[-1]), 2)
-        prev_close = round(float(closes[-2]), 2) if len(closes) > 1 else current_price
+        current_price = float(df["close"].iloc[-1])
+        prev_close = float(df["close"].iloc[-2]) if len(df) > 1 else current_price
         day_open = round(float(df["open"].iloc[-1]), 2)
         day_high = round(float(df["high"].iloc[-1]), 2)
         day_low = round(float(df["low"].iloc[-1]), 2)
 
         change_val = round(current_price - prev_close, 2)
-        change_pct = round((change_val / prev_close) * 100.0, 2) if prev_close > 0 else 0.0
+        change_pct = round((change_val / prev_close) * 100.0, 2) if prev_close else 0.0
 
         # -------------------------------------------------------------
         # 1. Technical & Quantitative Indicators Calculation

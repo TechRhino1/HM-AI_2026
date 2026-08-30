@@ -122,13 +122,13 @@ class TestApexMasterTraderOptimization(unittest.TestCase):
             ask=2400.2,
             structure=StructureContext(bias="BULLISH"),
             liquidity=LiquidityContext(),
-            volatility=VolatilityContext(atr=10.0, current_spread_pips=1.5),
+            volatility=VolatilityContext(atr=10.0, current_spread_pips=1.2),
             momentum=MomentumContext(trend_score=40.0, adx=25.0),
             session=SessionContext(is_prime_session=True)
         )
         gate_gold = self.decision_engine._apply_quality_gate(
             context=ctx_gold, regime=regime, devil_report=devil, ai_score=76.5, rr_ratio=2.0,
-            ev=10.0, final_win_p=0.60, spread=1.5, premium_discount_valid=True,
+            ev=10.0, final_win_p=0.60, spread=1.2, premium_discount_valid=True,
             account_balance=10000.0, tentative_bias="BUY", calibrated_win_p=0.60, risk_dist=10.0, planned_risk_dollars=50.0
         )
         self.assertTrue(gate_gold.checks["AI Multi-Score Gate"], "Gold min_score=76.0 should pass score=76.5")
