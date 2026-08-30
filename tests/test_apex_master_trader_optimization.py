@@ -16,7 +16,11 @@ from jarvis.data.schemas import (
 class TestApexMasterTraderOptimization(unittest.TestCase):
     def setUp(self):
         from jarvis.intelligence.self_learning import SelfLearningEngine
-        self.decision_engine = DecisionEngine(self_learning=SelfLearningEngine(db_path=":memory:"))
+        from jarvis.intelligence.realtime_optimizer import RealtimeOptimizer
+        self.decision_engine = DecisionEngine(
+            self_learning=SelfLearningEngine(db_path=":memory:"),
+            realtime_optimizer=RealtimeOptimizer(db_path=":memory:")
+        )
         self.strategy_selector = StrategySelector()
 
     def test_decision_engine_no_forced_bias_fallback_defaults_to_hold(self):
