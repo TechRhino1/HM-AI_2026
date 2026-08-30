@@ -6,6 +6,9 @@ Greeks, FII/DII Institutional Flows, CPR/Camarilla Pivots, and NSE/SEBI Rule Val
 import json
 import csv
 import io
+import time
+import concurrent.futures
+import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timezone
 from jarvis.india.universe import (
@@ -22,20 +25,57 @@ from jarvis.india.nse_rules import NSE_RULES
 from jarvis.india.news_analyzer import INDIA_NEWS
 from jarvis.india.risk_engine import INDIA_RISK
 
+logger = logging.getLogger("jarvis.india_service")
+
 
 class IndiaMarketsService:
     """
     Central API Service for India Markets (NSE/BSE & F&O).
+    Provides high-speed parallel scanning and 15-second TTL in-memory caching.
     """
+
+    def __init__(self):
+        self._cached_scanner_results: Dict[str, Any] = {}
+        self._last_full_scan_time: float = 0.0
+        self._scan_cache_ttl: float = 15.0
+        self._master_scan_cache: Dict[str, Dict[str, Any]] = {}
+
+        self._cached_indices_snapshot: Optional[List[Dict[str, Any]]] = None
+        self._last_indices_scan_time: float = 0.0
+        self._indices_cache_ttl: float = 15.0
 
     def get_indices_snapshot(self) -> List[Dict[str, Any]]:
         """
-        Returns live telemetry summary for major Indian Benchmark & Sectoral indices.
+        Returns live telemetry summary for major Indian Benchmark & Sectoral indices with 15s caching and parallel execution.
         """
+        now = time.time()
+        if self._cached_indices_snapshot is not None and (now - self._last_indices_scan_time) < self._indices_cache_ttl:
+            return self._cached_indices_snapshot
+
         indices_syms = ["NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "SENSEX", "NIFTYIT", "NIFTYAUTO"]
+        results_map: Dict[str, Dict[str, Any]] = {}
+
+        try:
+            from jarvis.data.tradingview_provider import TRADINGVIEW_PROVIDER
+            TRADINGVIEW_PROVIDER.fetch_quotes(indices_syms)
+        except Exception:
+            pass
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            future_to_sym = {
+                executor.submit(INDIA_ENGINE.analyze_india_instrument, sym, "1D"): sym
+                for sym in indices_syms
+            }
+            for future in concurrent.futures.as_completed(future_to_sym):
+                sym = future_to_sym[future]
+                try:
+                    results_map[sym] = future.result()
+                except Exception as exc:
+                    logger.debug("Failed analyzing index %s: %s", sym, exc)
+
         res = []
         for sym in indices_syms:
-            data = INDIA_ENGINE.analyze_india_instrument(sym, timeframe="1D")
+            data = results_map.get(sym) or INDIA_ENGINE.analyze_india_instrument(sym, timeframe="1D")
             res.append({
                 "symbol": data["symbol"],
                 "name": data["name"],
@@ -49,7 +89,40 @@ class IndiaMarketsService:
                 "vwap": data["vwap_structure"]["vwap"],
                 "bias": data["multi_timeframe"]["1D"]["bias"]
             })
+
+        self._cached_indices_snapshot = res
+        self._last_indices_scan_time = now
         return res
+
+    def _refresh_master_scan(self):
+        """
+        Refreshes master technical analysis across the Indian universe in parallel using 8 worker threads.
+        """
+        now = time.time()
+        if self._master_scan_cache and (now - self._last_full_scan_time) < self._scan_cache_ttl:
+            return
+
+        symbols = get_all_india_symbols()
+        try:
+            from jarvis.data.tradingview_provider import TRADINGVIEW_PROVIDER
+            TRADINGVIEW_PROVIDER.fetch_quotes(symbols)
+        except Exception:
+            pass
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            future_to_sym = {
+                executor.submit(INDIA_ENGINE.analyze_india_instrument, sym, "1D"): sym
+                for sym in symbols
+            }
+            for future in concurrent.futures.as_completed(future_to_sym):
+                sym = future_to_sym[future]
+                try:
+                    self._master_scan_cache[sym] = future.result()
+                except Exception as exc:
+                    logger.debug("Failed scanning symbol %s: %s", sym, exc)
+
+        self._last_full_scan_time = now
+        self._cached_scanner_results.clear()
 
     def get_scanner_data(
         self,
@@ -62,8 +135,16 @@ class IndiaMarketsService:
         include_indices: bool = False
     ) -> Dict[str, Any]:
         """
-        Scans Indian universe instruments. Strictly scans individual corporate equities when include_indices=False.
+        Scans Indian universe instruments with 15-second TTL in-memory caching.
+        Strictly scans individual corporate equities when include_indices=False.
         """
+        cache_key = f"{sector}_{market}_{cpr_type}_{min_prob}_{sort_by}_{sort_dir}_{include_indices}"
+        now = time.time()
+        if (now - self._last_full_scan_time) < self._scan_cache_ttl and cache_key in self._cached_scanner_results:
+            return self._cached_scanner_results[cache_key]
+
+        self._refresh_master_scan()
+
         if include_indices:
             symbols = get_all_india_symbols()
         else:
@@ -72,7 +153,10 @@ class IndiaMarketsService:
         scanned_list = []
 
         for sym in symbols:
-            analysis = INDIA_ENGINE.analyze_india_instrument(sym, timeframe="1D")
+            analysis = self._master_scan_cache.get(sym)
+            if not analysis:
+                analysis = INDIA_ENGINE.analyze_india_instrument(sym, timeframe="1D")
+                self._master_scan_cache[sym] = analysis
 
             # Strictly exclude indices unless explicitly requested
             if not include_indices and (analysis.get("is_index", False) or analysis.get("sector") == "Indices"):
@@ -142,23 +226,26 @@ class IndiaMarketsService:
         # Curate Top 4 "AI Recommended: Buy Now" Opportunities (Strictly Non-Index Equities)
         ai_buys = self.get_ai_recommended_stock_buys(limit=4)
 
-        return {
+        result = {
             "count": len(scanned_list),
             "stocks": scanned_list,
             "ai_recommended_buys": ai_buys,
             "scanned_at": datetime.now(timezone.utc).isoformat()
         }
+        self._cached_scanner_results[cache_key] = result
+        return result
 
     def get_ai_recommended_stock_buys(self, limit: int = 4) -> List[Dict[str, Any]]:
         """
         Extracts the highest-conviction 'BUY NOW' Indian corporate stock setups.
         Guaranteed to return top 4 prime setups with complete fallback.
         """
+        self._refresh_master_scan()
         all_stocks = get_all_india_stocks()
         candidates = []
 
         for sym in all_stocks:
-            data = INDIA_ENGINE.analyze_india_instrument(sym, timeframe="1D")
+            data = self._master_scan_cache.get(sym) or INDIA_ENGINE.analyze_india_instrument(sym, timeframe="1D")
             if data.get("is_index", False) or data.get("sector") == "Indices":
                 continue
             if data.get("sebi_regulatory", {}).get("is_fno_ban", False):
@@ -194,6 +281,7 @@ class IndiaMarketsService:
         """
         Aggregates Indian sectoral performance and smart money capital flows.
         """
+        self._refresh_master_scan()
         sectors_map: Dict[str, List[Dict[str, Any]]] = {}
         for sym, prof in INDIA_UNIVERSE.items():
             if prof.get("sector") == "Indices":
@@ -202,7 +290,7 @@ class IndiaMarketsService:
             if sec not in sectors_map:
                 sectors_map[sec] = []
             
-            data = INDIA_ENGINE.analyze_india_instrument(sym, timeframe="1D")
+            data = self._master_scan_cache.get(sym) or INDIA_ENGINE.analyze_india_instrument(sym, timeframe="1D")
             sectors_map[sec].append(data)
 
         heatmap_list = []

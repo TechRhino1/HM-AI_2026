@@ -303,39 +303,49 @@ def _try_yfinance(ticker: str, timeframe: str, num_bars: int) -> Optional[List[D
 
 
 def _try_nse(symbol: str, timeframe: str, num_bars: int) -> Optional[List[Dict[str, Any]]]:
-    """Live NSE daily candles (real exchange data). Intraday not provided by the
-    free endpoint, so only Daily/Weekly/Monthly timeframes are served."""
+    """Live NSE daily candles (real exchange data) wrapped with a strict 0.5s timeout.
+    Intraday not provided by the free endpoint, so only Daily/Weekly/Monthly timeframes are served."""
     if timeframe.upper() not in ("1D", "1W", "1MO", "1WK"):
         return None
-    try:
-        from jarvis.india.nse_bse_adapter import fetch_nse_historical
-    except Exception:
-        return None
-    rows = fetch_nse_historical(symbol, days=num_bars)
-    if not rows:
-        return None
-    out: List[Dict[str, Any]] = []
-    for r in rows:
+
+    def _fetch() -> Optional[List[Dict[str, Any]]]:
         try:
-            ts = r.get("date")
-            if isinstance(ts, str):
-                ts = int(_dt.datetime.strptime(ts, "%Y-%m-%d").timestamp())
-            elif hasattr(ts, "timestamp"):
-                ts = int(ts.timestamp())
-            else:
-                ts = int(ts) if ts else 0
-            out.append({
-                "time": ts,
-                "open": float(r["open"]),
-                "high": float(r["high"]),
-                "low": float(r["low"]),
-                "close": float(r["close"]),
-                "volume": int(r.get("volume", 0) or 0),
-            })
-        except Exception:
-            continue
-    out = out[-num_bars:]
-    return out if out else None
+            from jarvis.india.nse_bse_adapter import fetch_nse_historical
+            rows = fetch_nse_historical(symbol, days=num_bars)
+            if not rows:
+                return None
+            out: List[Dict[str, Any]] = []
+            for r in rows:
+                try:
+                    ts = r.get("date")
+                    if isinstance(ts, str):
+                        ts = int(_dt.datetime.strptime(ts, "%Y-%m-%d").timestamp())
+                    elif hasattr(ts, "timestamp"):
+                        ts = int(ts.timestamp())
+                    else:
+                        ts = int(ts) if ts else 0
+                    out.append({
+                        "time": ts,
+                        "open": float(r["open"]),
+                        "high": float(r["high"]),
+                        "low": float(r["low"]),
+                        "close": float(r["close"]),
+                        "volume": int(r.get("volume", 0) or 0),
+                    })
+                except Exception:
+                    continue
+            out = out[-num_bars:]
+            return out if out else None
+        except Exception as exc:
+            logger.debug("NSE fetch failed for %s: %s", symbol, exc)
+            return None
+
+    try:
+        from jarvis.application.timeout_guard import TimeoutGuard
+        return TimeoutGuard.run_sync(_fetch, timeout_sec=0.5, default=None, task_name=f"NSE_Historical_{symbol}")
+    except Exception as exc:
+        logger.debug("NSE timeout guard execution failed for %s: %s", symbol, exc)
+        return None
 
 
 def _try_tradingview(symbol: str, timeframe: str = "1D", num_bars: int = 120) -> Optional[List[Dict[str, Any]]]:
@@ -420,32 +430,43 @@ def fetch_real_candles(
 ) -> Optional[List[Dict[str, Any]]]:
     """Attempt to fetch genuine OHLCV candles across the multi-tier data hierarchy.
 
-    Hierarchy:
+    Hierarchy for US / Global (market == "US"):
       Tier 1: MT5 live broker feed
       Tier 2: TradingView Scanner real-time feed
       Tier 3: yfinance free exchange feed
       Tier 4: Callers fallback to 2026 calibrated baseline prices.
 
+    Hierarchy for India (market == "IN"):
+      Tier 1: Fast TradingView Scanner feed (_try_tradingview)
+      Tier 2: yfinance free exchange feed (_try_yfinance)
+      Tier 3: Live NSE feed with strict 0.5s timeout (_try_nse)
+      Tier 4: Return None (caller immediately generates 2026 calibrated candles in < 0.1ms).
+
     Returns a list of candle dicts (newest last) or ``None`` when no live
     source is reachable.
     """
-    # Indian equities/indices: prefer the real NSE feed, then TradingView, then yfinance.
+    # Indian equities/indices:
     if market == "IN":
-        candles = _try_nse(symbol, timeframe, num_bars)
-        if candles:
-            logger.info("Live NSE candles for %s (%d bars)", symbol, len(candles))
-            return candles
-
-        candles = _try_tradingview(symbol, timeframe, num_bars)
+        # Tier 1: Fast TradingView feed
+        candles = _try_tradingview(symbol, timeframe=timeframe, num_bars=num_bars)
         if candles:
             logger.info("Live TradingView candles for %s (%d bars)", symbol, len(candles))
             return candles
 
+        # Tier 2: yfinance free exchange feed
         ticker = _resolve_ticker(symbol, market)
-        candles = _try_yfinance(ticker, timeframe, num_bars)
+        candles = _try_yfinance(ticker, timeframe=timeframe, num_bars=num_bars)
         if candles:
             logger.info("Live candles for %s (ticker=%s, %d bars)", symbol, ticker, len(candles))
             return candles
+
+        # Tier 3: Live NSE with strict 0.5s timeout
+        candles = _try_nse(symbol, timeframe=timeframe, num_bars=num_bars)
+        if candles:
+            logger.info("Live NSE candles for %s (%d bars)", symbol, len(candles))
+            return candles
+
+        # Tier 4: Return None (caller immediately generates 2026 calibrated candles in < 0.1ms)
         return None
 
     # US / Global equities:

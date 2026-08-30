@@ -35,8 +35,8 @@ _BSE_HEADERS = {
     "Referer": "https://www.bseindia.com/",
 }
 
-_TIMEOUT = 8
-_SESSION_CACHE: Dict[str, Any] = {"ts": 0.0, "session": None}
+_TIMEOUT = 1.0
+_SESSION_CACHE: Dict[str, Any] = {"ts": 0.0, "session": None, "last_fail_ts": 0.0}
 
 # BSE scrip codes for the liquid F&O universe (used as a secondary live source).
 BSE_CODE_MAP = {
@@ -49,21 +49,26 @@ BSE_CODE_MAP = {
 
 
 def _nse_session() -> Optional["requests.Session"]:
-    """Return a requests Session with a valid NSE cookie, caching for 60s."""
+    """Return a requests Session with a valid NSE cookie, caching for 60s with 30s fail cooldown."""
     if not _HAVE_REQUESTS:
         return None
     cache = _SESSION_CACHE
-    if cache.get("session") is not None and (time.time() - cache["ts"]) < 60:
+    now = time.time()
+    if (now - cache.get("last_fail_ts", 0.0)) < 30.0:
+        return None
+    if cache.get("session") is not None and (now - cache["ts"]) < 60:
         return cache["session"]
     try:
         s = requests.Session()
         s.headers.update(_NSE_HEADERS)
         s.get("https://www.nseindia.com/", timeout=_TIMEOUT)
         cache["session"] = s
-        cache["ts"] = time.time()
+        cache["ts"] = now
         return s
     except Exception as e:
-        logger.warning("NSE session init failed: %s", e)
+        logger.debug("NSE session init failed: %s", e)
+        cache["last_fail_ts"] = now
+        cache["session"] = None
         return None
 
 
@@ -98,7 +103,8 @@ def fetch_nse_quote(symbol: str) -> Optional[Dict[str, Any]]:
             "volume": int(j.get("securityWiseDP", {}).get("quantityTraded", 0) or 0),
         }
     except Exception as e:
-        logger.warning("NSE quote fetch failed for %s: %s", sym, e)
+        logger.debug("NSE quote fetch failed for %s: %s", sym, e)
+        _SESSION_CACHE["last_fail_ts"] = time.time()
         return None
 
 
@@ -135,7 +141,8 @@ def fetch_nse_historical(symbol: str, days: int = 180) -> Optional[List[Dict[str
                 continue
         return out if len(out) >= 30 else None
     except Exception as e:
-        logger.warning("NSE historical fetch failed for %s: %s", sym, e)
+        logger.debug("NSE historical fetch failed for %s: %s", sym, e)
+        _SESSION_CACHE["last_fail_ts"] = time.time()
         return None
 
 
@@ -159,7 +166,8 @@ def fetch_nse_option_chain(symbol: str) -> Optional[Dict[str, Any]]:
                     return _normalize_nse_chain(j, symbol)
         return None
     except Exception as e:
-        logger.warning("NSE option chain fetch failed for %s: %s", sym, e)
+        logger.debug("NSE option chain fetch failed for %s: %s", sym, e)
+        _SESSION_CACHE["last_fail_ts"] = time.time()
         return None
 
 

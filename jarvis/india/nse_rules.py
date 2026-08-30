@@ -85,7 +85,10 @@ NSE_LOT_SIZES: Dict[str, int] = {
     "LTIM": 150,
     "POLYCAB": 100,
     "SUZLON": 10000,
-    "IDEA": 80000
+    "IDEA": 80000,
+    "PAYTM": 650,
+    "SWIGGY": 1000,
+    "HYUNDAI": 300
 }
 
 # Quantity Freeze Limits (Maximum allowable single-order quantity on NSE)

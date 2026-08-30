@@ -141,19 +141,24 @@ def hm_start(mode: str = "live", port: int = 8501, host: str = "0.0.0.0"):
     orch_thread.start()
     logger.info(f"Autonomous Multi-Asset Trading Engine active ({mode.upper()} mode).")
 
-    # 3. Start Remote Access Web Terminal & REST API Server
+    # 3. Start Remote Access Web Terminal & REST API Server with auto-recovery
     logger.info(f"Starting Remote Access Web Terminal at http://{host}:{port}...")
-    try:
-        run_web_server(port=port, host=host)
-    except KeyboardInterrupt:
-        logger.info("Shutting down HM AI 4.0 trading platform...")
-        orchestrator.stop()
-        if _TUNNEL_STATE["proc"]:
-            try:
-                _TUNNEL_STATE["proc"].terminate()
-            except Exception:
-                pass
-        print("\n[SHUTDOWN] HM AI 4.0 stopped cleanly.", flush=True)
+    while True:
+        try:
+            run_web_server(port=port, host=host)
+        except KeyboardInterrupt:
+            logger.info("Shutting down HM AI 4.0 trading platform...")
+            orchestrator.stop()
+            if _TUNNEL_STATE["proc"]:
+                try:
+                    _TUNNEL_STATE["proc"].terminate()
+                except Exception:
+                    pass
+            print("\n[SHUTDOWN] HM AI 4.0 stopped cleanly.", flush=True)
+            break
+        except Exception as e:
+            logger.error(f"Web server encountered error: {e}. Auto-restarting in 3s...", exc_info=True)
+            time.sleep(3)
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("-") else "live"

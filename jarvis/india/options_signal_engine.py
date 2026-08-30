@@ -18,6 +18,8 @@ from jarvis.india.options_engine import INDIA_OPTIONS
 from jarvis.india.gamma_exposure import interpret_for_signal
 
 
+import concurrent.futures
+
 class OptionSignalEngine:
     """
     Quantitative Algorithmic Engine for High-Probability Single Entry Option Buying (Long CE / Long PE).
@@ -25,7 +27,7 @@ class OptionSignalEngine:
 
     def generate_single_option_signals(self, limit: int = 8) -> List[Dict[str, Any]]:
         """
-        Scans entire NSE universe (Indices + Liquid F&O Equities) and formulates
+        Scans entire NSE universe (Indices + Liquid F&O Equities) in parallel and formulates
         top high-conviction Single Option Buy trade setups (CE / PE).
         """
         # Primary candidate universe: Top liquid indices and active F&O equities
@@ -41,13 +43,18 @@ class OptionSignalEngine:
 
         signals = []
 
-        for sym in candidates_syms:
-            try:
-                sig = self._evaluate_instrument_for_option_buy(sym, fii_sentiment_score)
-                if sig:
-                    signals.append(sig)
-            except Exception as ex:
-                pass
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            future_to_sym = {
+                executor.submit(self._evaluate_instrument_for_option_buy, sym, fii_sentiment_score): sym
+                for sym in candidates_syms
+            }
+            for future in concurrent.futures.as_completed(future_to_sym):
+                try:
+                    sig = future.result()
+                    if sig:
+                        signals.append(sig)
+                except Exception:
+                    pass
 
         # Sort by AI Conviction Score descending
         signals.sort(key=lambda x: x["conviction_score"], reverse=True)
