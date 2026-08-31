@@ -461,39 +461,30 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                 fresh_acc = self.mt5_client.get_account_snapshot()
                 self.state_manager.sync_broker_state(fresh_acc, fresh_pos)
                 self._send_json({"status": "SUCCESS", "closed_count": len(results), "details": results})
-            elif path == "/api/action/manual_trade":
+            elif path in ("/api/action/manual_trade", "/api/action/place_order"):
                 sym = data.get("symbol", "XAUUSD")
-                action = data.get("action", "BUY").upper()
-                lots = float(data.get("lots", 0.01))
-                sl = float(data.get("sl", 0.0))
-                tp = float(data.get("tp", 0.0))
+                action = data.get("action", data.get("order_type", data.get("side", "BUY"))).upper()
+                lots = float(data.get("lots", data.get("volume", 0.01)))
+                sl = float(data.get("sl", data.get("sl_price", 0.0)))
+                tp = float(data.get("tp", data.get("tp_price", 0.0)))
                 comment = data.get("comment", "JARVIS_ManualDesk")
+                current_price = float(data.get("price", data.get("current_price", 0.0)))
 
-                # Sanitize and auto-validate protective SL & TP
-                try:
-                    from jarvis.data.symbol_registry import resolve as resolve_symbol
-                    spec = resolve_symbol(sym)
-                    digits = spec.digits
-                    df = self.data_feed.fetch_rates(sym, "H1", 20)
-                    if df is not None and len(df) > 0:
-                        c_price = float(df["close"].iloc[-1])
-                        highs = df["high"].values
-                        lows = df["low"].values
-                        atr_val = float((highs[-14:] - lows[-14:]).mean()) if len(df) >= 14 else (c_price * 0.005)
-                        min_dist = atr_val * 0.4
-
-                        if action == "BUY":
-                            if sl <= 0 or sl >= c_price or (c_price - sl) < min_dist:
-                                sl = round(c_price - (atr_val * 1.5), digits)
-                            if tp <= 0 or tp <= c_price:
-                                tp = round(c_price + (abs(c_price - sl) * 2.5), digits)
-                        else:  # SELL
-                            if sl <= 0 or sl <= c_price or (sl - c_price) < min_dist:
-                                sl = round(c_price + (atr_val * 1.5), digits)
-                            if tp <= 0 or tp >= c_price:
-                                tp = round(c_price - (abs(sl - c_price) * 2.5), digits)
-                except Exception as ex:
-                    logger.debug(f"Error checking manual SL/TP sanitization: {ex}")
+                # If sl <= 0 or tp <= 0, compute AI structural levels
+                if sl <= 0 or tp <= 0:
+                    try:
+                        from jarvis.intelligence.dynamic_levels import DYNAMIC_LEVELS_ENGINE
+                        ai_levels = DYNAMIC_LEVELS_ENGINE.calculate_manual_trade_levels(
+                            symbol=sym,
+                            action=action,
+                            current_price=current_price if current_price > 0 else None
+                        )
+                        if sl <= 0:
+                            sl = float(ai_levels.get("sl", 0.0))
+                        if tp <= 0:
+                            tp = float(ai_levels.get("tp", 0.0))
+                    except Exception as ex:
+                        logger.error(f"Error computing AI structural levels for {sym}: {ex}")
 
                 res = self.mt5_client.send_market_order(
                     symbol=sym,
@@ -517,7 +508,7 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                             score=100.0,
                             regime="MANUAL_EXECUTION",
                             ev=0.0,
-                            executor="MANUAL"
+                            executor="MANUAL_AI_ASSISTED"
                         )
                     except Exception as ex:
                         logger.error(f"Error logging manual trade to DB: {ex}")

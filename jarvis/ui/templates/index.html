@@ -20,94 +20,217 @@
     <!-- ==========================================================================
          TOP INSTITUTIONAL HUD HEADER
          ========================================================================== -->
-    <header class="terminal-hud">
-        <div class="brand-wrapper">
-            <div class="brand-logo">
+    <header class="terminal-hud" id="terminal-hud">
+        <!-- LEFT: Brand, Status Badge, Mode, and Trade Style Custom Dropdown -->
+        <div class="hud-left">
+            <a href="/" class="brand-logo" title="HM AI 4.0 Institutional Terminal">
                 <div class="brand-icon">⚡</div>
                 <div class="brand-text">HM <span>AI 4.0</span></div>
+            </a>
+            
+            <div class="hud-status-group">
+                <div id="status-badge" class="badge badge-live">
+                    <span class="pulse-dot"></span> OPERATIONAL
+                </div>
+                <div id="exec-mode-badge" class="badge badge-mode">LIVE</div>
             </div>
-            <div id="status-badge" class="badge badge-live">
-                <span class="pulse-dot"></span> OPERATIONAL
-            </div>
-            <div id="exec-mode-badge" class="badge badge-mode">LIVE</div>
-        </div>
 
-        <!-- Real-Time Trade Style Segmented Switcher -->
-        <div class="trade-style-segmented" id="trade-style-selector">
-            <button class="style-seg-btn active" data-style="SWING" onclick="window.setTradeStyle('SWING')" title="Swing Trading: Multi-Day Horizon (D1/H4/H1)">
-                <span class="style-icon">🌊</span> <span class="style-label">SWING</span> <span class="style-tf">(D1/H4/H1)</span>
-            </button>
-            <button class="style-seg-btn" data-style="DAY_TRADING" onclick="window.setTradeStyle('DAY_TRADING')" title="Day Trading: Intraday Horizon (H1/M15/M5)">
-                <span class="style-icon">🎯</span> <span class="style-label">DAY</span> <span class="style-tf">(H1/M15/M5)</span>
-            </button>
-            <button class="style-seg-btn" data-style="SCALP" onclick="window.setTradeStyle('SCALP')" title="Scalping: Micro Horizon (M15/M5/M1)">
-                <span class="style-icon">⚡</span> <span class="style-label">SCALP</span> <span class="style-tf">(M15/M5/M1)</span>
-            </button>
-        </div>
-
-        <!-- Real-Time Broker Telemetry Metrics Mini-HUD -->
-        <div class="hud-telemetry">
-            <div class="hud-tile">
-                <span class="hud-tile-label">Broker</span>
-                <span id="hud-server" class="hud-tile-value">Connecting...</span>
-            </div>
-            <div class="hud-tile">
-                <span class="hud-tile-label">Login</span>
-                <span id="hud-login" class="hud-tile-value">#--</span>
-            </div>
-            <div class="hud-tile-divider"></div>
-            <div class="hud-tile">
-                <span class="hud-tile-label">Balance</span>
-                <span id="hud-balance" class="hud-tile-value mono-number">$0.00</span>
-            </div>
-            <div class="hud-tile">
-                <span class="hud-tile-label">Equity</span>
-                <span id="hud-equity" class="hud-tile-value mono-number" style="color:var(--neon-bull);">$0.00</span>
-            </div>
-            <div class="hud-tile">
-                <span class="hud-tile-label">Free Margin</span>
-                <span id="hud-free-margin" class="hud-tile-value mono-number">$0.00</span>
-            </div>
-            <div class="hud-tile">
-                <span class="hud-tile-label">Margin Level</span>
-                <span id="hud-margin-level" class="hud-tile-value mono-number" style="color:var(--accent-cyan);">--%</span>
-            </div>
-            <div class="hud-tile-divider"></div>
-            <div class="hud-tile">
-                <span class="hud-tile-label">State</span>
-                <span id="hud-sync" class="hud-tile-value" style="color:var(--neon-bull);">ONLINE</span>
-            </div>
-            <div class="hud-tile">
-                <span class="hud-tile-label">Market</span>
-                <span id="hud-market-status" class="hud-tile-value" style="color:var(--neon-bear); font-weight:700; font-size:11px;">CLOSED</span>
+            <!-- Real-Time Trade Style Custom Dropdown -->
+            <div class="custom-dropdown" id="trade-style-dropdown">
+                <button class="dropdown-trigger-btn style-trigger-btn" id="trade-style-trigger-btn" onclick="window.toggleStyleDropdown(event)" title="Select Execution Strategy & Horizon">
+                    <span id="current-style-icon" class="dropdown-active-icon">🌊</span>
+                    <div class="dropdown-trigger-text">
+                        <span class="dropdown-trigger-label" id="current-style-label">SWING</span>
+                        <span class="dropdown-trigger-sub" id="current-style-tf">D1/H4/H1</span>
+                    </div>
+                    <span class="dropdown-arrow">▾</span>
+                </button>
+                <div class="dropdown-menu style-dropdown-menu" id="trade-style-menu">
+                    <div class="dropdown-header-title">EXECUTION HORIZON</div>
+                    <button class="dropdown-item style-opt-btn active" data-style="SWING" onclick="window.selectTradeStyle('SWING', event)">
+                        <div class="dropdown-item-left">
+                            <span class="item-icon swing-icon">🌊</span>
+                            <div class="item-text-stack">
+                                <span class="item-main-title">SWING TRADING</span>
+                                <span class="item-sub-desc">Multi-Day Horizon (D1 / H4 / H1)</span>
+                            </div>
+                        </div>
+                        <span class="item-badge swing-badge">D1 · H4 · H1</span>
+                    </button>
+                    <button class="dropdown-item style-opt-btn" data-style="DAY_TRADING" onclick="window.selectTradeStyle('DAY_TRADING', event)">
+                        <div class="dropdown-item-left">
+                            <span class="item-icon day-icon">🎯</span>
+                            <div class="item-text-stack">
+                                <span class="item-main-title">DAY TRADING</span>
+                                <span class="item-sub-desc">Intraday Horizon (H1 / M15 / M5)</span>
+                            </div>
+                        </div>
+                        <span class="item-badge day-badge">H1 · M15 · M5</span>
+                    </button>
+                    <button class="dropdown-item style-opt-btn" data-style="SCALP" onclick="window.selectTradeStyle('SCALP', event)">
+                        <div class="dropdown-item-left">
+                            <span class="item-icon scalp-icon">⚡</span>
+                            <div class="item-text-stack">
+                                <span class="item-main-title">SCALP EXECUTION</span>
+                                <span class="item-sub-desc">Micro Horizon (M15 / M5 / M1)</span>
+                            </div>
+                        </div>
+                        <span class="item-badge scalp-badge">M15 · M5 · M1</span>
+                    </button>
+                </div>
             </div>
         </div>
 
-        <!-- Header Action Controls -->
-        <div class="hud-actions">
-            <div class="market-links-group">
-                <a href="/stocks" class="btn-terminal btn-market-link us-link" title="Institutional US Stocks Terminal">
-                    <span class="flag-icon">🇺🇸</span> <span class="btn-text">US Stocks</span>
-                </a>
-                <a href="/india" class="btn-terminal btn-market-link in-link" title="NSE / BSE Equities Terminal">
-                    <span class="flag-icon">🇮🇳</span> <span class="btn-text">India Stocks</span>
-                </a>
-                <a href="/options" class="btn-terminal btn-market-link fno-link" title="NIFTY / BANKNIFTY Options Desk">
-                    <span class="flag-icon">📊</span> <span class="btn-text">India Options</span>
-                </a>
+        <!-- CENTER: Real-Time Broker Telemetry Metrics Mini-HUD Pill -->
+        <div class="hud-center">
+            <div class="hud-telemetry-pill">
+                <div class="telemetry-item">
+                    <span class="telemetry-label">BALANCE</span>
+                    <span id="hud-balance" class="telemetry-value mono-number">$0.00</span>
+                </div>
+                <div class="telemetry-divider"></div>
+                <div class="telemetry-item">
+                    <span class="telemetry-label">EQUITY</span>
+                    <span id="hud-equity" class="telemetry-value mono-number text-bull">$0.00</span>
+                </div>
+                <div class="telemetry-divider hide-compact"></div>
+                <div class="telemetry-item hide-compact">
+                    <span class="telemetry-label">FREE MARGIN</span>
+                    <span id="hud-free-margin" class="telemetry-value mono-number">$0.00</span>
+                </div>
+                <div class="telemetry-divider hide-medium"></div>
+                <div class="telemetry-item hide-medium">
+                    <span class="telemetry-label">MARGIN LEVEL</span>
+                    <span id="hud-margin-level" class="telemetry-value mono-number text-cyan">--%</span>
+                </div>
+                <div class="telemetry-divider hide-medium"></div>
+                <div class="telemetry-item hide-medium">
+                    <span class="telemetry-label">BROKER</span>
+                    <div class="broker-info-row">
+                        <span id="hud-server" class="telemetry-value">Connecting...</span>
+                        <span id="hud-login" class="telemetry-sub mono-number">#--</span>
+                    </div>
+                </div>
+                <div class="telemetry-divider hide-medium"></div>
+                <div class="telemetry-item hide-medium">
+                    <span class="telemetry-label">FEED</span>
+                    <div class="feed-status-row">
+                        <span id="hud-sync" class="telemetry-value text-bull">ONLINE</span>
+                        <span id="hud-market-status" class="telemetry-tag tag-closed">CLOSED</span>
+                    </div>
+                </div>
             </div>
-            <button class="cmd-hint-btn" onclick="toggleCommandPalette(true)" title="Spotlight Command Palette (Ctrl+K)">
-                <span>⌘K</span>
+        </div>
+
+        <!-- RIGHT: Markets Dropdown, Safe Mode, Copilot, Tools / Profile Dropdown -->
+        <div class="hud-right">
+            <!-- Markets Dropdown -->
+            <div class="custom-dropdown" id="markets-dropdown">
+                <button class="dropdown-trigger-btn markets-trigger-btn" id="markets-trigger-btn" onclick="window.toggleMarketsDropdown(event)" title="Institutional Desks & Market Screeners">
+                    <span class="dropdown-trigger-icon">🌐</span>
+                    <span class="dropdown-trigger-label hide-mobile-text">Markets</span>
+                    <span class="dropdown-arrow">▾</span>
+                </button>
+                <div class="dropdown-menu markets-dropdown-menu" id="markets-menu">
+                    <div class="dropdown-header-title">MULTI-MARKET DESKS</div>
+                    <a href="/stocks" class="dropdown-item market-nav-item">
+                        <div class="dropdown-item-left">
+                            <span class="item-flag">🇺🇸</span>
+                            <div class="item-text-stack">
+                                <span class="item-main-title">US Stocks Screener</span>
+                                <span class="item-sub-desc">NASDAQ & NYSE Institutional Radar</span>
+                            </div>
+                        </div>
+                        <span class="market-status-dot online">LIVE</span>
+                    </a>
+                    <a href="/india" class="dropdown-item market-nav-item">
+                        <div class="dropdown-item-left">
+                            <span class="item-flag">🇮🇳</span>
+                            <div class="item-text-stack">
+                                <span class="item-main-title">India Stocks NSE/BSE</span>
+                                <span class="item-sub-desc">Nifty 500 Equities & Breakouts</span>
+                            </div>
+                        </div>
+                        <span class="market-status-dot online">LIVE</span>
+                    </a>
+                    <a href="/options" class="dropdown-item market-nav-item">
+                        <div class="dropdown-item-left">
+                            <span class="item-flag">📊</span>
+                            <div class="item-text-stack">
+                                <span class="item-main-title">India Options Desk</span>
+                                <span class="item-sub-desc">NIFTY & BANKNIFTY Greeks Desk</span>
+                            </div>
+                        </div>
+                        <span class="market-status-dot options-live">F&O</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Safe Mode Toggle Button -->
+            <button id="btn-safe-mode" class="btn-hud-action btn-safe-mode" onclick="window.toggleSafeMode()" title="Toggle Safe Mode Execution Protection">
+                <span class="hud-action-icon">🛡️</span>
+                <span class="hud-action-text hide-compact">Safe Mode</span>
             </button>
-            <button class="btn-terminal" onclick="toggleCopilotModal()" title="HM AI Copilot Assistant">
-                <span style="color:var(--accent-cyan);">🤖</span> Copilot
+
+            <!-- Copilot Assistant Button -->
+            <button class="btn-hud-action btn-copilot" onclick="window.toggleCopilotModal()" title="Open HM AI Copilot Assistant (C)">
+                <span class="hud-action-icon">🤖</span>
+                <span class="hud-action-text hide-compact">Copilot</span>
             </button>
-            <button id="btn-safe-mode" class="btn-terminal btn-warning" onclick="toggleSafeMode()" title="Toggle Safe Mode Execution Protection">
-                🛡️ Safe Mode
-            </button>
-            <button class="btn-terminal" onclick="refreshData()" title="Force Refresh Telemetry">
-                ↻ Refresh
-            </button>
+
+            <!-- Tools / User Dropdown -->
+            <div class="custom-dropdown" id="tools-dropdown">
+                <button class="dropdown-trigger-btn tools-trigger-btn" id="tools-trigger-btn" onclick="window.toggleToolsDropdown(event)" title="Settings, Command Palette & Terminal Profile">
+                    <span class="dropdown-trigger-icon">⚙️</span>
+                    <span class="dropdown-trigger-label hide-compact">Tools</span>
+                    <span class="dropdown-arrow">▾</span>
+                </button>
+                <div class="dropdown-menu tools-dropdown-menu" id="tools-menu">
+                    <div class="dropdown-header-title">TERMINAL TOOLS & ACCESS</div>
+                    <button class="dropdown-item" onclick="window.toggleCommandPalette(true); window.closeAllDropdowns();">
+                        <div class="dropdown-item-left">
+                            <span class="item-icon">⌘</span>
+                            <div class="item-text-stack">
+                                <span class="item-main-title">Spotlight Command Palette</span>
+                                <span class="item-sub-desc">Quick actions & navigation</span>
+                            </div>
+                        </div>
+                        <span class="item-badge">Ctrl+K</span>
+                    </button>
+                    <button class="dropdown-item" onclick="window.refreshData(); window.closeAllDropdowns();">
+                        <div class="dropdown-item-left">
+                            <span class="item-icon">↻</span>
+                            <div class="item-text-stack">
+                                <span class="item-main-title">Force Telemetry Refresh</span>
+                                <span class="item-sub-desc">Poll broker state immediately</span>
+                            </div>
+                        </div>
+                        <span class="item-badge">F5</span>
+                    </button>
+                    <button class="dropdown-item" onclick="if(window.HM_AUTH) window.HM_AUTH.openLoginModal(); window.closeAllDropdowns();">
+                        <div class="dropdown-item-left">
+                            <span class="item-icon">👤</span>
+                            <div class="item-text-stack">
+                                <span class="item-main-title" id="dropdown-user-name">Admin Profile</span>
+                                <span class="item-sub-desc" id="dropdown-user-role">Institutional Trader</span>
+                            </div>
+                        </div>
+                        <span class="item-badge badge-role">AUTH</span>
+                    </button>
+                    <div class="dropdown-separator"></div>
+                    <button class="dropdown-item item-danger" onclick="if(window.HM_AUTH) window.HM_AUTH.logout(); else if(window.RemoteAuthUI) window.RemoteAuthUI.logout(); window.closeAllDropdowns();">
+                        <div class="dropdown-item-left">
+                            <span class="item-icon">🚪</span>
+                            <div class="item-text-stack">
+                                <span class="item-main-title">Sign Out / Lock</span>
+                                <span class="item-sub-desc">Terminate terminal session</span>
+                            </div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <div id="auth-header-widget" class="auth-header-widget" style="display:none;"></div>
         </div>
     </header>
 
@@ -115,11 +238,26 @@
          MOBILE NAVIGATION TAB BAR (VISIBLE ON TOUCH / MOBILE SCREENS <= 900PX)
          ========================================================================== -->
     <nav class="mobile-nav-bar" id="mobile-nav-bar">
-        <button id="mob-btn-chart" class="mob-tab-btn active" onclick="switchMobileView('chart')">📊 Chart & Desk</button>
-        <button id="mob-btn-radar" class="mob-tab-btn" onclick="switchMobileView('radar')">📡 Setups Radar</button>
-        <button id="mob-btn-cognition" class="mob-tab-btn" onclick="switchMobileView('cognition')">🛡️ AI Gates</button>
-        <button id="mob-btn-orders" class="mob-tab-btn" onclick="switchMobileView('orders')">📋 Orders & Log</button>
-        <button id="mob-btn-all" class="mob-tab-btn" onclick="switchMobileView('all')">🌐 All</button>
+        <button id="mob-btn-radar" class="mob-tab-btn" onclick="window.switchMobileView('radar')">
+            <span class="mob-tab-icon">📡</span>
+            <span class="mob-tab-label">Radar</span>
+        </button>
+        <button id="mob-btn-chart" class="mob-tab-btn active" onclick="window.switchMobileView('chart')">
+            <span class="mob-tab-icon">📈</span>
+            <span class="mob-tab-label">Chart</span>
+        </button>
+        <button id="mob-btn-desk" class="mob-tab-btn" onclick="window.switchMobileView('desk')">
+            <span class="mob-tab-icon">⚡</span>
+            <span class="mob-tab-label">Desk</span>
+        </button>
+        <button id="mob-btn-orders" class="mob-tab-btn" onclick="window.switchMobileView('orders')">
+            <span class="mob-tab-icon">💼</span>
+            <span class="mob-tab-label">Positions</span>
+        </button>
+        <button id="mob-btn-cognition" class="mob-tab-btn" onclick="window.switchMobileView('cognition')">
+            <span class="mob-tab-icon">🛡️</span>
+            <span class="mob-tab-label">AI Gates</span>
+        </button>
     </nav>
 
     <!-- ==========================================================================

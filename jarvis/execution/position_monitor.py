@@ -94,6 +94,9 @@ class PositionMonitorEngine:
         self._partially_closed_tickets: Set[int] = set()
         # Per-ticket live MFE high-water mark tracking (E2)
         self._peak_favorable_price: Dict[int, float] = {}
+        # Autonomous dynamic trailing tracking
+        self._initial_risk_dist: Dict[int, float] = {}
+        self._highest_favorable_price: Dict[int, float] = {}
 
     # ─── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -153,6 +156,8 @@ class PositionMonitorEngine:
         self._partially_closed_tickets = {t for t in self._partially_closed_tickets if t in active_tickets}
         self._last_action = {t: act for t, act in self._last_action.items() if t in active_tickets}
         self._peak_favorable_price = {t: pr for t, pr in self._peak_favorable_price.items() if t in active_tickets}
+        self._initial_risk_dist = {t: r for t, r in self._initial_risk_dist.items() if t in active_tickets}
+        self._highest_favorable_price = {t: pr for t, pr in self._highest_favorable_price.items() if t in active_tickets}
 
         # ── Per-position management ─────────────────────────────────────────
         for pos in positions:
@@ -166,9 +171,9 @@ class PositionMonitorEngine:
     def _manage_single_position(
         self,
         pos: PositionSnapshot,
-        equity: float,
-        balance: float,
-        emergency_brake: bool,
+        equity: float = 10000.0,
+        balance: float = 10000.0,
+        emergency_brake: bool = False,
     ):
         symbol  = pos.symbol
         is_manual = self._is_manual_trade(pos)
@@ -189,8 +194,13 @@ class PositionMonitorEngine:
         try:
             spec = _res(symbol)
             typical_spread = spec.typical_spread_pips
+            pip_size = spec.pip_size if spec.pip_size > 0 else 0.0001
+            digits = spec.digits
         except Exception:
             typical_spread = 3.0
+            pip_size = 0.0001
+            digits = 5
+
         if spread > (typical_spread * SPREAD_BLOWOUT_MULT):
             logger.warning(f"⚠️ Spread blowout {spread:.1f} pips on #{pos.ticket} — skipping modification.")
             return
@@ -214,9 +224,9 @@ class PositionMonitorEngine:
                 first_target = getattr(decision_obj, "first_target_price", None)
                 target_pct = getattr(decision_obj, "first_target_volume_pct", PARTIAL_CLOSE_PCT)
 
-                risk_dist = abs(pos.open_price - pos.sl) if pos.sl > 0 else (atr * 1.5)
+                risk_dist_init = abs(pos.open_price - pos.sl) if pos.sl > 0 else (atr * 1.5)
                 if not first_target or first_target <= 0:
-                    first_target = (pos.open_price + (risk_dist * PARTIAL_TP_TRIGGER_R)) if pos.type == "BUY" else (pos.open_price - (risk_dist * PARTIAL_TP_TRIGGER_R))
+                    first_target = (pos.open_price + (risk_dist_init * PARTIAL_TP_TRIGGER_R)) if pos.type == "BUY" else (pos.open_price - (risk_dist_init * PARTIAL_TP_TRIGGER_R))
 
                 is_target_hit = (c_price >= first_target) if pos.type == "BUY" else (c_price <= first_target)
                 if is_target_hit:
@@ -243,56 +253,142 @@ class PositionMonitorEngine:
                 if act:
                     actions.append(act)
 
-            # ── 2. Regime invalidation exit ────────────────────────────────
-            new_sl, act = self._check_regime_invalidation(pos, ctx, regime, c_price, atr, new_sl)
-            if act:
-                actions.append(act)
+            # ── 2. Autonomous Dynamic Trailing & R-Multiple Management (ALL positions) ──
+            if pos.ticket not in self._initial_risk_dist:
+                self._initial_risk_dist[pos.ticket] = abs(pos.open_price - pos.sl) if pos.sl > 0 else (1.5 * atr)
+            risk_dist = max(self._initial_risk_dist[pos.ticket], pip_size * 5)
 
-            # ── 3. Core SL trailing (breakeven + profit lock + S/R ratchet) ──
-            new_sl, sl_actions = self._trail_sl(pos, ctx, c_price, atr, new_sl, equity)
-            actions.extend(sl_actions)
+            if pos.type == "BUY":
+                prev_high = self._highest_favorable_price.get(pos.ticket, pos.open_price)
+                high_price = max(prev_high, c_price)
+                self._highest_favorable_price[pos.ticket] = high_price
+                self._peak_favorable_price[pos.ticket] = high_price
+                favorable_dist = max(0.0, high_price - pos.open_price)
+                r_multiple = favorable_dist / max(risk_dist, 1e-6)
+
+                # Stage 2 (Dynamic Chandelier Trail): R >= 1.50 -> trail at current_price - 1.20 * atr
+                if r_multiple >= 1.50:
+                    cand_sl = round(c_price - (1.20 * atr), digits)
+                    if cand_sl > new_sl and cand_sl < c_price:
+                        new_sl = cand_sl
+                        actions.append(f"STAGE2_CHANDELIER@{new_sl:.4f}")
+                # Stage 1 (Profit Floor): R >= 1.20 -> open_price + 0.40 * risk_dist
+                elif r_multiple >= 1.20:
+                    cand_sl = round(pos.open_price + (0.40 * risk_dist), digits)
+                    if cand_sl > new_sl and cand_sl < c_price:
+                        new_sl = cand_sl
+                        actions.append(f"STAGE1_PROFIT_FLOOR@{new_sl:.4f}")
+                # Stage 0 (Zero-Risk Lock): R >= 0.80 -> open_price + 0.10 * risk_dist
+                elif r_multiple >= 0.80:
+                    cand_sl = round(pos.open_price + (0.10 * risk_dist), digits)
+                    if cand_sl > new_sl and cand_sl < c_price:
+                        new_sl = cand_sl
+                        actions.append(f"STAGE0_ZERO_RISK@{new_sl:.4f}")
+
+                # Structural S/R ratchet — ratchet to higher-low support
+                if hasattr(ctx, "structure") and ctx.structure:
+                    st = ctx.structure
+                    if getattr(st, "higher_lows", False) and st.demand_zone[0] > 0:
+                        struct_sl = round(st.demand_zone[0] - (atr * SR_ATR_BUFFER), digits)
+                        if struct_sl > new_sl and struct_sl < c_price:
+                            new_sl = struct_sl
+                            actions.append(f"SR_RATCHET@{new_sl:.4f}")
+
+                    if hasattr(st, "key_levels") and st.key_levels:
+                        support_levels = sorted(
+                            [kl["price"] for kl in st.key_levels if kl.get("price", 0) < c_price],
+                            reverse=True,
+                        )
+                        if support_levels:
+                            key_sl = round(support_levels[0] - (atr * SR_ATR_BUFFER), digits)
+                            if key_sl > new_sl and key_sl < c_price:
+                                new_sl = key_sl
+                                actions.append(f"KEY_LEVEL@{new_sl:.4f}")
+
+            elif pos.type == "SELL":
+                prev_low = self._highest_favorable_price.get(pos.ticket, pos.open_price)
+                low_price = min(prev_low, c_price)
+                self._highest_favorable_price[pos.ticket] = low_price
+                self._peak_favorable_price[pos.ticket] = low_price
+                favorable_dist = max(0.0, pos.open_price - low_price)
+                r_multiple = favorable_dist / max(risk_dist, 1e-6)
+
+                # Stage 2 (Dynamic Chandelier Trail): R >= 1.50 -> trail at current_price + 1.20 * atr
+                if r_multiple >= 1.50:
+                    cand_sl = round(c_price + (1.20 * atr), digits)
+                    if (new_sl == 0 or cand_sl < new_sl) and cand_sl > c_price:
+                        new_sl = cand_sl
+                        actions.append(f"STAGE2_CHANDELIER@{new_sl:.4f}")
+                # Stage 1 (Profit Floor): R >= 1.20 -> open_price - 0.40 * risk_dist
+                elif r_multiple >= 1.20:
+                    cand_sl = round(pos.open_price - (0.40 * risk_dist), digits)
+                    if (new_sl == 0 or cand_sl < new_sl) and cand_sl > c_price:
+                        new_sl = cand_sl
+                        actions.append(f"STAGE1_PROFIT_FLOOR@{new_sl:.4f}")
+                # Stage 0 (Zero-Risk Lock): R >= 0.80 -> open_price - 0.10 * risk_dist
+                elif r_multiple >= 0.80:
+                    cand_sl = round(pos.open_price - (0.10 * risk_dist), digits)
+                    if (new_sl == 0 or cand_sl < new_sl) and cand_sl > c_price:
+                        new_sl = cand_sl
+                        actions.append(f"STAGE0_ZERO_RISK@{new_sl:.4f}")
+
+                # Structural S/R ratchet — ratchet to lower-high resistance
+                if hasattr(ctx, "structure") and ctx.structure:
+                    st = ctx.structure
+                    if getattr(st, "lower_highs", False) and st.supply_zone[1] > 0:
+                        struct_sl = round(st.supply_zone[1] + (atr * SR_ATR_BUFFER), digits)
+                        if (new_sl == 0 or struct_sl < new_sl) and struct_sl > c_price:
+                            new_sl = struct_sl
+                            actions.append(f"SR_RATCHET@{new_sl:.4f}")
+
+                    if hasattr(st, "key_levels") and st.key_levels:
+                        resistance_levels = sorted(
+                            [kl["price"] for kl in st.key_levels if kl.get("price", 0) > c_price]
+                        )
+                        if resistance_levels:
+                            key_sl = round(resistance_levels[0] + (atr * SR_ATR_BUFFER), digits)
+                            if (new_sl == 0 or key_sl < new_sl) and key_sl > c_price:
+                                key_sl = key_sl
+                                actions.append(f"KEY_LEVEL@{new_sl:.4f}")
 
             # ── 3.5 Live MFE Scale-Out & Retracement Protection (E2) ───────────
             if pos.type == "BUY":
-                prev_peak = self._peak_favorable_price.get(pos.ticket, pos.open_price)
-                peak_price = max(prev_peak, c_price)
-                self._peak_favorable_price[pos.ticket] = peak_price
-                peak_mfe = peak_price - pos.open_price
-
+                peak_mfe = self._peak_favorable_price[pos.ticket] - pos.open_price
                 if peak_mfe >= (atr * 1.5):
                     current_gain = c_price - pos.open_price
                     giveback_pct = (peak_mfe - current_gain) / (peak_mfe + 1e-9)
                     if giveback_pct >= 0.40:
-                        mfe_locked_sl = pos.open_price + (peak_mfe * 0.50)
+                        mfe_locked_sl = round(pos.open_price + (peak_mfe * 0.50), digits)
                         if mfe_locked_sl > new_sl and mfe_locked_sl < c_price:
                             new_sl = mfe_locked_sl
                             actions.append(f"MFE_RETRACE_50%_LOCK@{new_sl:.4f}")
             elif pos.type == "SELL":
-                prev_trough = self._peak_favorable_price.get(pos.ticket, pos.open_price)
-                trough_price = min(prev_trough, c_price)
-                self._peak_favorable_price[pos.ticket] = trough_price
-                peak_mfe = pos.open_price - trough_price
-
+                peak_mfe = pos.open_price - self._peak_favorable_price[pos.ticket]
                 if peak_mfe >= (atr * 1.5):
                     current_gain = pos.open_price - c_price
                     giveback_pct = (peak_mfe - current_gain) / (peak_mfe + 1e-9)
                     if giveback_pct >= 0.40:
-                        mfe_locked_sl = pos.open_price - (peak_mfe * 0.50)
+                        mfe_locked_sl = round(pos.open_price - (peak_mfe * 0.50), digits)
                         if (new_sl == 0 or mfe_locked_sl < new_sl) and mfe_locked_sl > c_price:
                             new_sl = mfe_locked_sl
                             actions.append(f"MFE_RETRACE_50%_LOCK@{new_sl:.4f}")
 
-            # ── 4. VWAP cross awareness ────────────────────────────────────
+            # ── 4. Regime invalidation exit ────────────────────────────────
+            new_sl, act = self._check_regime_invalidation(pos, ctx, regime, c_price, atr, new_sl)
+            if act:
+                actions.append(act)
+
+            # ── 5. VWAP cross awareness ────────────────────────────────────
             new_sl, act = self._check_vwap_cross(pos, ctx, c_price, atr, new_sl)
             if act:
                 actions.append(act)
 
-            # ── 5. Momentum exhaustion exit ───────────────────────────────
+            # ── 6. Momentum exhaustion exit ───────────────────────────────
             new_sl, act = self._check_momentum_exhaustion(pos, ctx, c_price, atr, new_sl)
             if act:
                 actions.append(act)
 
-            # ── 6. Regime-Adaptive Time-Decay Stale Trade Exit (E2) ────────────
+            # ── 7. Regime-Adaptive Time-Decay Stale Trade Exit (E2) ────────────
             if hasattr(pos, "open_time") and pos.open_time:
                 try:
                     open_dt = datetime.strptime(pos.open_time, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
@@ -321,7 +417,7 @@ class PositionMonitorEngine:
                             return
                         elif profit_ratio >= 0.005:
                             # If slightly in profit after max stall, ratchet SL to breakeven + buffer to protect capital
-                            be_cand = (pos.open_price + (atr * STAGE1_BE_BUFFER)) if pos.type == "BUY" else (pos.open_price - (atr * STAGE1_BE_BUFFER))
+                            be_cand = round((pos.open_price + (atr * STAGE1_BE_BUFFER)), digits) if pos.type == "BUY" else round((pos.open_price - (atr * STAGE1_BE_BUFFER)), digits)
                             if pos.type == "BUY" and be_cand > new_sl and be_cand < c_price:
                                 new_sl = be_cand
                                 actions.append(f"TIME_DECAY_BE@{new_sl:.4f}")
@@ -331,13 +427,23 @@ class PositionMonitorEngine:
                 except Exception:
                     pass
 
+        # Monotonic ratchet enforcement (SL only moves closer to price, never backward)
+        if pos.type == "BUY":
+            if pos.sl > 0 and new_sl < pos.sl:
+                new_sl = pos.sl
+        elif pos.type == "SELL":
+            if pos.sl > 0 and new_sl > pos.sl:
+                new_sl = pos.sl
 
-        # ── Apply modifications if anything changed ─────────────────────────
-        sl_changed = abs(new_sl - pos.sl) > 0.0001
+        # ── Apply modifications if SL changes by > 1.0 pip or TP changes ─────────────────────────
+        sl_pip_diff = abs(new_sl - pos.sl) / (pip_size if pip_size > 0 else 1.0)
+        sl_changed = (sl_pip_diff >= 1.0) or (pos.sl == 0 and new_sl > 0)
         tp_changed = abs(new_tp - pos.tp) > 0.0001
 
         if sl_changed or tp_changed:
-            action_key = f"{new_sl:.4f}"
+            new_sl = round(new_sl, digits)
+            new_tp = round(new_tp, digits)
+            action_key = f"{new_sl:.{digits}f}"
             if self._last_action.get(pos.ticket) != action_key:
                 res = self.mt5_client.modify_position(pos.ticket, sl=new_sl, tp=new_tp)
                 status = res.get("status") if res else "FAILED"

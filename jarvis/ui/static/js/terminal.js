@@ -2274,12 +2274,118 @@
         }
     };
 
+    // =========================================================================
+    // CUSTOM DROPDOWN INTERACTION SYSTEM
+    // =========================================================================
+    window.closeAllDropdowns = function () {
+        document.querySelectorAll(".dropdown-menu").forEach(menu => menu.classList.remove("show"));
+        document.querySelectorAll(".dropdown-trigger-btn").forEach(btn => btn.classList.remove("open"));
+    };
+
+    window.toggleStyleDropdown = function (event) {
+        if (event) event.stopPropagation();
+        const menu = document.getElementById("trade-style-menu");
+        const btn = document.getElementById("trade-style-trigger-btn");
+        if (!menu || !btn) return;
+        const isOpen = menu.classList.contains("show");
+        window.closeAllDropdowns();
+        if (!isOpen) {
+            menu.classList.add("show");
+            btn.classList.add("open");
+        }
+    };
+
+    window.toggleMarketsDropdown = function (event) {
+        if (event) event.stopPropagation();
+        const menu = document.getElementById("markets-menu");
+        const btn = document.getElementById("markets-trigger-btn");
+        if (!menu || !btn) return;
+        const isOpen = menu.classList.contains("show");
+        window.closeAllDropdowns();
+        if (!isOpen) {
+            menu.classList.add("show");
+            btn.classList.add("open");
+        }
+    };
+
+    window.toggleToolsDropdown = function (event) {
+        if (event) event.stopPropagation();
+        const menu = document.getElementById("tools-menu");
+        const btn = document.getElementById("tools-trigger-btn");
+        if (!menu || !btn) return;
+        const isOpen = menu.classList.contains("show");
+        window.closeAllDropdowns();
+        if (!isOpen) {
+            menu.classList.add("show");
+            btn.classList.add("open");
+        }
+    };
+
+    window.selectTradeStyle = function (style, event) {
+        if (event) event.stopPropagation();
+        window.closeAllDropdowns();
+        window.setTradeStyle(style);
+    };
+
+    // Close dropdowns on outside click or Escape key
+    document.addEventListener("click", (e) => {
+        if (!e.target.closest(".custom-dropdown")) {
+            window.closeAllDropdowns();
+        }
+    });
+
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+            window.closeAllDropdowns();
+        }
+    });
+
     function syncTradeStyleButtons(style) {
         const s = (style || "SWING").toUpperCase();
+        
+        // Sync segmented buttons (if any in DOM)
         document.querySelectorAll(".style-seg-btn").forEach(btn => {
             const btnStyle = (btn.getAttribute("data-style") || "").toUpperCase();
             btn.classList.toggle("active", btnStyle === s);
         });
+
+        // Sync dropdown item buttons
+        document.querySelectorAll(".style-opt-btn").forEach(btn => {
+            const btnStyle = (btn.getAttribute("data-style") || "").toUpperCase();
+            btn.classList.toggle("active", btnStyle === s);
+        });
+
+        // Sync Dropdown Trigger button display
+        const triggerBtn = document.getElementById("trade-style-trigger-btn");
+        const iconEl = document.getElementById("current-style-icon");
+        const labelEl = document.getElementById("current-style-label");
+        const tfEl = document.getElementById("current-style-tf");
+
+        let icon = "🌊";
+        let label = "SWING";
+        let tf = "D1/H4/H1";
+        let styleClass = "style-swing";
+
+        if (s === "DAY_TRADING" || s === "DAY") {
+            icon = "🎯";
+            label = "DAY";
+            tf = "H1/M15/M5";
+            styleClass = "style-day";
+        } else if (s === "SCALP") {
+            icon = "⚡";
+            label = "SCALP";
+            tf = "M15/M5/M1";
+            styleClass = "style-scalp";
+        }
+
+        if (iconEl) iconEl.textContent = icon;
+        if (labelEl) labelEl.textContent = label;
+        if (tfEl) tfEl.textContent = tf;
+
+        if (triggerBtn) {
+            triggerBtn.classList.remove("style-swing", "style-day", "style-scalp");
+            triggerBtn.classList.add(styleClass);
+        }
     }
 
     function syncRadarFilterButtons(filter) {
@@ -2370,6 +2476,10 @@
             if (data && typeof data.safe_mode !== "undefined") {
                 state.safeMode = data.safe_mode;
             }
+            const safeBtn = document.getElementById("btn-safe-mode");
+            if (safeBtn) {
+                safeBtn.classList.toggle("active", !!state.safeMode);
+            }
             fetchTelemetry();
         } catch (err) {
             console.error("Safe mode error:", err);
@@ -2385,19 +2495,20 @@
     };
 
     window.switchMobileView = function (view) {
-        state.activeMobileView = view;
+        state.activeMobileView = view || "chart";
+        const active = state.activeMobileView;
 
         const btnChart = document.getElementById("mob-btn-chart");
         const btnRadar = document.getElementById("mob-btn-radar");
-        const btnCognition = document.getElementById("mob-btn-cognition");
+        const btnDesk = document.getElementById("mob-btn-desk");
         const btnOrders = document.getElementById("mob-btn-orders");
-        const btnAll = document.getElementById("mob-btn-all");
+        const btnCognition = document.getElementById("mob-btn-cognition");
 
-        if (btnChart) btnChart.classList.toggle("active", view === "chart");
-        if (btnRadar) btnRadar.classList.toggle("active", view === "radar");
-        if (btnCognition) btnCognition.classList.toggle("active", view === "cognition");
-        if (btnOrders) btnOrders.classList.toggle("active", view === "orders");
-        if (btnAll) btnAll.classList.toggle("active", view === "all");
+        if (btnChart) btnChart.classList.toggle("active", active === "chart");
+        if (btnRadar) btnRadar.classList.toggle("active", active === "radar");
+        if (btnDesk) btnDesk.classList.toggle("active", active === "desk");
+        if (btnOrders) btnOrders.classList.toggle("active", active === "orders");
+        if (btnCognition) btnCognition.classList.toggle("active", active === "cognition");
 
         const leftPanel = document.getElementById("panel-left");
         const middlePanel = document.getElementById("panel-middle");
@@ -2407,7 +2518,7 @@
         const histSection = document.getElementById("section-history");
 
         if (window.innerWidth <= 900) {
-            if (view === "chart") {
+            if (active === "chart") {
                 if (leftPanel) leftPanel.style.display = "none";
                 if (middlePanel) {
                     middlePanel.style.display = "flex";
@@ -2415,22 +2526,22 @@
                     if (posSection) posSection.style.display = "none";
                     if (histSection) histSection.style.display = "none";
                 }
-                if (rightPanel) {
-                    rightPanel.style.display = "flex";
-                    switchRightTab("desk");
+                if (rightPanel) rightPanel.style.display = "none";
+            } else if (active === "radar") {
+                if (leftPanel) {
+                    leftPanel.style.display = "flex";
+                    switchLeftTab("radar");
                 }
-            } else if (view === "radar") {
-                if (leftPanel) leftPanel.style.display = "flex";
                 if (middlePanel) middlePanel.style.display = "none";
                 if (rightPanel) rightPanel.style.display = "none";
-            } else if (view === "cognition") {
+            } else if (active === "desk") {
                 if (leftPanel) leftPanel.style.display = "none";
                 if (middlePanel) middlePanel.style.display = "none";
                 if (rightPanel) {
                     rightPanel.style.display = "flex";
-                    switchRightTab("cognition");
+                    switchRightTab("desk");
                 }
-            } else if (view === "orders") {
+            } else if (active === "orders") {
                 if (leftPanel) leftPanel.style.display = "none";
                 if (middlePanel) {
                     middlePanel.style.display = "flex";
@@ -2439,15 +2550,13 @@
                     if (histSection) histSection.style.display = "flex";
                 }
                 if (rightPanel) rightPanel.style.display = "none";
-            } else if (view === "all") {
-                if (leftPanel) leftPanel.style.display = "flex";
-                if (middlePanel) {
-                    middlePanel.style.display = "flex";
-                    if (chartPanel) chartPanel.style.display = "flex";
-                    if (posSection) posSection.style.display = "flex";
-                    if (histSection) histSection.style.display = "flex";
+            } else if (active === "cognition") {
+                if (leftPanel) leftPanel.style.display = "none";
+                if (middlePanel) middlePanel.style.display = "none";
+                if (rightPanel) {
+                    rightPanel.style.display = "flex";
+                    switchRightTab("cognition");
                 }
-                if (rightPanel) rightPanel.style.display = "flex";
             }
         } else {
             // Restore desktop multi-column view

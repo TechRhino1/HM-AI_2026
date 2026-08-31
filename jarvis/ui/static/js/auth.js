@@ -109,6 +109,11 @@
         },
 
         updateHeaderUI: function (user) {
+            const dropUserName = document.getElementById("dropdown-user-name");
+            const dropUserRole = document.getElementById("dropdown-user-role");
+            if (dropUserName) dropUserName.textContent = (user && user.username) ? user.username : "Admin Profile";
+            if (dropUserRole) dropUserRole.textContent = (user && user.role) ? `${user.role} Trader` : "Institutional Trader";
+
             let container = document.getElementById("auth-header-widget");
             if (!container) {
                 // Find right-most nav container

@@ -6,6 +6,7 @@ Computes purely structural, volatility-adaptive SL, TP, and scale-out plans with
 - Adaptive Scale-Out Plan: Structural first target, regime-adaptive partial volume %, and ATR runner trailing.
 """
 from typing import Dict, List, Any, Optional
+from datetime import datetime, timezone
 import logging
 import numpy as np
 
@@ -332,3 +333,162 @@ class DynamicRiskAndLevelsEngine:
             "first_target_volume_pct": first_target_volume_pct,
             "runner_trail_distance_atr": runner_trail_distance_atr
         }
+
+    def calculate_manual_trade_levels(
+        self,
+        symbol: str,
+        action: str,
+        current_price: Optional[float] = None
+    ) -> Dict[str, Any]:
+        """
+        Calculate AI-assisted dynamic structural SL, TP1, and TP2 for manual orders.
+        Anchor beyond recent swing / OB / FVG + dynamic ATR buffer.
+        TP1: 1.0R - 1.2R, TP2: 2.0R - 3.5R.
+        """
+        norm_action = (action or "BUY").strip().upper()
+        if norm_action not in ("BUY", "SELL"):
+            norm_action = "BUY"
+
+        spec = resolve_symbol(symbol)
+        digits = spec.digits
+        pip_size = spec.pip_size if spec.pip_size > 0 else 0.0001
+        spread_pips = spec.typical_spread_pips if getattr(spec, "typical_spread_pips", 0) > 0 else 2.0
+        spread_dist = spread_pips * pip_size
+
+        ctx: Optional[MarketContext] = None
+
+        # 1. Try to retrieve context from global state manager if available
+        try:
+            from jarvis.application.state_manager import GLOBAL_STATE
+            ctx = GLOBAL_STATE.get_market_context(symbol)
+        except Exception as ex:
+            logger.debug(f"Could not retrieve context from GLOBAL_STATE for {symbol}: {ex}")
+
+        # 2. If no context in state manager, build fresh context via DataFeedEngine + MarketContextEngine
+        if ctx is None or ctx.current_price <= 0:
+            try:
+                from jarvis.market.data_feed import DataFeedEngine
+                from jarvis.market.market_context import MarketContextEngine
+                df_engine = DataFeedEngine()
+                mtf = df_engine.fetch_multi_timeframe(symbol)
+                if mtf and any(not df.empty for df in mtf.values()):
+                    ce = MarketContextEngine()
+                    ctx = ce.build_context(
+                        symbol,
+                        mtf,
+                        current_spread_pips=spread_pips,
+                        max_allowed_spread_pips=spec.max_spread_pips
+                    )
+            except Exception as ex:
+                logger.debug(f"Could not build context via data feed for {symbol}: {ex}")
+
+        # 3. Fallback synthetic context if live data is unavailable
+        if ctx is None or ctx.current_price <= 0:
+            price = current_price if (current_price is not None and current_price > 0) else (spec.base_price if spec.base_price > 0 else 100.0)
+            typical_atr_pct = getattr(spec, "typical_atr_pct", 0.5)
+            typical_atr = price * (typical_atr_pct / 100.0) if typical_atr_pct > 0 else (price * 0.005)
+            atr = typical_atr if typical_atr > 0 else (price * 0.005)
+
+            from jarvis.data.schemas import (
+                StructureContext, LiquidityContext, VolatilityContext,
+                MomentumContext, SessionContext
+            )
+            st = StructureContext(
+                bias="BULLISH" if norm_action == "BUY" else "BEARISH",
+                swing_high=round(price + (atr * 1.5), digits),
+                swing_low=round(price - (atr * 1.5), digits),
+                supply_zone=(round(price + (atr * 2.0), digits), round(price + (atr * 2.5), digits)),
+                demand_zone=(round(price - (atr * 2.5), digits), round(price - (atr * 2.0), digits)),
+                order_blocks=[],
+                fair_value_gaps=[]
+            )
+            liq = LiquidityContext(
+                buy_side_liquidity=round(price + (atr * 2.0), digits),
+                sell_side_liquidity=round(price - (atr * 2.0), digits)
+            )
+            vol = VolatilityContext(
+                atr=atr,
+                current_spread_pips=spread_pips
+            )
+            mom = MomentumContext(
+                trend_score=30 if norm_action == "BUY" else -30,
+                adx=25.0
+            )
+            sess = SessionContext()
+            ctx = MarketContext(
+                symbol=symbol,
+                timestamp=datetime.now(timezone.utc),
+                current_price=price,
+                bid=price,
+                ask=price + spread_dist,
+                structure=st,
+                liquidity=liq,
+                volatility=vol,
+                momentum=mom,
+                session=sess
+            )
+
+        # If custom current_price is provided, anchor the context around it
+        if current_price is not None and current_price > 0:
+            ctx.current_price = float(current_price)
+            ctx.bid = float(current_price)
+            ctx.ask = float(current_price + spread_dist)
+
+        # 4. Classify regime or use default
+        try:
+            from jarvis.intelligence.regime_engine import MarketRegimeClassifier
+            rc = MarketRegimeClassifier()
+            regime = rc.classify_regime(ctx)
+        except Exception:
+            regime = RegimeOutput(
+                primary_regime=MarketRegime.TREND_BULL if norm_action == "BUY" else MarketRegime.TREND_BEAR,
+                probabilities={"trend_bull": 0.8, "trend_bear": 0.2} if norm_action == "BUY" else {"trend_bull": 0.2, "trend_bear": 0.8},
+                confidence=0.80
+            )
+
+        # 5. Calculate structural levels using the mathematical engine
+        levels = self.calculate_levels(
+            context=ctx,
+            regime=regime,
+            tentative_bias=norm_action
+        )
+
+        entry = float(levels.get("entry_price", ctx.current_price))
+        sl = float(levels.get("sl_price", 0.0))
+        tp = float(levels.get("tp_price", 0.0))
+        risk_dist = float(levels.get("risk_dist", abs(entry - sl)))
+        if risk_dist <= 0:
+            atr_val = ctx.volatility.atr if ctx.volatility.atr > 0 else (entry * 0.005)
+            risk_dist = max(pip_size * 5, atr_val * 1.2)
+            sl = round(entry - risk_dist if norm_action == "BUY" else entry + risk_dist, digits)
+
+        rr = float(levels.get("rr_ratio", 2.0))
+
+        # Calculate dynamic TP1 (1.0R - 1.2R) and dynamic TP2 (2.0R - 3.5R)
+        first_target = levels.get("first_target_price")
+        if first_target is not None and first_target > 0:
+            if norm_action == "BUY" and first_target > entry:
+                tp1 = round(float(first_target), digits)
+            elif norm_action == "SELL" and first_target < entry:
+                tp1 = round(float(first_target), digits)
+            else:
+                tp1 = round(entry + (risk_dist * 1.1) if norm_action == "BUY" else entry - (risk_dist * 1.1), digits)
+        else:
+            tp1 = round(entry + (risk_dist * 1.1) if norm_action == "BUY" else entry - (risk_dist * 1.1), digits)
+
+        tp2 = round(tp, digits) if tp > 0 else (round(entry + (risk_dist * 2.5), digits) if norm_action == "BUY" else round(entry - (risk_dist * 2.5), digits))
+
+        return {
+            "sl": float(sl),
+            "tp": float(tp2),
+            "tp1": float(tp1),
+            "tp2": float(tp2),
+            "risk_dist": float(risk_dist),
+            "rr": float(rr),
+            "entry_price": float(entry),
+            "bias": norm_action
+        }
+
+
+DYNAMIC_LEVELS_ENGINE = DynamicRiskAndLevelsEngine()
+

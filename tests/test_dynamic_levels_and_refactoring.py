@@ -278,6 +278,28 @@ class TestDynamicLevelsAndRefactoring(unittest.TestCase):
         liq_ctx_doji = self.liquidity_engine.analyze_liquidity(df, pivot_window=3)
         self.assertFalse(liq_ctx_doji.sweep_detected)
 
+    def test_calculate_manual_trade_levels(self):
+        """Validates calculate_manual_trade_levels for AI-assisted manual orders."""
+        levels_buy = self.levels_engine.calculate_manual_trade_levels("XAUUSD", "BUY", current_price=2400.0)
+        self.assertIn("sl", levels_buy)
+        self.assertIn("tp", levels_buy)
+        self.assertIn("tp1", levels_buy)
+        self.assertIn("tp2", levels_buy)
+        self.assertIn("risk_dist", levels_buy)
+        self.assertIn("rr", levels_buy)
+        self.assertLess(levels_buy["sl"], 2400.0)
+        self.assertGreater(levels_buy["tp"], 2400.0)
+        self.assertGreater(levels_buy["tp1"], 2400.0)
+        self.assertGreater(levels_buy["tp2"], 2400.0)
+        self.assertGreater(levels_buy["risk_dist"], 0.0)
+
+        levels_sell = self.levels_engine.calculate_manual_trade_levels("EURUSD", "SELL", current_price=1.0850)
+        self.assertGreater(levels_sell["sl"], 1.0850)
+        self.assertLess(levels_sell["tp"], 1.0850)
+        self.assertLess(levels_sell["tp1"], 1.0850)
+        self.assertLess(levels_sell["tp2"], 1.0850)
+        self.assertGreater(levels_sell["risk_dist"], 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()
