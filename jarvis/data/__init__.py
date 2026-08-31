@@ -21,6 +21,10 @@ from jarvis.data.schemas import (
     AccountSnapshot,
     PositionSnapshot
 )
+from jarvis.data.dynamic_hydrator import (
+    DynamicMarketDataHydrator,
+    DYNAMIC_HYDRATOR,
+)
 
 __all__ = [
     "MarketRegime",
@@ -42,5 +46,7 @@ __all__ = [
     "TradeQualityGateResult",
     "DecisionObject",
     "AccountSnapshot",
-    "PositionSnapshot"
+    "PositionSnapshot",
+    "DynamicMarketDataHydrator",
+    "DYNAMIC_HYDRATOR",
 ]

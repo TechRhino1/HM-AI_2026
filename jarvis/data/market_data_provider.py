@@ -20,6 +20,7 @@ from typing import Optional, List, Dict, Any
 import logging
 import socket
 import re
+import threading
 import datetime as _dt
 
 logger = logging.getLogger("jarvis.market_data")
@@ -31,6 +32,7 @@ except ImportError:
     mt5 = None
     MT5_AVAILABLE = False
 
+_MT5_LOCK = threading.Lock()
 _TF_TO_YF = {
     "1M": "1m", "5M": "5m", "15M": "15m", "30M": "30m",
     "1H": "1h", "4H": "4h", "1D": "1d", "1W": "1wk", "1MO": "1mo",
@@ -162,57 +164,58 @@ def _build_mt5_symbol_index():
 def _resolve_mt5_symbol(symbol: str) -> Optional[str]:
     """Dynamically resolve stock ticker to MT5 broker symbol."""
     ticker = symbol.strip().upper()
-    if ticker in _MT5_RESOLVED_CACHE:
-        return _MT5_RESOLVED_CACHE[ticker]
+    with _MT5_LOCK:
+        if ticker in _MT5_RESOLVED_CACHE:
+            return _MT5_RESOLVED_CACHE[ticker]
 
-    if not _ensure_mt5_connected():
-        return None
+        if not _ensure_mt5_connected():
+            return None
 
-    if not _MT5_INDEX_BUILT:
-        _build_mt5_symbol_index()
+        if not _MT5_INDEX_BUILT:
+            _build_mt5_symbol_index()
 
-    # 1. Direct match from regex-parsed descriptions
-    if ticker in _MT5_SYMBOL_MAP:
-        cand = _MT5_SYMBOL_MAP[ticker]
-        if mt5.symbol_info(cand) is not None:
-            _MT5_RESOLVED_CACHE[ticker] = cand
-            return cand
-
-    # 2. Direct match s.name.upper() == ticker or ticker + "#" or ticker + ".US"
-    for suffix in ("", "#", ".US", ".C", "M"):
-        key = f"{ticker}{suffix}"
-        if key in _MT5_SYMBOL_MAP:
-            cand = _MT5_SYMBOL_MAP[key]
+        # 1. Direct match from regex-parsed descriptions
+        if ticker in _MT5_SYMBOL_MAP:
+            cand = _MT5_SYMBOL_MAP[ticker]
             if mt5.symbol_info(cand) is not None:
                 _MT5_RESOLVED_CACHE[ticker] = cand
                 return cand
-        info = mt5.symbol_info(key)
-        if info is not None:
-            _MT5_RESOLVED_CACHE[ticker] = info.name
-            return info.name
 
-    # 3. Common alias dictionary fallback
-    if ticker in _COMMON_STOCK_ALIASES:
-        cand = _COMMON_STOCK_ALIASES[ticker]
-        if mt5.symbol_info(cand) is not None:
-            _MT5_RESOLVED_CACHE[ticker] = cand
-            return cand
+        # 2. Direct match s.name.upper() == ticker or ticker + "#" or ticker + ".US"
+        for suffix in ("", "#", ".US", ".C", "M"):
+            key = f"{ticker}{suffix}"
+            if key in _MT5_SYMBOL_MAP:
+                cand = _MT5_SYMBOL_MAP[key]
+                if mt5.symbol_info(cand) is not None:
+                    _MT5_RESOLVED_CACHE[ticker] = cand
+                    return cand
+            info = mt5.symbol_info(key)
+            if info is not None:
+                _MT5_RESOLVED_CACHE[ticker] = info.name
+                return info.name
 
-    # 4. Direct scan across all symbols if index missed something
-    all_syms = mt5.symbols_get() or []
-    for s in all_syms:
-        desc = s.description or ""
-        m = _DESC_PATTERN.search(desc)
-        if m and m.group(1).upper() == ticker:
-            _MT5_RESOLVED_CACHE[ticker] = s.name
-            return s.name
-        s_u = s.name.upper()
-        if s_u == ticker or s_u == f"{ticker}#" or s_u == f"{ticker}.US":
-            _MT5_RESOLVED_CACHE[ticker] = s.name
-            return s.name
+        # 3. Common alias dictionary fallback
+        if ticker in _COMMON_STOCK_ALIASES:
+            cand = _COMMON_STOCK_ALIASES[ticker]
+            if mt5.symbol_info(cand) is not None:
+                _MT5_RESOLVED_CACHE[ticker] = cand
+                return cand
 
-    _MT5_RESOLVED_CACHE[ticker] = None
-    return None
+        # 4. Direct scan across all symbols if index missed something
+        all_syms = mt5.symbols_get() or []
+        for s in all_syms:
+            desc = s.description or ""
+            m = _DESC_PATTERN.search(desc)
+            if m and m.group(1).upper() == ticker:
+                _MT5_RESOLVED_CACHE[ticker] = s.name
+                return s.name
+            s_u = s.name.upper()
+            if s_u == ticker or s_u == f"{ticker}#" or s_u == f"{ticker}.US":
+                _MT5_RESOLVED_CACHE[ticker] = s.name
+                return s.name
+
+        _MT5_RESOLVED_CACHE[ticker] = None
+        return None
 
 
 def _try_mt5(symbol: str, timeframe: str = "1D", num_bars: int = 120) -> Optional[List[Dict[str, Any]]]:
@@ -220,18 +223,16 @@ def _try_mt5(symbol: str, timeframe: str = "1D", num_bars: int = 120) -> Optiona
     if not MT5_AVAILABLE or mt5 is None:
         return None
     try:
-        if not _ensure_mt5_connected():
-            return None
-
         resolved_sym = _resolve_mt5_symbol(symbol)
         if not resolved_sym:
             return None
 
-        # Select symbol in MarketWatch
-        mt5.symbol_select(resolved_sym, True)
+        with _MT5_LOCK:
+            # Select symbol in MarketWatch
+            mt5.symbol_select(resolved_sym, True)
 
-        mt5_tf = _TF_TO_MT5.get(timeframe.upper(), getattr(mt5, "TIMEFRAME_D1", 16408))
-        rates = mt5.copy_rates_from_pos(resolved_sym, mt5_tf, 0, num_bars)
+            mt5_tf = _TF_TO_MT5.get(timeframe.upper(), getattr(mt5, "TIMEFRAME_D1", 16408))
+            rates = mt5.copy_rates_from_pos(resolved_sym, mt5_tf, 0, num_bars)
         if rates is None or len(rates) == 0:
             return None
 
@@ -274,18 +275,13 @@ def _try_yfinance(ticker: str, timeframe: str, num_bars: int) -> Optional[List[D
     interval = _TF_TO_YF.get(timeframe.upper(), "1d")
     # Intraday histories are only available for a short window on Yahoo.
     period = "5d" if interval in ("1m", "5m", "15m", "30m") else "1y"
-    prev_timeout = socket.getdefaulttimeout()
     try:
-        # Bound the network call so a stalled connection cannot hang the engine.
-        socket.setdefaulttimeout(10)
         df = yf.Ticker(ticker).history(
-            period=period, interval=interval, actions=False, auto_adjust=False
+            period=period, interval=interval, actions=False, auto_adjust=False, timeout=1.5
         )
     except Exception as exc:  # noqa: BLE001 - any failure means "no live data"
         logger.warning("yfinance fetch failed for %s: %s", ticker, exc)
         return None
-    finally:
-        socket.setdefaulttimeout(prev_timeout)
     if df is None or len(df) == 0:
         return None
     rows: List[Dict[str, Any]] = []

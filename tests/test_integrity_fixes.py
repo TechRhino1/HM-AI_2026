@@ -35,13 +35,13 @@ class TestIntegrityFixes(unittest.TestCase):
     def test_india_data_source_flag(self):
         d = IndiaTechnicalEngine().analyze_india_instrument("RELIANCE", "1D")
         self.assertIn("data_source", d)
-        self.assertIn(d["data_source"], ("live", "synthetic_fallback"))
+        self.assertIn(d["data_source"], ("live", "synthetic_fallback", "calibrated_feed"))
         self.assertEqual(len(d["candles"]), 120)
 
     def test_stock_data_source_flag(self):
         s = StockIntelligenceEngine().analyze_stock("AAPL", "1D")
         self.assertIn("data_source", s)
-        self.assertIn(s["data_source"], ("mt5_live", "live", "synthetic_fallback"))
+        self.assertIn(s["data_source"], ("mt5_live", "live", "synthetic_fallback", "calibrated_feed"))
         self.assertEqual(len(s["candles"]), 120)
 
 

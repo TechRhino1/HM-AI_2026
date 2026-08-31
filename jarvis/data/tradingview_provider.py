@@ -4,6 +4,7 @@ Fetches live institutional quotes, technical indicators, and OHLCV candle stream
 across US equities, global stocks, Forex, and Crypto via TradingView Scanner APIs.
 """
 from typing import Dict, Any, List, Optional
+import concurrent.futures
 import json
 import logging
 import re
@@ -30,6 +31,14 @@ TRADINGVIEW_SCANNER_COLUMNS: List[str] = [
     "MACD.macd",
     "Recommend.All",
     "description",
+    "market_cap_basic",
+    "price_earnings_ttm",
+    "sector",
+    "industry",
+    "beta_1_year",
+    "price_52_week_high",
+    "price_52_week_low",
+    "average_volume_30d_calc",
 ]
 
 # Timeframe mapping to interval in seconds
@@ -203,7 +212,7 @@ class TradingViewDataProvider:
     Supports real-time quotes, technical momentum indicators, and continuous candle stream generation.
     """
 
-    def __init__(self, request_timeout: int = 8):
+    def __init__(self, request_timeout: float = 1.0):
         self.request_timeout = request_timeout
         self._user_agent = (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -297,9 +306,7 @@ class TradingViewDataProvider:
             },
         )
 
-        prev_timeout = socket.getdefaulttimeout()
         try:
-            socket.setdefaulttimeout(self.request_timeout)
             with urllib.request.urlopen(req, timeout=self.request_timeout) as resp:
                 if resp.status == 200:
                     body = resp.read().decode("utf-8")
@@ -317,8 +324,6 @@ class TradingViewDataProvider:
                 exc,
             )
             return []
-        finally:
-            socket.setdefaulttimeout(prev_timeout)
 
     def fetch_quotes(self, symbols: List[str]) -> Dict[str, Dict[str, Any]]:
         """
@@ -388,59 +393,86 @@ class TradingViewDataProvider:
                     ticker_to_sym_map[cand] = []
                 ticker_to_sym_map[cand].append(clean_sym)
 
-        # Query relevant endpoints
-        for ep, tickers in endpoint_tickers.items():
-            if not tickers:
-                continue
-            rows = self._post_scanner_request(ep, tickers)
-            for row in rows:
-                ticker_str = row.get("s", "")
-                d = row.get("d", [])
-                if not d or len(d) < len(TRADINGVIEW_SCANNER_COLUMNS):
-                    continue
-
-                raw_name = str(d[0]) if d[0] is not None else ""
-                close_p = float(d[1]) if d[1] is not None else 0.0
-                change_pct = float(d[2]) if d[2] is not None else 0.0
-                change_abs = float(d[3]) if d[3] is not None else 0.0
-                volume_val = int(d[4]) if (d[4] is not None and str(d[4]).isdigit()) else int(float(d[4] or 0))
-                high_p = float(d[5]) if d[5] is not None else close_p
-                low_p = float(d[6]) if d[6] is not None else close_p
-                open_p = float(d[7]) if d[7] is not None else close_p
-                rsi_val = float(d[8]) if d[8] is not None else 50.0
-                macd_val = float(d[9]) if d[9] is not None else 0.0
-                rec_val = float(d[10]) if d[10] is not None else 0.0
-                desc_val = str(d[11]) if d[11] is not None else ""
-
-                quote_data = {
-                    "price": close_p,
-                    "open": open_p,
-                    "high": high_p,
-                    "low": low_p,
-                    "close": close_p,
-                    "change_val": change_abs,
-                    "change_pct": change_pct,
-                    "volume": volume_val,
-                    "rsi": rsi_val,
-                    "macd": macd_val,
-                    "recommendation": rec_val,
-                    "description": desc_val,
-                    "source": "tradingview",
+        # Query relevant endpoints in parallel
+        active_endpoints = {ep: tks for ep, tks in endpoint_tickers.items() if tks}
+        if active_endpoints:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(5, len(active_endpoints))) as executor:
+                future_to_ep = {
+                    executor.submit(self._post_scanner_request, ep, tks): ep
+                    for ep, tks in active_endpoints.items()
                 }
+                for future in concurrent.futures.as_completed(future_to_ep):
+                    try:
+                        rows = future.result()
+                    except Exception as exc:
+                        logger.debug("Scanner request failed for endpoint: %s", exc)
+                        rows = []
 
-                # Associate with requested symbol(s)
-                matched_symbols = ticker_to_sym_map.get(ticker_str, [])
-                if not matched_symbols and raw_name:
-                    matched_symbols = [raw_name]
+                    for row in rows:
+                        ticker_str = row.get("s", "")
+                        d = row.get("d", [])
+                        if not d or len(d) < 12:
+                            continue
 
-                for s in matched_symbols:
-                    quotes[s] = quote_data
+                        raw_name = str(d[0]) if d[0] is not None else ""
+                        close_p = float(d[1]) if d[1] is not None else 0.0
+                        change_pct = float(d[2]) if d[2] is not None else 0.0
+                        change_abs = float(d[3]) if d[3] is not None else 0.0
+                        volume_val = int(d[4]) if (d[4] is not None and str(d[4]).isdigit()) else int(float(d[4] or 0))
+                        high_p = float(d[5]) if d[5] is not None else close_p
+                        low_p = float(d[6]) if d[6] is not None else close_p
+                        open_p = float(d[7]) if d[7] is not None else close_p
+                        rsi_val = float(d[8]) if d[8] is not None else 50.0
+                        macd_val = float(d[9]) if d[9] is not None else 0.0
+                        rec_val = float(d[10]) if d[10] is not None else 0.0
+                        desc_val = str(d[11]) if d[11] is not None else ""
 
-                # Also key under ticker string and raw name for direct lookups
-                if ticker_str not in quotes:
-                    quotes[ticker_str] = quote_data
-                if raw_name and raw_name not in quotes:
-                    quotes[raw_name] = quote_data
+                        mkt_cap_val = float(d[12]) if len(d) > 12 and d[12] is not None else None
+                        pe_val = float(d[13]) if len(d) > 13 and d[13] is not None else None
+                        sector_val = str(d[14]) if len(d) > 14 and d[14] is not None else None
+                        industry_val = str(d[15]) if len(d) > 15 and d[15] is not None else None
+                        beta_val = float(d[16]) if len(d) > 16 and d[16] is not None else None
+                        w52_high_val = float(d[17]) if len(d) > 17 and d[17] is not None else None
+                        w52_low_val = float(d[18]) if len(d) > 18 and d[18] is not None else None
+                        avg_vol_val = float(d[19]) if len(d) > 19 and d[19] is not None else None
+
+                        quote_data = {
+                            "price": close_p,
+                            "open": open_p,
+                            "high": high_p,
+                            "low": low_p,
+                            "close": close_p,
+                            "change_val": change_abs,
+                            "change_pct": change_pct,
+                            "volume": volume_val,
+                            "rsi": rsi_val,
+                            "macd": macd_val,
+                            "recommendation": rec_val,
+                            "description": desc_val,
+                            "market_cap_raw": mkt_cap_val,
+                            "pe_ratio_raw": pe_val,
+                            "sector_raw": sector_val,
+                            "industry_raw": industry_val,
+                            "beta_raw": beta_val,
+                            "week52_high_raw": w52_high_val,
+                            "week52_low_raw": w52_low_val,
+                            "avg_volume_raw": avg_vol_val,
+                            "source": "tradingview",
+                        }
+
+                        # Associate with requested symbol(s)
+                        matched_symbols = ticker_to_sym_map.get(ticker_str, [])
+                        if not matched_symbols and raw_name:
+                            matched_symbols = [raw_name]
+
+                        for s in matched_symbols:
+                            quotes[s] = quote_data
+
+                        # Also key under ticker string and raw name for direct lookups
+                        if ticker_str not in quotes:
+                            quotes[ticker_str] = quote_data
+                        if raw_name and raw_name not in quotes:
+                            quotes[raw_name] = quote_data
 
         # If any symbols missed in america, fallback to global/scan
         unresolved = [
@@ -465,8 +497,17 @@ class TradingViewDataProvider:
                 for row in rows:
                     ticker_str = row.get("s", "")
                     d = row.get("d", [])
-                    if d and len(d) >= len(TRADINGVIEW_SCANNER_COLUMNS):
+                    if d and len(d) >= 12:
                         close_p = float(d[1]) if d[1] is not None else 0.0
+                        mkt_cap_val = float(d[12]) if len(d) > 12 and d[12] is not None else None
+                        pe_val = float(d[13]) if len(d) > 13 and d[13] is not None else None
+                        sector_val = str(d[14]) if len(d) > 14 and d[14] is not None else None
+                        industry_val = str(d[15]) if len(d) > 15 and d[15] is not None else None
+                        beta_val = float(d[16]) if len(d) > 16 and d[16] is not None else None
+                        w52_high_val = float(d[17]) if len(d) > 17 and d[17] is not None else None
+                        w52_low_val = float(d[18]) if len(d) > 18 and d[18] is not None else None
+                        avg_vol_val = float(d[19]) if len(d) > 19 and d[19] is not None else None
+
                         quote_data = {
                             "price": close_p,
                             "open": float(d[7]) if d[7] is not None else close_p,
@@ -480,6 +521,14 @@ class TradingViewDataProvider:
                             "macd": float(d[9]) if d[9] is not None else 0.0,
                             "recommendation": float(d[10]) if d[10] is not None else 0.0,
                             "description": str(d[11]) if d[11] is not None else "",
+                            "market_cap_raw": mkt_cap_val,
+                            "pe_ratio_raw": pe_val,
+                            "sector_raw": sector_val,
+                            "industry_raw": industry_val,
+                            "beta_raw": beta_val,
+                            "week52_high_raw": w52_high_val,
+                            "week52_low_raw": w52_low_val,
+                            "avg_volume_raw": avg_vol_val,
                             "source": "tradingview",
                         }
                         matched = ticker_to_sym_map.get(ticker_str, [])

@@ -743,44 +743,63 @@ def get_india_indices() -> List[str]:
     return [k for k, v in INDIA_UNIVERSE.items() if v.get("sector") == "Indices" or "INDEX" in v.get("tags", [])]
 
 def get_india_profile(symbol: str) -> Dict[str, Any]:
+    """
+    Retrieves the fully hydrated dynamic profile for an Indian equity or benchmark/sectoral index.
+    Leverages DynamicMarketDataHydrator for live market data resolution with fallback to INDIA_UNIVERSE baseline.
+    """
     sym = (symbol or "RELIANCE").upper().strip().replace(".NSE", "").replace(".BSE", "")
     if sym in ("TATAMOTORS", "TATA_MOTORS"):
         sym = "TMPV"
-    profile = INDIA_UNIVERSE.get(sym, {
-        "symbol": sym,
-        "name": f"{sym} India Limited",
-        "sector": "Diversified",
-        "industry": "Indian Equities",
-        "market": "NSE_EQUITY",
-        "market_cap": "₹25,000 Cr",
-        "base_price": 1000.00,
-        "beta": 1.15,
-        "avg_volume": "5.0M",
-        "pe_ratio": 25.0,
-        "week52_high": 1250.00,
-        "week52_low": 750.00,
-        "lot_size": 100,
-        "description": f"Publicly listed Indian equity instrument {sym} analyzed on NSE/BSE.",
-        "tags": ["NSE", "EQUITY"]
-    }).copy()
+    if sym in ("NIFTY50", "NIFTY 50"):
+        sym = "NIFTY"
+    if sym in ("BANK NIFTY", "BANK_NIFTY"):
+        sym = "BANKNIFTY"
 
-    is_index = (profile.get("sector") == "Indices" or "INDEX" in profile.get("tags", []))
-    profile["is_index"] = is_index
+    try:
+        from jarvis.data.dynamic_hydrator import DYNAMIC_HYDRATOR
+        return DYNAMIC_HYDRATOR.get_profile(sym, market="IN")
+    except Exception:
+        profile = INDIA_UNIVERSE.get(sym, {
+            "symbol": sym,
+            "name": f"{sym} India Limited",
+            "sector": "Diversified",
+            "industry": "Indian Equities",
+            "market": "NSE_EQUITY",
+            "market_cap": "₹25,000 Cr",
+            "base_price": 1000.00,
+            "beta": 1.15,
+            "avg_volume": "5.0M",
+            "pe_ratio": 25.0,
+            "week52_high": 1250.00,
+            "week52_low": 750.00,
+            "lot_size": 100,
+            "description": f"Publicly listed Indian equity instrument {sym} analyzed on NSE/BSE.",
+            "tags": ["NSE", "EQUITY"]
+        }).copy()
 
-    # Deterministic Indian quarterly earnings date
-    seed_offset = (abs(hash(sym)) % 45) + 3
-    earnings_dt = datetime.now(timezone.utc) + timedelta(days=seed_offset)
-    profile["earnings_date"] = earnings_dt.strftime("%d-%b-%Y")
-    profile["days_to_earnings"] = seed_offset
-    profile["implied_volatility"] = round(12.5 + (profile.get("beta", 1.1) * 8.5) + (abs(hash(sym)) % 6), 1)
+        is_index = (profile.get("sector") == "Indices" or "INDEX" in profile.get("tags", []))
+        profile["is_index"] = is_index
 
-    # 2024-2026 SEBI Surveillance & MWPL status
-    hash_val = abs(hash(sym))
-    profile["circuit_limit_pct"] = "NO_BAND (F&O)" if "F&O" in profile.get("tags", []) else "20%"
-    profile["asm_stage"] = 1 if (hash_val % 19 == 0) else 0
-    profile["gsm_stage"] = 0
-    mwpl_pct = round(15.0 + (hash_val % 68), 1)
-    profile["mwpl_utilization_pct"] = mwpl_pct
-    profile["is_fno_ban"] = bool(mwpl_pct >= 95.0)
+        # Deterministic Indian quarterly earnings date
+        seed_offset = (abs(hash(sym)) % 45) + 3
+        earnings_dt = datetime.now(timezone.utc) + timedelta(days=seed_offset)
+        profile["earnings_date"] = earnings_dt.strftime("%d-%b-%Y")
+        profile["days_to_earnings"] = seed_offset
+        profile["implied_volatility"] = round(12.5 + (profile.get("beta", 1.1) * 8.5) + (abs(hash(sym)) % 6), 1)
 
-    return profile
+        # 2024-2026 SEBI Surveillance & MWPL status
+        hash_val = abs(hash(sym))
+        profile["circuit_limit_pct"] = "NO_BAND (F&O)" if "F&O" in profile.get("tags", []) else "20%"
+        profile["asm_stage"] = 1 if (hash_val % 19 == 0) else 0
+        profile["gsm_stage"] = 0
+        mwpl_pct = round(15.0 + (hash_val % 68), 1)
+        profile["mwpl_utilization_pct"] = mwpl_pct
+        profile["is_fno_ban"] = bool(mwpl_pct >= 95.0)
+        profile["price"] = profile.get("base_price", 1000.00)
+        profile["change_val"] = 0.0
+        profile["change_pct"] = 0.0
+        profile["rsi"] = 50.0
+        profile["macd"] = 0.0
+        profile["recommendation"] = 0.0
+
+        return profile

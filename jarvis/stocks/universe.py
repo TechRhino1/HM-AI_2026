@@ -804,29 +804,43 @@ def get_all_symbols() -> List[str]:
     return list(STOCK_UNIVERSE.keys())
 
 def get_stock_profile(symbol: str) -> Dict[str, Any]:
+    """
+    Retrieves the fully hydrated dynamic profile for a US or global equity instrument.
+    Leverages DynamicMarketDataHydrator for live market data resolution with fallback to STOCK_UNIVERSE baseline.
+    """
     sym = (symbol or "NVDA").upper().strip()
-    base_data = STOCK_UNIVERSE.get(sym, {
-        "symbol": sym,
-        "name": f"{sym} Corporation",
-        "sector": "Technology",
-        "industry": "General Equities",
-        "market": "US_EQUITIES",
-        "market_cap": "$45.0B",
-        "base_price": 100.00,
-        "beta": 1.20,
-        "avg_volume": "10.0M",
-        "pe_ratio": 25.0,
-        "week52_high": 125.00,
-        "week52_low": 75.00,
-        "description": f"Publicly traded equity instrument {sym} analyzed by JARVIS AI Institutional Screener.",
-        "tags": ["US_EQUITIES"]
-    }).copy()
+    try:
+        from jarvis.data.dynamic_hydrator import DYNAMIC_HYDRATOR
+        return DYNAMIC_HYDRATOR.get_profile(sym, market="US")
+    except Exception:
+        base_data = STOCK_UNIVERSE.get(sym, {
+            "symbol": sym,
+            "name": f"{sym} Corporation",
+            "sector": "Technology",
+            "industry": "General Equities",
+            "market": "US_EQUITIES",
+            "market_cap": "$45.0B",
+            "base_price": 100.00,
+            "beta": 1.20,
+            "avg_volume": "10.0M",
+            "pe_ratio": 25.0,
+            "week52_high": 125.00,
+            "week52_low": 75.00,
+            "description": f"Publicly traded equity instrument {sym} analyzed by JARVIS AI Institutional Screener.",
+            "tags": ["US_EQUITIES"]
+        }).copy()
 
-    # Deterministic earnings date & days remaining
-    seed_offset = (abs(hash(sym)) % 55) + 4
-    earnings_dt = datetime.now(timezone.utc) + timedelta(days=seed_offset)
-    base_data["earnings_date"] = earnings_dt.strftime("%b %d, %Y")
-    base_data["days_to_earnings"] = seed_offset
-    base_data["implied_volatility"] = round(24.0 + (base_data.get("beta", 1.2) * 14.0) + (abs(hash(sym)) % 10), 1)
-    
-    return base_data
+        # Deterministic earnings date & days remaining
+        seed_offset = (abs(hash(sym)) % 55) + 4
+        earnings_dt = datetime.now(timezone.utc) + timedelta(days=seed_offset)
+        base_data["earnings_date"] = earnings_dt.strftime("%b %d, %Y")
+        base_data["days_to_earnings"] = seed_offset
+        base_data["implied_volatility"] = round(24.0 + (base_data.get("beta", 1.2) * 14.0) + (abs(hash(sym)) % 10), 1)
+        base_data["price"] = base_data.get("base_price", 100.00)
+        base_data["change_val"] = 0.0
+        base_data["change_pct"] = 0.0
+        base_data["rsi"] = 50.0
+        base_data["macd"] = 0.0
+        base_data["recommendation"] = 0.0
+        
+        return base_data
