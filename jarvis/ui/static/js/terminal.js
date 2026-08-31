@@ -22,6 +22,9 @@
         symbol: "XAUUSD",
         candleSymbol: "XAUUSD",
         timeframe: "H1",
+        tradeStyle: "SWING",
+        radarFilter: "ALL",
+        hasManuallySetTradeStyle: false,
         chartMode: "tv_live", // 'tv_live' or 'tv_pro'
         chartExpanded: false,
         candles: [],
@@ -189,6 +192,9 @@
         { id: "desk", title: "View 1-Click Desk & Plan", desc: "Switch right panel to Trade Desk & Targets", shortcut: "D", action: () => switchRightTab("desk") },
         { id: "cognition", title: "View AI Cognition & Gates", desc: "Switch right panel to 14 Quality Gates & Analysis", shortcut: "A", action: () => switchRightTab("cognition") },
         { id: "copilot", title: "Toggle HM AI 4.0 Copilot", desc: "Open / Close intelligent assistant modal", shortcut: "C", action: () => toggleCopilotModal() },
+        { id: "swing", title: "Trade Style: SWING (D1/H4/H1)", desc: "Switch trading engine to Multi-Day Swing Horizon", shortcut: "1", action: () => window.setTradeStyle("SWING") },
+        { id: "day", title: "Trade Style: DAY TRADING (H1/M15/M5)", desc: "Switch trading engine to Intraday Horizon", shortcut: "2", action: () => window.setTradeStyle("DAY_TRADING") },
+        { id: "scalp", title: "Trade Style: SCALP (M15/M5/M1)", desc: "Switch trading engine to Micro Scalp Horizon", shortcut: "3", action: () => window.setTradeStyle("SCALP") },
         { id: "safe", title: "Toggle Emergency Safe Mode", desc: "Pause or unpause all autonomous executions", shortcut: "Esc", action: () => toggleSafeMode() },
         { id: "refresh", title: "Force Refresh Telemetry", desc: "Poll latest MT5 broker state immediately", shortcut: "F5", action: () => refreshData() }
     ];
@@ -770,6 +776,10 @@
                 state.account = data.account;
                 state.executionMode = data.execution_mode;
                 state.safeMode = data.safe_mode;
+                if (data.trade_style && !state.hasManuallySetTradeStyle) {
+                    state.tradeStyle = data.trade_style;
+                    syncTradeStyleButtons(data.trade_style);
+                }
                 state.radarOpportunities = data.radar_opportunities || [];
                 state.positions = data.positions || [];
                 state.latestDecisions = data.latest_decisions || {};
@@ -1199,12 +1209,25 @@
         if (!el.radarList) return;
         const currentSymStatus = (state.marketStatuses && state.marketStatuses[state.symbol]) || computeClientMarketStatus(state.symbol);
         
-        if (state.activeLeftTab === "radar" && el.leftPanelCounter) {
-            el.leftPanelCounter.textContent = currentSymStatus.is_open ? `${opps.length} Monitored` : `🔒 CLOSED | ${opps.length} Monitored`;
+        let rawOpps = opps || [];
+        let filteredOpps = rawOpps;
+        if (state.radarFilter && state.radarFilter !== "ALL") {
+            const f = state.radarFilter.toUpperCase();
+            filteredOpps = rawOpps.filter(o => {
+                const s = String(o.trade_style || state.tradeStyle || "SWING").toUpperCase();
+                if (f === "DAY" || f === "DAY_TRADING" || f === "INTRADAY") {
+                    return s === "DAY" || s === "DAY_TRADING" || s === "INTRADAY";
+                }
+                return s === f;
+            });
         }
 
-        if (!opps || opps.length === 0) {
-            el.radarList.innerHTML = `<div style="text-align:center; color:var(--text-dim); padding:16px;">Scanning monitored instruments...</div>`;
+        if (state.activeLeftTab === "radar" && el.leftPanelCounter) {
+            el.leftPanelCounter.textContent = currentSymStatus.is_open ? `${filteredOpps.length} Monitored` : `🔒 CLOSED | ${filteredOpps.length} Monitored`;
+        }
+
+        if (filteredOpps.length === 0) {
+            el.radarList.innerHTML = `<div style="text-align:center; color:var(--text-dim); padding:16px;">No active ${state.radarFilter !== 'ALL' ? state.radarFilter : ''} opportunities detected.</div>`;
             _lastRadarSnapshot = "";
             return;
         }
@@ -1214,7 +1237,7 @@
         // 2. Action Conviction: READY > WAIT > NO_TRADE > CLOSED
         // 3. AI Win Probability: highest win rate first
         // 4. Mathematical Expected Value (EV)
-        const sortedOpps = [...opps].sort((a, b) => {
+        const sortedOpps = [...filteredOpps].sort((a, b) => {
             const symA = a.symbol || "XAUUSD";
             const symB = b.symbol || "XAUUSD";
             const statusA = (state.marketStatuses && state.marketStatuses[symA]) || computeClientMarketStatus(symA);
@@ -1248,7 +1271,7 @@
             return evB - evA;
         });
 
-        const snapshot = JSON.stringify({ activeSym: state.symbol, data: sortedOpps, mktOpen: currentSymStatus.is_open });
+        const snapshot = JSON.stringify({ activeSym: state.symbol, filter: state.radarFilter, style: state.tradeStyle, data: sortedOpps, mktOpen: currentSymStatus.is_open });
         if (snapshot === _lastRadarSnapshot) {
             return; // Zero DOM thrashing when data is unchanged
         }
@@ -1270,6 +1293,20 @@
             const probStr = opp.win_prob ? `${opp.win_prob}%` : (opp.score ? `${opp.score}%` : "--%");
             const strategyName = opp.strategy || "MARKET_STRUCTURE";
 
+            const oppStyle = String(opp.trade_style || state.tradeStyle || "SWING").toUpperCase();
+            let styleTagClass = "tag-swing";
+            let tfDisplay = opp.timeframe || "D1/H4/H1";
+            if (oppStyle === "SCALP") {
+                styleTagClass = "tag-scalp";
+                tfDisplay = "SCALP: M15/M5/M1";
+            } else if (oppStyle === "DAY_TRADING" || oppStyle === "DAY" || oppStyle === "INTRADAY") {
+                styleTagClass = "tag-day";
+                tfDisplay = "DAY: H1/M15/M5";
+            } else {
+                styleTagClass = "tag-swing";
+                tfDisplay = "SWING: D1/H4/H1";
+            }
+
             const gateLabel = isMarketClosed 
                 ? `<b style="color:#ff5277;">🔒 WEEKEND CLOSE</b>`
                 : (opp.gate_passed ? '<b style="color:var(--neon-bull);">GATE PASS (14/14)</b>' : '<b style="color:var(--devil-amber);">GATE WAIT</b>');
@@ -1283,7 +1320,7 @@
                     <div class="radar-card-top">
                         <div class="radar-symbol">
                             ${opp.symbol}
-                            <span class="radar-timeframe-tag">${opp.timeframe || 'H1'}</span>
+                            <span class="radar-timeframe-tag ${styleTagClass}">[${tfDisplay}]</span>
                         </div>
                         <div class="radar-action-pill ${badge.cssClass}">${badge.label}</div>
                     </div>
@@ -2237,10 +2274,81 @@
         }
     };
 
+    function syncTradeStyleButtons(style) {
+        const s = (style || "SWING").toUpperCase();
+        document.querySelectorAll(".style-seg-btn").forEach(btn => {
+            const btnStyle = (btn.getAttribute("data-style") || "").toUpperCase();
+            btn.classList.toggle("active", btnStyle === s);
+        });
+    }
+
+    function syncRadarFilterButtons(filter) {
+        const f = (filter || "ALL").toUpperCase();
+        document.querySelectorAll(".radar-filter-pill").forEach(btn => {
+            const btnFilter = (btn.getAttribute("data-filter") || "").toUpperCase();
+            btn.classList.toggle("active", btnFilter === f);
+        });
+    }
+
+    window.setTradeStyle = async function (style) {
+        const s = (style || "SWING").toUpperCase();
+        state.tradeStyle = s;
+        state.hasManuallySetTradeStyle = true;
+        syncTradeStyleButtons(s);
+
+        // Auto-switch timeframe to recommended default for the chosen style
+        if (s === "SCALP") {
+            window.setTimeframe("M5");
+        } else if (s === "DAY_TRADING") {
+            window.setTimeframe("M15");
+        } else {
+            window.setTimeframe("H1");
+        }
+
+        // Send updated trade style to backend
+        try {
+            const token = getAuthToken();
+            await fetch("/api/action/set_trade_style", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": token ? `Bearer ${token}` : ""
+                },
+                body: JSON.stringify({ trade_style: s })
+            });
+        } catch (err) {
+            console.error("Error setting trade style:", err);
+        }
+
+        // Fetch radar opportunities and refresh telemetry for new style
+        fetchRadar(s);
+        fetchTelemetry();
+    };
+
+    window.setRadarFilter = function (filter) {
+        state.radarFilter = (filter || "ALL").toUpperCase();
+        syncRadarFilterButtons(state.radarFilter);
+        renderScannerRadarDOM(state.radarOpportunities);
+    };
+
+    async function fetchRadar(style) {
+        try {
+            const queryParam = style ? `?trade_style=${encodeURIComponent(style)}` : "";
+            const res = await fetch(`/api/radar${queryParam}`);
+            const data = await res.json();
+            if (data && Array.isArray(data.opportunities)) {
+                state.radarOpportunities = data.opportunities;
+                renderScannerRadarDOM(state.radarOpportunities);
+            }
+        } catch (err) {
+            console.error("Error fetching radar:", err);
+        }
+    }
+
     window.setTimeframe = function (tf) {
         state.timeframe = tf;
         document.querySelectorAll(".tf-btn").forEach(btn => {
-            btn.classList.toggle("active", btn.textContent === tf);
+            btn.classList.toggle("active", btn.textContent.trim() === tf);
         });
         fetchCandles(true);
 
@@ -2251,9 +2359,17 @@
 
     window.toggleSafeMode = async function () {
         try {
-            const res = await fetch("/api/action/toggle_safe_mode", { method: "POST" });
+            const token = getAuthToken();
+            const res = await fetch("/api/action/toggle_safe_mode", {
+                method: "POST",
+                headers: {
+                    "Authorization": token ? `Bearer ${token}` : ""
+                }
+            });
             const data = await res.json();
-            state.safeMode = data.safe_mode;
+            if (data && typeof data.safe_mode !== "undefined") {
+                state.safeMode = data.safe_mode;
+            }
             fetchTelemetry();
         } catch (err) {
             console.error("Safe mode error:", err);
@@ -2263,6 +2379,7 @@
     window.refreshData = function () {
         fetchCandles();
         fetchTelemetry();
+        fetchRadar(state.tradeStyle);
         fetchNews();
         updateMarketStatusDisplay(state.symbol);
     };
@@ -2452,11 +2569,14 @@
         initTradingViewLightweightChart();
         initCopilotInteractivity();
         initCommandPalette();
+        syncTradeStyleButtons(state.tradeStyle);
+        syncRadarFilterButtons(state.radarFilter);
 
         checkRemoteAuth();
         updateMarketStatusDisplay(state.symbol);
         fetchCandles(true);
         fetchTelemetry();
+        fetchRadar(state.tradeStyle);
         fetchNews();
 
         if (window.innerWidth <= 900) {

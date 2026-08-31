@@ -32,7 +32,20 @@
             <div id="exec-mode-badge" class="badge badge-mode">LIVE</div>
         </div>
 
-        <!-- Real-Time Broker Telemetry Metrics -->
+        <!-- Real-Time Trade Style Segmented Switcher -->
+        <div class="trade-style-segmented" id="trade-style-selector">
+            <button class="style-seg-btn active" data-style="SWING" onclick="window.setTradeStyle('SWING')" title="Swing Trading: Multi-Day Horizon (D1/H4/H1)">
+                <span class="style-icon">🌊</span> <span class="style-label">SWING</span> <span class="style-tf">(D1/H4/H1)</span>
+            </button>
+            <button class="style-seg-btn" data-style="DAY_TRADING" onclick="window.setTradeStyle('DAY_TRADING')" title="Day Trading: Intraday Horizon (H1/M15/M5)">
+                <span class="style-icon">🎯</span> <span class="style-label">DAY</span> <span class="style-tf">(H1/M15/M5)</span>
+            </button>
+            <button class="style-seg-btn" data-style="SCALP" onclick="window.setTradeStyle('SCALP')" title="Scalping: Micro Horizon (M15/M5/M1)">
+                <span class="style-icon">⚡</span> <span class="style-label">SCALP</span> <span class="style-tf">(M15/M5/M1)</span>
+            </button>
+        </div>
+
+        <!-- Real-Time Broker Telemetry Metrics Mini-HUD -->
         <div class="hud-telemetry">
             <div class="hud-tile">
                 <span class="hud-tile-label">Broker</span>
@@ -42,6 +55,7 @@
                 <span class="hud-tile-label">Login</span>
                 <span id="hud-login" class="hud-tile-value">#--</span>
             </div>
+            <div class="hud-tile-divider"></div>
             <div class="hud-tile">
                 <span class="hud-tile-label">Balance</span>
                 <span id="hud-balance" class="hud-tile-value mono-number">$0.00</span>
@@ -58,6 +72,7 @@
                 <span class="hud-tile-label">Margin Level</span>
                 <span id="hud-margin-level" class="hud-tile-value mono-number" style="color:var(--accent-cyan);">--%</span>
             </div>
+            <div class="hud-tile-divider"></div>
             <div class="hud-tile">
                 <span class="hud-tile-label">State</span>
                 <span id="hud-sync" class="hud-tile-value" style="color:var(--neon-bull);">ONLINE</span>
@@ -70,25 +85,27 @@
 
         <!-- Header Action Controls -->
         <div class="hud-actions">
-            <a href="/stocks" class="btn-terminal" style="text-decoration:none; color:var(--accent-cyan); border-color:rgba(0,212,255,0.4); font-weight:700;">
-                <span>🇺🇸</span> US Stocks
-            </a>
-            <a href="/india" class="btn-terminal" style="text-decoration:none; color:#ff9900; border-color:rgba(255,153,0,0.4); font-weight:700;">
-                <span>🇮🇳</span> India Stocks
-            </a>
-            <a href="/options" class="btn-terminal" style="text-decoration:none; color:var(--neon-gold); border-color:rgba(251,191,36,0.4); font-weight:700;">
-                <span>📊</span> India Options
-            </a>
-            <button class="cmd-hint-btn" onclick="toggleCommandPalette(true)">
-                <span>⌘K</span> / <span>Palette</span>
+            <div class="market-links-group">
+                <a href="/stocks" class="btn-terminal btn-market-link us-link" title="Institutional US Stocks Terminal">
+                    <span class="flag-icon">🇺🇸</span> <span class="btn-text">US Stocks</span>
+                </a>
+                <a href="/india" class="btn-terminal btn-market-link in-link" title="NSE / BSE Equities Terminal">
+                    <span class="flag-icon">🇮🇳</span> <span class="btn-text">India Stocks</span>
+                </a>
+                <a href="/options" class="btn-terminal btn-market-link fno-link" title="NIFTY / BANKNIFTY Options Desk">
+                    <span class="flag-icon">📊</span> <span class="btn-text">India Options</span>
+                </a>
+            </div>
+            <button class="cmd-hint-btn" onclick="toggleCommandPalette(true)" title="Spotlight Command Palette (Ctrl+K)">
+                <span>⌘K</span>
             </button>
-            <button class="btn-terminal" onclick="toggleCopilotModal()">
+            <button class="btn-terminal" onclick="toggleCopilotModal()" title="HM AI Copilot Assistant">
                 <span style="color:var(--accent-cyan);">🤖</span> Copilot
             </button>
-            <button id="btn-safe-mode" class="btn-terminal btn-warning" onclick="toggleSafeMode()">
+            <button id="btn-safe-mode" class="btn-terminal btn-warning" onclick="toggleSafeMode()" title="Toggle Safe Mode Execution Protection">
                 🛡️ Safe Mode
             </button>
-            <button class="btn-terminal" onclick="refreshData()">
+            <button class="btn-terminal" onclick="refreshData()" title="Force Refresh Telemetry">
                 ↻ Refresh
             </button>
         </div>
@@ -159,6 +176,13 @@
                         <span>High-Probability Radar</span>
                         <span class="action-hint">1-CLICK LOAD</span>
                     </div>
+                    <!-- Quick-Filter Pills for Radar Setups -->
+                    <div class="radar-filter-pills" id="radar-filter-pills">
+                        <button class="radar-filter-pill active" data-filter="ALL" onclick="window.setRadarFilter('ALL')">ALL</button>
+                        <button class="radar-filter-pill" data-filter="SWING" onclick="window.setRadarFilter('SWING')">🌊 SWING</button>
+                        <button class="radar-filter-pill" data-filter="DAY_TRADING" onclick="window.setRadarFilter('DAY_TRADING')">🎯 DAY</button>
+                        <button class="radar-filter-pill" data-filter="SCALP" onclick="window.setRadarFilter('SCALP')">⚡ SCALP</button>
+                    </div>
                     <div id="radar-list" class="scanner-radar-list">
                         <!-- Rendered dynamically by terminal.js -->
                     </div>
@@ -197,7 +221,8 @@
                                 <button id="btn-mode-tv-live" class="tab-btn active" onclick="switchChartMode('tv_live')">⚡ Live MT5</button>
                                 <button id="btn-mode-tv-pro" class="tab-btn" onclick="switchChartMode('tv_pro')">📈 TV Pro</button>
                             </div>
-                            <div class="timeframe-selector">
+                            <div class="timeframe-selector" id="timeframe-selector">
+                                <button class="tf-btn" onclick="setTimeframe('M1')">M1</button>
                                 <button class="tf-btn" onclick="setTimeframe('M5')">M5</button>
                                 <button class="tf-btn" onclick="setTimeframe('M15')">M15</button>
                                 <button class="tf-btn active" onclick="setTimeframe('H1')">H1</button>

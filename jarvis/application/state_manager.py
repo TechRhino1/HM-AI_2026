@@ -28,6 +28,7 @@ class StateManager:
     def _init_state(self):
         self._rw_lock = threading.RLock()
         self.execution_mode: ExecutionMode = ExecutionMode.LIVE
+        self.trade_style: str = "SWING"
         self.is_safe_mode: bool = False
 
         self.is_running: bool = True
@@ -71,6 +72,11 @@ class StateManager:
     def set_execution_mode(self, mode: ExecutionMode):
         with self._rw_lock:
             self.execution_mode = mode
+
+    def set_trade_style(self, style: str):
+        with self._rw_lock:
+            self.trade_style = (style or "SWING").upper()
+            self._bump_version()
 
     def toggle_safe_mode(self) -> bool:
         with self._rw_lock:
@@ -141,6 +147,7 @@ class StateManager:
 
             return {
                 "execution_mode": self.execution_mode.value,
+                "trade_style": getattr(self, "trade_style", "SWING"),
                 "safe_mode": self.is_safe_mode,
                 "is_running": self.is_running,
                 "account": acc_dict,

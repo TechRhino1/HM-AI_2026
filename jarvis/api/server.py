@@ -291,7 +291,7 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
             elif path == "/api/radar":
                 style_filter = query.get("trade_style", [None])[0]
                 opps = self.state_manager.radar_opportunities
-                if style_filter:
+                if style_filter and style_filter.upper() != "ALL":
                     opps = [o for o in opps if str(o.get("trade_style", "")).upper() == style_filter.upper()]
                 self._send_json({"opportunities": opps})
             elif path == "/api/history":
@@ -430,6 +430,12 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
             elif path == "/api/action/toggle_safe_mode":
                 is_safe = self.state_manager.toggle_safe_mode()
                 self._send_json({"safe_mode": is_safe})
+            elif path == "/api/action/set_trade_style":
+                style = data.get("trade_style", "SWING").upper()
+                self.state_manager.set_trade_style(style)
+                if hasattr(self, "orchestrator") and self.orchestrator:
+                    self.orchestrator.trade_style = style
+                self._send_json({"status": "SUCCESS", "trade_style": style})
             elif path == "/api/action/set_mode":
                 mode_str = data.get("mode", "PAPER").upper()
                 try:
