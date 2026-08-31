@@ -286,22 +286,22 @@ INDIA_UNIVERSE: Dict[str, Dict[str, Any]] = {
         "description": "India's largest retail digital lending franchise with extensive consumer omnichannel ecosystem.",
         "tags": ["NIFTY50", "FINANCIALS", "HIGH_GROWTH", "F&O"]
     },
-    "TATAMOTORS": {
-        "symbol": "TATAMOTORS",
-        "name": "Tata Motors Limited",
+    "TMPV": {
+        "symbol": "TMPV",
+        "name": "Tata Motors Passenger Vehicles Ltd",
         "sector": "Consumer Cyclical",
-        "industry": "Commercial & Passenger EV",
+        "industry": "Passenger Vehicles & EV",
         "market": "NSE_EQUITY",
-        "market_cap": "₹3.8 Lakh Cr",
-        "base_price": 942.50,
-        "beta": 1.45,
-        "avg_volume": "9.8M",
-        "pe_ratio": 11.4,
-        "week52_high": 1179.05,
-        "week52_low": 750.00,
-        "lot_size": 1425,
-        "description": "India's EV market leader along with luxury British marque Jaguar Land Rover (JLR).",
-        "tags": ["NIFTY50", "NIFTYAUTO", "EV_LEADER", "F&O"]
+        "market_cap": "₹1.45 Lakh Cr",
+        "base_price": 315.20,
+        "beta": 1.35,
+        "avg_volume": "12.5M",
+        "pe_ratio": 16.2,
+        "week52_high": 365.00,
+        "week52_low": 280.00,
+        "lot_size": 1500,
+        "description": "Pure-play passenger vehicle titan encompassing India's dominant electric vehicle (EV) franchise and luxury marque Jaguar Land Rover (JLR).",
+        "tags": ["NIFTYAUTO", "EV_LEADER", "PASSENGER_VEHICLES", "F&O"]
     },
     "ITC": {
         "symbol": "ITC",
@@ -744,6 +744,8 @@ def get_india_indices() -> List[str]:
 
 def get_india_profile(symbol: str) -> Dict[str, Any]:
     sym = (symbol or "RELIANCE").upper().strip().replace(".NSE", "").replace(".BSE", "")
+    if sym in ("TATAMOTORS", "TATA_MOTORS"):
+        sym = "TMPV"
     profile = INDIA_UNIVERSE.get(sym, {
         "symbol": sym,
         "name": f"{sym} India Limited",

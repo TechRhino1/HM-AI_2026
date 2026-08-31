@@ -44,7 +44,7 @@ class IndiaNewsAnalyzer:
             (f"Management of {sym} affirms strong guidance with order book exceeding ₹45,000 Cr", "BULLISH", 0.85, "1 day ago", "CNBC-TV18")
         ]
 
-        if sym in ["RELIANCE", "TCS", "HDFCBANK", "INFY", "TATAMOTORS", "ZOMATO"]:
+        if sym in ["RELIANCE", "TCS", "HDFCBANK", "INFY", "TATAMOTORS", "TMPV", "ZOMATO"]:
             random.seed(int(hash(sym) % 1000))
         
         selected = random.sample(headline_templates, min(4, len(headline_templates)))

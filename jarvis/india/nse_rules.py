@@ -28,7 +28,8 @@ NSE_LOT_SIZES: Dict[str, int] = {
     "ITC": 1600,
     "LT": 175,
     "HINDUNILVR": 300,
-    "TATAMOTORS": 1425,
+    "TATAMOTORS": 1500,
+    "TMPV": 1500,
     "MARUTI": 50,
     "SUNPHARMA": 350,
     "BAJFINANCE": 125,
@@ -90,6 +91,8 @@ NSE_LOT_SIZES: Dict[str, int] = {
     "SWIGGY": 1000,
     "HYUNDAI": 300
 }
+
+LOT_SIZE_MAP: Dict[str, int] = NSE_LOT_SIZES
 
 # Quantity Freeze Limits (Maximum allowable single-order quantity on NSE)
 NSE_FREEZE_LIMITS: Dict[str, int] = {

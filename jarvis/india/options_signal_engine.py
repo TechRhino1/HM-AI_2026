@@ -33,7 +33,7 @@ class OptionSignalEngine:
         # Primary candidate universe: Top liquid indices and active F&O equities
         candidates_syms = [
             "NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY",
-            "RELIANCE", "TCS", "HDFCBANK", "ICICIBANK", "TATAMOTORS",
+            "RELIANCE", "TCS", "HDFCBANK", "ICICIBANK", "TMPV",
             "INFY", "BHARTIARTL", "SBIN", "MARUTI", "BAJFINANCE",
             "LT", "SUNPHARMA", "TITAN", "ADANIENT", "TATASTEEL"
         ]
