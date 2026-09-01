@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 class MarketRegime(str, Enum):
     TREND_BULL = "TREND_BULL"
     TREND_BEAR = "TREND_BEAR"
+    STRONG_TREND_BULL = "STRONG_TREND_BULL"
+    STRONG_TREND_BEAR = "STRONG_TREND_BEAR"
     WEAK_TREND = "WEAK_TREND"
     RANGE = "RANGE"
     CONSOLIDATION = "CONSOLIDATION"
@@ -144,6 +146,7 @@ class MarketContext:
     mtf_confluence_score: float = 0.0
     mtf_alignment: Dict[str, str] = field(default_factory=dict)
     order_flow: Dict[str, Any] = field(default_factory=dict)
+    trade_style: str = "SWING"
 
 @dataclass
 class RegimeOutput:

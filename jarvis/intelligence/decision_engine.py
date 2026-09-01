@@ -301,16 +301,28 @@ class DecisionEngine:
             max_spread = spec.max_spread_pips
 
         # Real-time per-symbol optimizer adjustments
+        if is_micro_mode:
+            floor_win_p_opt = 0.45
+        elif rr_ratio >= 3.0 and ev > 0:
+            floor_win_p_opt = 0.45
+        elif rr_ratio >= 2.0 and ev > 0:
+            floor_win_p_opt = 0.48
+        elif rr_ratio >= 1.5:
+            floor_win_p_opt = 0.55
+        else:
+            floor_win_p_opt = 0.58
+
+        floor_score_opt = 65.0 if is_micro_mode else 76.0
+
         try:
             regime_str = regime.primary_regime.value if regime and hasattr(regime, "primary_regime") else "GLOBAL"
             adj = self.realtime_optimizer.get_adjustments(context.symbol, regime_str)
-            floor_win_p_opt = 0.45 if is_micro_mode else 0.58
-            floor_score_opt = 65.0 if is_micro_mode else 76.0
             required_win_p = max(floor_win_p_opt, min(0.65, required_win_p + float(adj.get("win_p_delta", 0))))
             min_score = max(floor_score_opt, min(85.0, min_score + float(adj.get("score_delta", 0))))
             min_rr = max(1.5, min(2.0, min_rr + float(adj.get("rr_delta", 0))))
         except Exception:
-            pass
+            required_win_p = max(floor_win_p_opt, min(0.65, required_win_p))
+            min_score = max(floor_score_opt, min(85.0, min_score))
 
         # 4. Macro MTF Confluence Guard
         mtf_align = getattr(context, "mtf_alignment", {})
@@ -326,18 +338,36 @@ class DecisionEngine:
             if not (has_reversal_structure and ai_score >= 82.0 and calibrated_win_p >= 0.60):
                 mtf_counter_trend = True
 
-        # 5. Dynamic RSI Exhaustion Bounds based on ADX and regime: 70 +- 10 * TrendPower
-        adx_val = getattr(context.momentum, "adx", 20.0)
+        # 5. Dynamic RSI Exhaustion Bounds based on ADX and regime: 70 +- 15 * TrendPower
+        adx_val = getattr(context.momentum, "adx", 20.0) if hasattr(context, "momentum") else 20.0
         trend_power = min(1.0, max(0.0, (adx_val - 20.0) / 25.0))
-        rsi_upper = 70.0 + (10.0 * trend_power)
-        rsi_lower = 30.0 - (10.0 * trend_power)
-        rsi_val = getattr(context.momentum, "rsi", 50.0)
+        rsi_upper = 70.0 + (15.0 * trend_power)
+        rsi_lower = 30.0 - (15.0 * trend_power)
+        rsi_val = getattr(context.momentum, "rsi", 50.0) if hasattr(context, "momentum") else 50.0
+
+        is_expansion_reg = (
+            regime.primary_regime in (
+                MarketRegime.BREAKOUT, MarketRegime.POST_BREAKOUT, MarketRegime.HIGH_VOLATILITY,
+                MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR,
+                MarketRegime.STRONG_TREND_BULL, MarketRegime.STRONG_TREND_BEAR
+            )
+            or getattr(context.structure, "bos", False)
+            or (adx_val >= 22.0 and abs(getattr(context.momentum, "trend_score", 0.0)) >= 20.0)
+        )
+        has_bull_div = bool(getattr(context.momentum, "bullish_divergence", False)) if hasattr(context, "momentum") else False
+        has_bear_div = bool(getattr(context.momentum, "bearish_divergence", False)) if hasattr(context, "momentum") else False
+        has_counter_choch = (
+            (tentative_bias == "SELL" and getattr(context.structure, "choch_type", "") == "BULLISH") or
+            (tentative_bias == "BUY" and getattr(context.structure, "choch_type", "") == "BEARISH")
+        )
+
         is_exhausted = False
-        is_breakout_reg = regime.primary_regime in (MarketRegime.BREAKOUT, MarketRegime.POST_BREAKOUT, MarketRegime.HIGH_VOLATILITY)
-        if tentative_bias == "BUY" and rsi_val > rsi_upper and not is_breakout_reg:
-            is_exhausted = True
-        elif tentative_bias == "SELL" and rsi_val < rsi_lower and not is_breakout_reg:
-            is_exhausted = True
+        if tentative_bias == "BUY" and rsi_val > rsi_upper:
+            if has_bear_div or has_counter_choch or not is_expansion_reg:
+                is_exhausted = True
+        elif tentative_bias == "SELL" and rsi_val < rsi_lower:
+            if has_bull_div or has_counter_choch or not is_expansion_reg:
+                is_exhausted = True
 
         from jarvis.market.sessions import SessionEngine
         mkt_status = SessionEngine.get_market_trading_status(context.symbol, dt=getattr(context, "timestamp", None))
@@ -357,13 +387,20 @@ class DecisionEngine:
         # 6. Gold (XAUUSD) Trend Following Gate: Require sweep confirmation or pullback to discount/premium
         gold_trend_following_valid = True
         effective_strat = strategy or getattr(context, "strategy", "")
-        if is_gold and effective_strat == "TREND_FOLLOWING":
-            st_zone = context.structure.discount_premium_zone
-            sweep_confirmed = bool(context.liquidity.sweep_detected)
-            if tentative_bias == "BUY" and not (sweep_confirmed or st_zone in ("DISCOUNT", "EQUILIBRIUM")):
-                gold_trend_following_valid = False
-            elif tentative_bias == "SELL" and not (sweep_confirmed or st_zone in ("PREMIUM", "EQUILIBRIUM")):
-                gold_trend_following_valid = False
+        if is_gold and effective_strat in ("TREND_FOLLOWING", "BREAKDOWN", "MOMENTUM_CONTINUATION", "STRUCTURE"):
+            st_zone = getattr(context.structure, "discount_premium_zone", "EQUILIBRIUM") if hasattr(context, "structure") else "EQUILIBRIUM"
+            sweep_confirmed = bool(getattr(context.liquidity, "sweep_detected", False)) if hasattr(context, "liquidity") else False
+            bos_active = bool(getattr(context.structure, "bos", False)) if hasattr(context, "structure") else False
+            ts = getattr(context.momentum, "trend_score", 0.0) if hasattr(context, "momentum") else 0.0
+            adx_val = getattr(context.momentum, "adx", 0.0) if hasattr(context, "momentum") else 0.0
+            strong_expansion = (adx_val >= 20.0 and abs(ts) >= 20.0)
+
+            if tentative_bias == "BUY":
+                if not (sweep_confirmed or st_zone in ("DISCOUNT", "EQUILIBRIUM") or bos_active or (strong_expansion and ts > 0)):
+                    gold_trend_following_valid = False
+            elif tentative_bias == "SELL":
+                if not (sweep_confirmed or st_zone in ("PREMIUM", "EQUILIBRIUM") or bos_active or (strong_expansion and ts < 0)):
+                    gold_trend_following_valid = False
 
         # Institutional Quality Gate Matrix
         regime_viable = regime.primary_regime != MarketRegime.EVENT_RISK
@@ -381,7 +418,7 @@ class DecisionEngine:
             "Spread Protection": spread <= max_spread and not context.volatility.is_excessive_spread,
             "AI Multi-Score Gate": ai_score >= min_score,
             "Devil Adversarial Guard": devil_report.penalty_score <= self.max_devil_penalty,
-            "Calibrated Win Prob >= 50%": calibrated_win_p >= required_win_p,
+            "Calibrated Win Prob >= 50%": calibrated_win_p >= (required_win_p - 0.005),
             "Valid Stop Loss Distance": risk_dist >= (context.volatility.atr * min_sl_atr_mult),
             "Premium/Discount Alignment": premium_discount_valid,
             "No Active Macro Shock": regime.primary_regime != MarketRegime.EVENT_RISK,
@@ -568,9 +605,21 @@ class DecisionEngine:
         calibrated_win_p = min(0.95, max(0.05, calibrated_win_p + float(_master["prob_boost"])))
         final_win_p = min(0.95, max(0.05, final_win_p + float(_master["prob_boost"])))
         
-        # HARD GATE: Minimum 70/100 Master Confluence required for Forex entry, 65 for others
-        # This eliminates low-quality setups that lack institutional confluence
-        _min_confluence = 70 if _is_forex(context.symbol) else 65
+        # HARD GATE: Horizon-Adaptive Master Confluence Threshold
+        is_micro_mode = is_micro_account(account_balance)
+        t_style = (getattr(context, "trade_style", None) or getattr(context, "style", "SWING") or "SWING").upper()
+        if "SCALP" in t_style:
+            _min_confluence = 40
+        elif any(x in t_style for x in ("DAY", "INTRADAY")):
+            _min_confluence = 50
+        elif _is_forex(context.symbol):
+            _min_confluence = 70
+        else:
+            _min_confluence = 60
+
+        if (rr_ratio >= 2.5 and ev > 0) or is_micro_mode:
+            _min_confluence = max(35, _min_confluence - 5)
+
         master_confluence_valid = _master_score >= _min_confluence
         
         if _master_tier in ("ELITE", "HIGH"):

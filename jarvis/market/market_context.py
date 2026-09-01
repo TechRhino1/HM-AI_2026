@@ -207,5 +207,6 @@ class MarketContextEngine:
             session=session,
             mtf_confluence_score=mtf_confluence_pct,
             mtf_alignment=mtf_alignment,
-            order_flow=order_flow
+            order_flow=order_flow,
+            trade_style=style
         )

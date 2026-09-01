@@ -139,7 +139,8 @@ class TestDynamicLevelsAndRefactoring(unittest.TestCase):
         )
         self.assertTrue(gate_high.checks["Trend Not Exhausted"])
 
-        # In low ADX (ADX=20), TrendPower = 0.0 -> RSI bound is 70.0. RSI=74 should be marked exhausted
+        # In low ADX non-expansion (RANGE regime, ADX=20), TrendPower = 0.0 -> RSI bound is 70.0. RSI=74 should be marked exhausted
+        regime_range = RegimeOutput(primary_regime=MarketRegime.RANGE, probabilities={}, confidence=0.85)
         ctx_low_adx = MarketContext(
             symbol="EURUSD",
             timestamp=datetime.now(timezone.utc),
@@ -149,19 +150,19 @@ class TestDynamicLevelsAndRefactoring(unittest.TestCase):
             structure=StructureContext(bias="BULLISH"),
             liquidity=LiquidityContext(),
             volatility=VolatilityContext(atr=0.0015, current_spread_pips=1.0),
-            momentum=MomentumContext(trend_score=20.0, adx=20.0, rsi=74.0),
+            momentum=MomentumContext(trend_score=15.0, adx=20.0, rsi=74.0),
             session=SessionContext(is_prime_session=True)
         )
         gate_low = self.decision_engine._apply_quality_gate(
-            context=ctx_low_adx, regime=regime, devil_report=devil, ai_score=80.0,
+            context=ctx_low_adx, regime=regime_range, devil_report=devil, ai_score=80.0,
             rr_ratio=2.2, ev=10.0, final_win_p=0.65, spread=1.0, premium_discount_valid=True,
             account_balance=10000.0, tentative_bias="BUY", calibrated_win_p=0.65
         )
         self.assertFalse(gate_low.checks["Trend Not Exhausted"])
 
     def test_decision_engine_gold_trend_following_confirmation(self):
-        """Task 2: Gold (XAUUSD) requires sweep confirmation or discount/premium pullback for TREND_FOLLOWING."""
-        # Scenario A: Gold buying at PREMIUM without liquidity sweep -> should fail Gold Trend Following gate
+        """Task 2: Gold (XAUUSD) requires sweep confirmation, discount/premium pullback, or strong momentum expansion for TREND_FOLLOWING."""
+        # Scenario A: Gold buying at PREMIUM without liquidity sweep, BOS, or strong expansion -> should fail Gold Trend Following gate
         ctx_gold_prem = MarketContext(
             symbol="XAUUSD",
             timestamp=datetime.now(timezone.utc),
@@ -171,7 +172,7 @@ class TestDynamicLevelsAndRefactoring(unittest.TestCase):
             structure=StructureContext(bias="BULLISH", discount_premium_zone="PREMIUM"),
             liquidity=LiquidityContext(sweep_detected=False),
             volatility=VolatilityContext(atr=10.0, current_spread_pips=1.5),
-            momentum=MomentumContext(trend_score=40.0, adx=26.0),
+            momentum=MomentumContext(trend_score=10.0, adx=15.0),
             session=SessionContext(is_prime_session=True)
         )
         regime = RegimeOutput(primary_regime=MarketRegime.TREND_BULL, probabilities={}, confidence=0.85)
@@ -194,7 +195,7 @@ class TestDynamicLevelsAndRefactoring(unittest.TestCase):
             structure=StructureContext(bias="BULLISH", discount_premium_zone="PREMIUM"),
             liquidity=LiquidityContext(sweep_detected=True, sweep_type="BULLISH_SWEEP"),
             volatility=VolatilityContext(atr=10.0, current_spread_pips=1.5),
-            momentum=MomentumContext(trend_score=40.0, adx=26.0),
+            momentum=MomentumContext(trend_score=10.0, adx=15.0),
             session=SessionContext(is_prime_session=True)
         )
         gate_pass = self.decision_engine._apply_quality_gate(

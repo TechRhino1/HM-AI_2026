@@ -214,6 +214,10 @@ class TradingViewDataProvider:
 
     def __init__(self, request_timeout: float = 1.0):
         self.request_timeout = request_timeout
+        try:
+            socket.setdefaulttimeout(1.0)
+        except Exception:
+            pass
         self._user_agent = (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
