@@ -276,28 +276,37 @@ class DecisionEngine:
         dynamic_score = base_score + (5.0 if is_transition_reg else 0.0) + (6.0 * spread_excess) - confluence_adj
         min_score = max(65.0, min(85.0, dynamic_score))
 
-        # Risk-Reward minimum & SL multiplier
-        if is_micro_mode:
+        # Risk-Reward minimum & SL multiplier (adapted to trade horizon)
+        t_style_check = (getattr(context, "trade_style", None) or getattr(context, "style", "SWING") or "SWING").upper()
+        if "SCALP" in t_style_check:
+            min_rr = 1.3
+            min_sl_atr_mult = 0.20
+            max_spread = spec.max_spread_pips
+        elif any(x in t_style_check for x in ("DAY", "INTRADAY")):
             min_rr = 1.5
-            min_sl_atr_mult = 0.40
+            min_sl_atr_mult = 0.35
+            max_spread = spec.max_spread_pips
+        elif is_micro_mode:
+            min_rr = 1.5
+            min_sl_atr_mult = 0.35
             max_spread = min(3.0, spec.max_spread_pips * 0.8)
             if current_drawdown_pct > 5.0:
                 min_score = max(min_score, 74.0)
         elif is_gold:
             min_rr = 1.8
-            min_sl_atr_mult = 0.50
+            min_sl_atr_mult = 0.45
             max_spread = spec.max_spread_pips
         elif is_crypto:
             min_rr = 1.8
-            min_sl_atr_mult = 0.65
+            min_sl_atr_mult = 0.50
             max_spread = spec.max_spread_pips
         elif is_jpy:
             min_rr = 1.8
-            min_sl_atr_mult = 0.60
+            min_sl_atr_mult = 0.50
             max_spread = spec.max_spread_pips
         else:  # Forex Majors
             min_rr = 1.7
-            min_sl_atr_mult = 0.60
+            min_sl_atr_mult = 0.50
             max_spread = spec.max_spread_pips
 
         # Real-time per-symbol optimizer adjustments
