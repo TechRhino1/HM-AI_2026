@@ -13,6 +13,7 @@ from jarvis.application.event_bus import EventBus, GLOBAL_EVENT_BUS
 from jarvis.market.data_feed import DataFeedEngine
 from jarvis.market.market_context import MarketContextEngine
 from jarvis.intelligence.regime_engine import MarketRegimeClassifier
+from jarvis.intelligence.opportunity_arbiter import UniversalOpportunityArbiter
 from jarvis.analysts.parallel_runner import ParallelAnalystCluster
 from jarvis.intelligence.decision_engine import DecisionEngine
 from jarvis.risk.risk_engine import RiskEngine
@@ -79,6 +80,11 @@ class JarvisOrchestrator:
         self.regime_classifier = MarketRegimeClassifier()
         self.analyst_cluster = ParallelAnalystCluster()
         self.decision_engine = DecisionEngine(ml_predictor=self.ml_predictor)
+        self.opportunity_arbiter = UniversalOpportunityArbiter(
+            ml_predictor=self.ml_predictor,
+            bandit=self.strategy_bandit,
+            self_learning=getattr(self.decision_engine, "self_learning", None)
+        )
         self.risk_engine = RiskEngine()
         self.order_manager = OrderManager(self.mt5_client)
         self.execution_engine = ExecutionEngine(self.mt5_client, self.state_manager)
@@ -163,6 +169,7 @@ class JarvisOrchestrator:
         pending = self._pending_features.pop(ticket, None)
         strategy = pending.get("strategy", data.get("strategy", "UNKNOWN")) if pending else data.get("strategy", "UNKNOWN")
         regime_name = pending.get("regime", data.get("regime", "GLOBAL")) if pending else data.get("regime", "GLOBAL")
+        trade_style = pending.get("trade_style", data.get("trade_style", "SWING")) if pending else data.get("trade_style", "SWING")
 
         # Calculate realized R-multiple
         r_multiple = 1.0
@@ -183,12 +190,18 @@ class JarvisOrchestrator:
                 mae=0.0
             )
 
-        # 2. Update ML SGD predictor (§17)
+        # 2. Update ML SGD predictor with return weighting (§17)
         if pending and "features" in pending:
-            self.ml_predictor.update_online(pending["features"], is_win)
+            self.ml_predictor.update_online(pending["features"], is_win, r_multiple=r_multiple)
 
-        # 3. Update Multi-Armed Bandit (§17)
-        self.strategy_bandit.record_outcome(strategy, is_win, r_multiple, regime=regime_name)
+        # 3. Update Multi-Armed Bandit with Thompson Sampling (§17)
+        self.strategy_bandit.record_outcome(
+            strategy=strategy,
+            is_win=is_win,
+            r_multiple=r_multiple,
+            regime=regime_name,
+            style=trade_style
+        )
 
         # 4. Update Circuit Breaker & Drawdown Guard
         trade_symbol = pending.get("symbol", data.get("symbol", "")) if pending else data.get("symbol", "")
@@ -203,7 +216,7 @@ class JarvisOrchestrator:
 
         logger.info(
             f"🔄 Closed-trade self-learning loop completed for #{ticket}: "
-            f"PnL=${pnl:.2f}, Win={is_win}, R={r_multiple}, Strat={strategy}, Regime={regime_name}"
+            f"PnL=${pnl:.2f}, Win={is_win}, R={r_multiple}, Strat={strategy}, Regime={regime_name}, Style={trade_style}"
         )
 
     @staticmethod
@@ -446,7 +459,8 @@ class JarvisOrchestrator:
                     self._pending_features[ticket] = {
                         "features": ml_feat,
                         "strategy": decision.strategy,
-                        "regime": regime.primary_regime.value,
+                        "regime": regime.primary_regime.value if hasattr(regime.primary_regime, "value") else str(regime.primary_regime),
+                        "trade_style": active_trade_style,
                         "entry": fill_price,
                         "sl": actual_sl,
                         "risk_dist": abs(fill_price - actual_sl),
@@ -479,11 +493,11 @@ class JarvisOrchestrator:
         }
 
     def _orchestration_loop_single_pass(self) -> List[Dict[str, Any]]:
-        """Executes a single multi-style radar sweep across SWING, DAY_TRADING, and SCALP."""
+        """Executes a single multi-style radar sweep across SWING, DAY_TRADING, and SCALP with Universal Opportunity Arbitration."""
         from concurrent.futures import ThreadPoolExecutor, as_completed
         active_styles = ["SWING", "DAY_TRADING", "SCALP"]
         tasks = [(sym, style) for style in active_styles for sym in self.symbols]
-        radar_results = []
+        raw_results = []
 
         with ThreadPoolExecutor(max_workers=max(4, min(32, len(tasks))), thread_name_prefix="radar_worker") as executor:
             future_to_task = {
@@ -494,77 +508,33 @@ class JarvisOrchestrator:
                 sym, style = future_to_task[fut]
                 try:
                     res = fut.result()
-                    d = res["decision"]
-                    ctx = res.get("context")
-                    spec = _resolve_sym(sym)
-
-                    # Directional win probability calculation
-                    win_p = d.probabilities.get(d.bias.lower(), d.model_confidence) if (d.probabilities and d.bias in ["BUY", "SELL"]) else d.model_confidence
-                    
-                    mkt_status = SessionEngine.get_market_trading_status(sym)
-                    is_mkt_open = mkt_status.get("is_open", True)
-
-                    # Standardized Status Classification
-                    if not is_mkt_open:
-                        status_label = "MARKET CLOSED"
-                    elif d.decision == "EXECUTE":
-                        status_label = f"{d.bias} READY"
-                    elif d.decision == "WAIT" and d.bias in ["BUY", "SELL"]:
-                        status_label = f"WAIT: {d.bias}"
-                    elif d.decision == "NO_TRADE":
-                        if d.quality_gate and not d.quality_gate.passed and any("Invalid" in r or "Devil" in r or "Adversarial" in r for r in d.quality_gate.failing_reasons):
-                            status_label = f"INVALID: {d.bias}" if d.bias in ["BUY", "SELL"] else "TRADE INVALIDATED"
-                        elif d.bias in ["BUY", "SELL"]:
-                            status_label = f"NO TRADE: {d.bias}"
-                        else:
-                            status_label = "NO SETUP"
-                    elif d.bias in ["BUY", "SELL"]:
-                        status_label = f"WAIT: {d.bias}"
-                    else:
-                        status_label = "NO SETUP"
-
-                    tf_str = "D1/H4/H1" if style == "SWING" else ("H1/M15/M5" if style in ("DAY_TRADING", "INTRADAY", "DAY") else "M15/M5/M1")
-
-                    curr_price = d.entry_price
-                    if ctx and hasattr(ctx, "current_price") and ctx.current_price is not None:
-                        try:
-                            curr_price = round(float(ctx.current_price), getattr(spec, "digits", 2 if "XAU" in sym or "BTC" in sym else 5))
-                        except Exception:
-                            curr_price = d.entry_price
-
-                    radar_results.append({
-                        "symbol": sym,
-                        "trade_style": style,
-                        "timeframe": tf_str,
-                        "current_price": curr_price,
-                        "entry_price": d.entry_price,
-                        "stop_loss": d.stop_loss,
-                        "take_profit": d.take_profit,
-                        "risk_reward_ratio": round(d.risk_reward_ratio, 2) if d.risk_reward_ratio else 2.50,
-                        "ev": round(d.expected_value, 2) if d.expected_value else 0.0,
-                        "bias": d.bias,
-                        "action": status_label,
-                        "status_label": status_label,
-                        "decision": d.decision,
-                        "score": round(win_p * 100.0, 0),
-                        "win_prob": round(win_p * 100.0, 0),
-                        "confluence_score": getattr(d, "master_confluence_score", 0.0),
-                        "confluence_tier": getattr(d, "master_confluence_tier", "MODERATE"),
-                        "regime": d.regime.primary_regime.value if (d.regime and hasattr(d.regime, "primary_regime")) else "UNKNOWN",
-                        "strategy": d.strategy or "STRUCTURE",
-                        "gate_passed": d.quality_gate.passed if d.quality_gate else False,
-                        "failing_reasons": d.quality_gate.failing_reasons if d.quality_gate else [],
-                        "checks": d.quality_gate.checks if d.quality_gate else {},
-                        "waiting_reasons": getattr(d, "waiting_reasons", []),
-                        "rejection_reasons": getattr(d, "rejection_reasons", []),
-                        "risk_factors": d.risk_factors or [],
-                        "adversarial_penalty": round(d.adversarial_penalty, 1) if d.adversarial_penalty else 0.0,
-                        "invalidation_levels": d.invalidation_levels or [],
-                        "mtf_alignment": getattr(ctx, "mtf_alignment", {}),
-                        "mtf_confluence": getattr(ctx, "mtf_confluence_score", 0.0),
-                    })
+                    raw_results.append((sym, style, res))
                 except Exception as e:
                     logger.error(f"Parallel scan error for {sym} ({style}): {e}", exc_info=True)
+
+        # 1. Evaluate every opportunity through the Universal Opportunity Arbiter
+        candidates = []
+        for sym, style, res in raw_results:
+            try:
+                d = res["decision"]
+                ctx = res.get("context")
+                cand = self.opportunity_arbiter.evaluate_opportunity(d, ctx, trade_style=style)
+                candidates.append(cand)
+            except Exception as e:
+                logger.error(f"Arbiter evaluation error for {sym} ({style}): {e}", exc_info=True)
+
+        # 2. Rank candidates by Utility score & select best actionable opportunity across styles
+        best_opportunity, ranked_candidates = self.opportunity_arbiter.rank_and_select_best(candidates)
+
+        if best_opportunity:
+            logger.info(
+                f"🏆 Arbiter Top Selection: [{best_opportunity.setup_grade}] {best_opportunity.symbol} "
+                f"({best_opportunity.trade_style} {best_opportunity.bias}) | Utility={best_opportunity.utility_score:.3f} | "
+                f"WinP={best_opportunity.win_prob:.0f}% | EV={best_opportunity.expected_value:.2f}R | Confluence={best_opportunity.confluence_score:.1f}"
+            )
+
+        # 3. Convert ranked opportunities to radar items for state manager and dashboard
+        radar_results = [cand.to_radar_item() for cand in ranked_candidates]
 
         if radar_results:
             def _radar_sort_key(item):
@@ -578,9 +548,10 @@ class JarvisOrchestrator:
                     conv = 1
                 else:
                     conv = 0
+                util = item.get("utility_score", 0.0) or 0.0
                 prob = item.get("win_prob", 0) or item.get("score", 0) or 0
                 ev = item.get("ev", 0) or 0
-                return (is_open, conv, prob, ev)
+                return (is_open, conv, util, prob, ev)
 
             radar_results.sort(key=_radar_sort_key, reverse=True)
             self.state_manager.update_radar(radar_results)

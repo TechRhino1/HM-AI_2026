@@ -7,6 +7,7 @@ from jarvis.intelligence.reasoning_engine import ReasoningEngine
 from jarvis.intelligence.decision_engine import DecisionEngine
 from jarvis.intelligence.realtime_optimizer import RealtimeOptimizer
 from jarvis.intelligence.dynamic_levels import DynamicRiskAndLevelsEngine
+from jarvis.intelligence.opportunity_arbiter import UniversalOpportunityArbiter, CandidateOpportunity
 
 __all__ = [
     "MarketRegimeClassifier",
@@ -16,5 +17,7 @@ __all__ = [
     "ReasoningEngine",
     "DecisionEngine",
     "RealtimeOptimizer",
-    "DynamicRiskAndLevelsEngine"
+    "DynamicRiskAndLevelsEngine",
+    "UniversalOpportunityArbiter",
+    "CandidateOpportunity"
 ]
