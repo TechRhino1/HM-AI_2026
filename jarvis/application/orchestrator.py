@@ -225,10 +225,11 @@ class JarvisOrchestrator:
             })
         return out
 
-    def run_cycle_for_symbol(self, symbol: str) -> Dict[str, Any]:
-        """Executes a single end-to-end analytical and decision cycle for a target symbol."""
+    def run_cycle_for_symbol(self, symbol: str, trade_style: Optional[str] = None) -> Dict[str, Any]:
+        """Executes a single end-to-end analytical and decision cycle for a target symbol and trade style."""
+        active_trade_style = (trade_style or self.trade_style or "SWING").upper()
         # 1. Fetch Multi-Timeframe Data based on trade_style
-        mtf_data = self.data_feed.fetch_multi_timeframe(symbol, trade_style=self.trade_style)
+        mtf_data = self.data_feed.fetch_multi_timeframe(symbol, trade_style=active_trade_style)
         _spec = _resolve_sym(symbol)
         
         # 2. Synthesize Multi-Timeframe Market Context with dynamic MTF weighting
@@ -237,13 +238,14 @@ class JarvisOrchestrator:
             mtf_data,
             current_spread_pips=_spec.typical_spread_pips,
             max_allowed_spread_pips=_spec.max_spread_pips,
-            trade_style=self.trade_style
+            trade_style=active_trade_style
         )
         self.state_manager.update_market_context(symbol, context)
 
-        # 3. Classify Market Regime (thread-safe, isolated per symbol)
+        # 3. Classify Market Regime (thread-safe, isolated per symbol and trade style)
+        regime_key = f"{symbol}_{active_trade_style}"
         with self._regime_state_lock:
-            prev = self._regime_state.get(symbol, {})
+            prev = self._regime_state.get(regime_key, {})
             prev_reg = prev.get("prev")
             prev_persist = prev.get("persist", 0)
 
@@ -254,7 +256,7 @@ class JarvisOrchestrator:
         )
 
         with self._regime_state_lock:
-            self._regime_state[symbol] = {
+            self._regime_state[regime_key] = {
                 "prev": regime.primary_regime,
                 "persist": regime.regime_persistence
             }
@@ -269,11 +271,22 @@ class JarvisOrchestrator:
         if account and account.balance > 0 and account.equity < account.balance:
             dd_pct = ((account.balance - account.equity) / account.balance) * 100.0
         decision = self.decision_engine.evaluate(
-            context, regime, analyst_reports, devil_report, account_balance=account.equity, current_drawdown_pct=dd_pct, mtf_data=mtf_data, recent_candles=self._df_to_candles(mtf_data.get("primary") if isinstance(mtf_data, dict) else None)
+            context, regime, analyst_reports, devil_report, account_balance=account.equity if account else 10000.0, current_drawdown_pct=dd_pct, mtf_data=mtf_data, recent_candles=self._df_to_candles(mtf_data.get("primary") if isinstance(mtf_data, dict) else None)
         )
         self.state_manager.record_decision(symbol, decision)
 
-        # 6. Risk Engine Independent Authorization & Sizing
+        # 6. Risk Engine Independent Authorization & Sizing (only if opportunity matches active trading style)
+        def _normalize_style(s: str) -> str:
+            s = (s or "").upper()
+            if s in ("DAY", "INTRADAY", "DAY_TRADING"):
+                return "DAY_TRADING"
+            if s in ("SCALP", "SCALPING"):
+                return "SCALP"
+            return s
+
+        orch_style = (self.trade_style or "SWING").upper()
+        is_exec_style_match = (orch_style == "ALL") or (_normalize_style(active_trade_style) == _normalize_style(orch_style))
+
         positions = self.state_manager.positions
         _spec = _resolve_sym(symbol)
         sym_info = {
@@ -290,7 +303,10 @@ class JarvisOrchestrator:
         is_favorable_scalp = (decision.risk_reward_ratio >= 1.8 and decision.expected_value > 0 and context.volatility.current_spread_pips <= (_spec.max_spread_pips * 0.75))
         is_forex = (_spec.asset_class == "FOREX")
         MIN_CONFIDENCE = 0.45 if is_forex else (0.50 if is_favorable_scalp else 0.55)
-        if decision.decision == "EXECUTE" and decision.model_confidence < MIN_CONFIDENCE:
+        
+        if not is_exec_style_match:
+            auth_res = {"authorized": False, "reason": f"STYLE_FILTER: Opportunity style {active_trade_style} does not match active trading style {orch_style}"}
+        elif decision.decision == "EXECUTE" and decision.model_confidence < MIN_CONFIDENCE:
             decision.decision = "WAIT"
             decision.execution_authorized = False
             auth_res = {"authorized": False, "reason": f"CONFIDENCE_GATE: {decision.model_confidence:.2f} < {MIN_CONFIDENCE} minimum"}
@@ -333,7 +349,9 @@ class JarvisOrchestrator:
             except Exception as e:
                 logger.error(f"Error trailing position #{pos.ticket}: {e}", exc_info=True)
 
-        if already_executing and decision.decision == "EXECUTE":
+        if not is_exec_style_match:
+            pass
+        elif already_executing and decision.decision == "EXECUTE":
             decision.decision = "WAIT"
             decision.execution_authorized = False
             auth_res = {"authorized": False, "reason": "IN_PROCESS_LOCK: Execution already in progress for this symbol."}
@@ -368,12 +386,13 @@ class JarvisOrchestrator:
             auth_res = {'authorized': False, 'reason': f'CIRCUIT_BREAKER: {cb_status.get("reason", "Cooling down")}'}
 
         # Drawdown Guard check (backstop — also checked inside risk_engine)
-        dd_status = self.drawdown_guard.check_limits(account.equity, account.balance)
-        if not dd_status.get('passed') and decision.decision == 'EXECUTE':
-            decision.decision = 'WAIT'
-            decision.execution_authorized = False
-            reason = dd_status.get("breaches", ["Max drawdown reached"])[0] if dd_status.get("breaches") else "Max drawdown reached"
-            auth_res = {'authorized': False, 'reason': f'DRAWDOWN_GUARD: {reason}'}
+        if account:
+            dd_status = self.drawdown_guard.check_limits(account.equity, account.balance)
+            if not dd_status.get('passed') and decision.decision == 'EXECUTE':
+                decision.decision = 'WAIT'
+                decision.execution_authorized = False
+                reason = dd_status.get("breaches", ["Max drawdown reached"])[0] if dd_status.get("breaches") else "Max drawdown reached"
+                auth_res = {'authorized': False, 'reason': f'DRAWDOWN_GUARD: {reason}'}
 
         # 7. Execute if authorized (Atomic Reservation -> Execute -> Commit/Release)
         exec_res = None
@@ -381,7 +400,8 @@ class JarvisOrchestrator:
             decision.execution_authorized = True
             lots = auth_res.get("lots", 0.01)
             # Unified lot cap based on account tier (§4)
-            lots = min(lots, get_max_lot_cap(account.equity))
+            if account:
+                lots = min(lots, get_max_lot_cap(account.equity))
 
             # Claim in-process lock & reserve risk capacity BEFORE sending to MT5
             risk_dist = abs(decision.entry_price - decision.stop_loss)
@@ -451,103 +471,133 @@ class JarvisOrchestrator:
 
         return {
             "symbol": symbol,
+            "trade_style": active_trade_style,
             "decision": decision,
-            "authorized": auth_res["authorized"],
+            "context": context,
+            "authorized": auth_res.get("authorized", False),
             "execution": exec_res
         }
 
+    def _orchestration_loop_single_pass(self) -> List[Dict[str, Any]]:
+        """Executes a single multi-style radar sweep across SWING, DAY_TRADING, and SCALP."""
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        active_styles = ["SWING", "DAY_TRADING", "SCALP"]
+        tasks = [(sym, style) for style in active_styles for sym in self.symbols]
+        radar_results = []
+
+        with ThreadPoolExecutor(max_workers=max(4, min(32, len(tasks))), thread_name_prefix="radar_worker") as executor:
+            future_to_task = {
+                executor.submit(self.run_cycle_for_symbol, sym, style): (sym, style)
+                for sym, style in tasks
+            }
+            for fut in as_completed(future_to_task):
+                sym, style = future_to_task[fut]
+                try:
+                    res = fut.result()
+                    d = res["decision"]
+                    ctx = res.get("context")
+                    spec = _resolve_sym(sym)
+
+                    # Directional win probability calculation
+                    win_p = d.probabilities.get(d.bias.lower(), d.model_confidence) if (d.probabilities and d.bias in ["BUY", "SELL"]) else d.model_confidence
+                    
+                    mkt_status = SessionEngine.get_market_trading_status(sym)
+                    is_mkt_open = mkt_status.get("is_open", True)
+
+                    # Standardized Status Classification
+                    if not is_mkt_open:
+                        status_label = "MARKET CLOSED"
+                    elif d.decision == "EXECUTE":
+                        status_label = f"{d.bias} READY"
+                    elif d.decision == "WAIT" and d.bias in ["BUY", "SELL"]:
+                        status_label = f"WAIT: {d.bias}"
+                    elif d.decision == "NO_TRADE":
+                        if d.quality_gate and not d.quality_gate.passed and any("Invalid" in r or "Devil" in r or "Adversarial" in r for r in d.quality_gate.failing_reasons):
+                            status_label = f"INVALID: {d.bias}" if d.bias in ["BUY", "SELL"] else "TRADE INVALIDATED"
+                        elif d.bias in ["BUY", "SELL"]:
+                            status_label = f"NO TRADE: {d.bias}"
+                        else:
+                            status_label = "NO SETUP"
+                    elif d.bias in ["BUY", "SELL"]:
+                        status_label = f"WAIT: {d.bias}"
+                    else:
+                        status_label = "NO SETUP"
+
+                    tf_str = "D1/H4/H1" if style == "SWING" else ("H1/M15/M5" if style in ("DAY_TRADING", "INTRADAY", "DAY") else "M15/M5/M1")
+
+                    curr_price = d.entry_price
+                    if ctx and hasattr(ctx, "current_price") and ctx.current_price is not None:
+                        try:
+                            curr_price = round(float(ctx.current_price), getattr(spec, "digits", 2 if "XAU" in sym or "BTC" in sym else 5))
+                        except Exception:
+                            curr_price = d.entry_price
+
+                    radar_results.append({
+                        "symbol": sym,
+                        "trade_style": style,
+                        "timeframe": tf_str,
+                        "current_price": curr_price,
+                        "entry_price": d.entry_price,
+                        "stop_loss": d.stop_loss,
+                        "take_profit": d.take_profit,
+                        "risk_reward_ratio": round(d.risk_reward_ratio, 2) if d.risk_reward_ratio else 2.50,
+                        "ev": round(d.expected_value, 2) if d.expected_value else 0.0,
+                        "bias": d.bias,
+                        "action": status_label,
+                        "status_label": status_label,
+                        "decision": d.decision,
+                        "score": round(win_p * 100.0, 0),
+                        "win_prob": round(win_p * 100.0, 0),
+                        "confluence_score": getattr(d, "master_confluence_score", 0.0),
+                        "confluence_tier": getattr(d, "master_confluence_tier", "MODERATE"),
+                        "regime": d.regime.primary_regime.value if (d.regime and hasattr(d.regime, "primary_regime")) else "UNKNOWN",
+                        "strategy": d.strategy or "STRUCTURE",
+                        "gate_passed": d.quality_gate.passed if d.quality_gate else False,
+                        "failing_reasons": d.quality_gate.failing_reasons if d.quality_gate else [],
+                        "checks": d.quality_gate.checks if d.quality_gate else {},
+                        "waiting_reasons": getattr(d, "waiting_reasons", []),
+                        "rejection_reasons": getattr(d, "rejection_reasons", []),
+                        "risk_factors": d.risk_factors or [],
+                        "adversarial_penalty": round(d.adversarial_penalty, 1) if d.adversarial_penalty else 0.0,
+                        "invalidation_levels": d.invalidation_levels or [],
+                        "mtf_alignment": getattr(ctx, "mtf_alignment", {}),
+                        "mtf_confluence": getattr(ctx, "mtf_confluence_score", 0.0),
+                    })
+                except Exception as e:
+                    logger.error(f"Parallel scan error for {sym} ({style}): {e}", exc_info=True)
+
+        if radar_results:
+            def _radar_sort_key(item):
+                act = item.get("action", "")
+                is_open = 0 if "CLOSED" in act else 1
+                if "READY" in act:
+                    conv = 3
+                elif "WAIT" in act:
+                    conv = 2
+                elif "NO TRADE" in act or "INVALID" in act:
+                    conv = 1
+                else:
+                    conv = 0
+                prob = item.get("win_prob", 0) or item.get("score", 0) or 0
+                ev = item.get("ev", 0) or 0
+                return (is_open, conv, prob, ev)
+
+            radar_results.sort(key=_radar_sort_key, reverse=True)
+            self.state_manager.update_radar(radar_results)
+
+        return radar_results
 
     def _orchestration_loop(self):
-        """Ultra-fast parallel radar scan loop across configured symbols (<50ms latency)."""
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        with ThreadPoolExecutor(max_workers=max(4, len(self.symbols)), thread_name_prefix="radar_worker") as executor:
-            while self._running:
-                try:
-                    future_to_sym = {executor.submit(self.run_cycle_for_symbol, sym): sym for sym in self.symbols}
-                    radar_results = []
-                    for fut in as_completed(future_to_sym):
-                        sym = future_to_sym[fut]
-                        try:
-                            res = fut.result()
-                            d = res["decision"]
-                            # Calculate directional win probability
-                            win_p = d.probabilities.get(d.bias.lower(), d.model_confidence) if d.bias in ["BUY", "SELL"] else d.model_confidence
-                            
-                            mkt_status = SessionEngine.get_market_trading_status(sym)
-                            is_mkt_open = mkt_status.get("is_open", True)
+        """Ultra-fast parallel multi-style radar scan loop (<50ms latency)."""
+        while self._running:
+            try:
+                self._orchestration_loop_single_pass()
+            except Exception as e:
+                logger.error(f"Orchestration loop error: {e}", exc_info=True)
 
-                            # Standardized Status Classification (Always showing Directional Bias)
-                            if not is_mkt_open:
-                                status_label = "MARKET CLOSED"
-                            elif d.decision == "EXECUTE":
-                                status_label = f"{d.bias} READY"
-                            elif d.decision == "WAIT" and d.bias in ["BUY", "SELL"]:
-                                status_label = f"WAIT: {d.bias}"
-                            elif d.decision == "NO_TRADE":
-                                if not d.quality_gate.passed and any("Invalid" in r or "Devil" in r or "Adversarial" in r for r in d.quality_gate.failing_reasons):
-                                    status_label = f"INVALID: {d.bias}" if d.bias in ["BUY", "SELL"] else "TRADE INVALIDATED"
-                                elif d.bias in ["BUY", "SELL"]:
-                                    status_label = f"NO TRADE: {d.bias}"
-                                else:
-                                    status_label = "NO SETUP"
-                            elif d.bias in ["BUY", "SELL"]:
-                                status_label = f"WAIT: {d.bias}"
-                            else:
-                                status_label = "NO SETUP"
-
-                            radar_results.append({
-                                "symbol": sym,
-                                "trade_style": self.trade_style,
-                                "timeframe": "D1/H4/H1" if self.trade_style == "SWING" else ("H1/M15/M5" if self.trade_style in ("DAY_TRADING", "INTRADAY", "DAY") else "H1/M5/M1"),
-                                "bias": d.bias,
-                                "action": status_label,
-                                "status_label": status_label,
-                                "decision": d.decision,
-                                "score": round(win_p * 100.0, 0),
-                                "win_prob": round(win_p * 100.0, 0),
-                                "entry_price": d.entry_price,
-                                "stop_loss": d.stop_loss,
-                                "take_profit": d.take_profit,
-                                "risk_reward_ratio": round(d.risk_reward_ratio, 2) if d.risk_reward_ratio else 2.50,
-                                "ev": round(d.expected_value, 2) if d.expected_value else 0.0,
-                                "regime": d.regime.primary_regime.value if d.regime else "UNKNOWN",
-                                "strategy": d.strategy or "STRUCTURE",
-                                "adversarial_penalty": round(d.adversarial_penalty, 1) if d.adversarial_penalty else 0.0,
-                                "invalidation_levels": d.invalidation_levels or [],
-                                "risk_factors": d.risk_factors or [],
-                                "gate_passed": d.quality_gate.passed,
-                                "failing_reasons": d.quality_gate.failing_reasons,
-                                "checks": d.quality_gate.checks,
-                                "waiting_reasons": getattr(d, "waiting_reasons", []),
-                                "rejection_reasons": getattr(d, "rejection_reasons", [])
-                            })
-                        except Exception as e:
-                            logger.error(f"Parallel scan error for {sym}: {e}", exc_info=True)
-
-                    if radar_results:
-                        def _radar_sort_key(item):
-                            act = item.get("action", "")
-                            is_open = 0 if "CLOSED" in act else 1
-                            if "READY" in act:
-                                conv = 3
-                            elif "WAIT" in act:
-                                conv = 2
-                            elif "NO TRADE" in act or "INVALID" in act:
-                                conv = 1
-                            else:
-                                conv = 0
-                            prob = item.get("win_prob", 0) or item.get("score", 0) or 0
-                            ev = item.get("ev", 0) or 0
-                            return (is_open, conv, prob, ev)
-
-                        radar_results.sort(key=_radar_sort_key, reverse=True)
-                        self.state_manager.update_radar(radar_results)
-                except Exception as e:
-                    logger.error(f"Orchestration loop error: {e}", exc_info=True)
-
-                try:
-                    session = SessionEngine.get_current_session()
-                    sleep_interval = 3.0 if session.is_prime_session else 15.0
-                except Exception:
-                    sleep_interval = 5.0
-                time.sleep(sleep_interval)
+            try:
+                session = SessionEngine.get_current_session()
+                sleep_interval = 3.0 if session.is_prime_session else 15.0
+            except Exception:
+                sleep_interval = 5.0
+            time.sleep(sleep_interval)

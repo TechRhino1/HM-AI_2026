@@ -106,75 +106,91 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                         time.sleep(2.0)
                         continue
 
-                    # 2. Standalone Fallback: Sweep Multi-Asset Radar
+                    # 2. Standalone Fallback: Sweep Multi-Asset Radar across all 3 active styles
                     radar_results = []
                     account = cls.state_manager.account or acc
+                    active_styles = ["SWING", "DAY_TRADING", "SCALP"]
 
-                    trade_style = getattr(cls.state_manager, "trade_style", "SWING")
-                    for sym in symbols:
-                        try:
-                            mtf = cls.data_feed.fetch_multi_timeframe(sym, trade_style=trade_style)
-                            spec = resolve_symbol(sym)
-                            ctx = ce.build_context(sym, mtf, current_spread_pips=spec.typical_spread_pips, max_allowed_spread_pips=spec.max_spread_pips, trade_style=trade_style)
-                            cls.state_manager.update_market_context(sym, ctx)
-                            regime = rc.classify_regime(ctx)
-                            tentative_bias = "BUY" if ctx.structure.bias == "BULLISH" else ("SELL" if ctx.structure.bias == "BEARISH" else ("SELL" if getattr(ctx.momentum, "trend_score", 0.0) < 0 else "BUY"))
-                            reports, devil = ac.run_all_parallel(ctx, regime, tentative_bias)
-                            d = de.evaluate(ctx, regime, reports, devil, account_balance=account.equity, mtf_data=mtf)
-                            cls.state_manager.record_decision(sym, d)
+                    for t_style in active_styles:
+                        for sym in symbols:
+                            try:
+                                mtf = cls.data_feed.fetch_multi_timeframe(sym, trade_style=t_style)
+                                spec = resolve_symbol(sym)
+                                ctx = ce.build_context(sym, mtf, current_spread_pips=spec.typical_spread_pips, max_allowed_spread_pips=spec.max_spread_pips, trade_style=t_style)
+                                cls.state_manager.update_market_context(sym, ctx)
+                                regime = rc.classify_regime(ctx)
+                                tentative_bias = "BUY" if ctx.structure.bias == "BULLISH" else ("SELL" if ctx.structure.bias == "BEARISH" else ("SELL" if getattr(ctx.momentum, "trend_score", 0.0) < 0 else "BUY"))
+                                reports, devil = ac.run_all_parallel(ctx, regime, tentative_bias)
+                                d = de.evaluate(ctx, regime, reports, devil, account_balance=account.equity if account else 10000.0, mtf_data=mtf)
+                                
+                                active_state_style = getattr(cls.state_manager, "trade_style", "SWING")
+                                if t_style.upper() == active_state_style.upper() or (t_style == "DAY_TRADING" and active_state_style in ("DAY", "INTRADAY")):
+                                    cls.state_manager.record_decision(sym, d)
 
-                            mkt_status = SessionEngine.get_market_trading_status(sym)
-                            is_mkt_open = mkt_status.get("is_open", True)
+                                mkt_status = SessionEngine.get_market_trading_status(sym)
+                                is_mkt_open = mkt_status.get("is_open", True)
 
-                            win_p = d.probabilities.get(d.bias.lower(), d.model_confidence) if d.bias in ["BUY", "SELL"] else d.model_confidence
-                            if not is_mkt_open:
-                                status_label = "MARKET CLOSED"
-                            elif d.decision == "EXECUTE":
-                                status_label = f"{d.bias} READY"
-                            elif d.decision == "WAIT" and d.bias in ["BUY", "SELL"]:
-                                status_label = f"WAIT: {d.bias}"
-                            elif d.decision == "NO_TRADE":
-                                if not d.quality_gate.passed and any("Invalid" in r or "Devil" in r or "Adversarial" in r for r in d.quality_gate.failing_reasons):
-                                    status_label = f"INVALID: {d.bias}" if d.bias in ["BUY", "SELL"] else "TRADE INVALIDATED"
+                                win_p = d.probabilities.get(d.bias.lower(), d.model_confidence) if (d.probabilities and d.bias in ["BUY", "SELL"]) else d.model_confidence
+                                if not is_mkt_open:
+                                    status_label = "MARKET CLOSED"
+                                elif d.decision == "EXECUTE":
+                                    status_label = f"{d.bias} READY"
+                                elif d.decision == "WAIT" and d.bias in ["BUY", "SELL"]:
+                                    status_label = f"WAIT: {d.bias}"
+                                elif d.decision == "NO_TRADE":
+                                    if d.quality_gate and not d.quality_gate.passed and any("Invalid" in r or "Devil" in r or "Adversarial" in r for r in d.quality_gate.failing_reasons):
+                                        status_label = f"INVALID: {d.bias}" if d.bias in ["BUY", "SELL"] else "TRADE INVALIDATED"
+                                    elif d.bias in ["BUY", "SELL"]:
+                                        status_label = f"NO TRADE: {d.bias}"
+                                    else:
+                                        status_label = "NO SETUP"
                                 elif d.bias in ["BUY", "SELL"]:
-                                    status_label = f"NO TRADE: {d.bias}"
+                                    status_label = f"WAIT: {d.bias}"
                                 else:
                                     status_label = "NO SETUP"
-                            elif d.bias in ["BUY", "SELL"]:
-                                status_label = f"WAIT: {d.bias}"
-                            else:
-                                status_label = "NO SETUP"
 
-                            radar_results.append({
-                                "symbol": sym,
-                                "trade_style": trade_style,
-                                "timeframe": "D1/H4/H1" if trade_style == "SWING" else ("H1/M15/M5" if trade_style in ("DAY_TRADING", "INTRADAY", "DAY") else "H1/M5/M1"),
-                                "bias": d.bias,
-                                "action": status_label,
-                                "status_label": status_label,
-                                "decision": d.decision,
-                                "score": round(win_p * 100.0, 0),
-                                "win_prob": round(win_p * 100.0, 0),
-                                "entry_price": d.entry_price,
-                                "stop_loss": d.stop_loss,
-                                "take_profit": d.take_profit,
-                                "risk_reward_ratio": round(d.risk_reward_ratio, 2) if d.risk_reward_ratio else 2.50,
-                                "ev": round(d.expected_value, 2) if d.expected_value else 0.0,
-                                "regime": d.regime.primary_regime.value if d.regime else "UNKNOWN",
-                                "strategy": d.strategy or "STRUCTURE",
-                                "adversarial_penalty": round(d.adversarial_penalty, 1) if d.adversarial_penalty else 0.0,
-                                "invalidation_levels": d.invalidation_levels or [],
-                                "risk_factors": d.risk_factors or [],
-                                "gate_passed": d.quality_gate.passed,
-                                "failing_reasons": d.quality_gate.failing_reasons,
-                                "checks": d.quality_gate.checks,
-                                "mtf_alignment": ctx.mtf_alignment,
-                                "mtf_confluence": ctx.mtf_confluence_score,
-                                "waiting_reasons": getattr(d, "waiting_reasons", []),
-                                "rejection_reasons": getattr(d, "rejection_reasons", [])
-                            })
-                        except Exception as e_sym:
-                            logger.error(f"Radar sweep error for {sym}: {e_sym}", exc_info=True)
+                                tf_str = "D1/H4/H1" if t_style == "SWING" else ("H1/M15/M5" if t_style in ("DAY_TRADING", "INTRADAY", "DAY") else "M15/M5/M1")
+
+                                curr_price = d.entry_price
+                                if ctx and hasattr(ctx, "current_price") and ctx.current_price is not None:
+                                    try:
+                                        curr_price = round(float(ctx.current_price), getattr(spec, "digits", 2 if "XAU" in sym or "BTC" in sym else 5))
+                                    except Exception:
+                                        curr_price = d.entry_price
+
+                                radar_results.append({
+                                    "symbol": sym,
+                                    "trade_style": t_style,
+                                    "timeframe": tf_str,
+                                    "current_price": curr_price,
+                                    "entry_price": d.entry_price,
+                                    "stop_loss": d.stop_loss,
+                                    "take_profit": d.take_profit,
+                                    "risk_reward_ratio": round(d.risk_reward_ratio, 2) if d.risk_reward_ratio else 2.50,
+                                    "ev": round(d.expected_value, 2) if d.expected_value else 0.0,
+                                    "bias": d.bias,
+                                    "action": status_label,
+                                    "status_label": status_label,
+                                    "decision": d.decision,
+                                    "score": round(win_p * 100.0, 0),
+                                    "win_prob": round(win_p * 100.0, 0),
+                                    "confluence_score": getattr(d, "master_confluence_score", 0.0),
+                                    "confluence_tier": getattr(d, "master_confluence_tier", "MODERATE"),
+                                    "regime": d.regime.primary_regime.value if (d.regime and hasattr(d.regime, "primary_regime")) else "UNKNOWN",
+                                    "strategy": d.strategy or "STRUCTURE",
+                                    "gate_passed": d.quality_gate.passed if d.quality_gate else False,
+                                    "failing_reasons": d.quality_gate.failing_reasons if d.quality_gate else [],
+                                    "checks": d.quality_gate.checks if d.quality_gate else {},
+                                    "waiting_reasons": getattr(d, "waiting_reasons", []),
+                                    "rejection_reasons": getattr(d, "rejection_reasons", []),
+                                    "risk_factors": d.risk_factors or [],
+                                    "adversarial_penalty": round(d.adversarial_penalty, 1) if d.adversarial_penalty else 0.0,
+                                    "invalidation_levels": d.invalidation_levels or [],
+                                    "mtf_alignment": getattr(ctx, "mtf_alignment", {}),
+                                    "mtf_confluence": getattr(ctx, "mtf_confluence_score", 0.0),
+                                })
+                            except Exception as e_sym:
+                                logger.error(f"Radar sweep error for {sym} ({t_style}): {e_sym}", exc_info=True)
 
                     if radar_results:
                         def _radar_sort_key(item):
@@ -289,10 +305,37 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                     df = self.data_feed.fetch_rates(sym, timeframe=tf, num_bars=bars, include_current_bar=True)
                     self._send_json({"symbol": sym, "timeframe": tf, "rates": df.to_dict(orient="records")})
             elif path == "/api/radar":
-                style_filter = query.get("trade_style", [None])[0]
-                opps = self.state_manager.radar_opportunities
-                if style_filter and style_filter.upper() != "ALL":
-                    opps = [o for o in opps if str(o.get("trade_style", "")).upper() == style_filter.upper()]
+                style_filter = query.get("trade_style", query.get("style", [None]))[0]
+                opps = list(self.state_manager.radar_opportunities)
+
+                def _radar_sort_key(item):
+                    act = str(item.get("action", "") or item.get("status_label", ""))
+                    is_open = 0 if "CLOSED" in act else 1
+                    if "READY" in act:
+                        conv = 3
+                    elif "WAIT" in act:
+                        conv = 2
+                    elif "NO TRADE" in act or "INVALID" in act:
+                        conv = 1
+                    else:
+                        conv = 0
+                    prob = item.get("win_prob", 0) or item.get("score", 0) or 0
+                    ev = item.get("ev", 0) or 0
+                    return (is_open, conv, prob, ev)
+
+                if style_filter and style_filter.strip().upper() not in ("ALL", "", "NONE"):
+                    s_norm = style_filter.strip().upper()
+                    if s_norm in ("DAY", "DAY_TRADING", "INTRADAY"):
+                        target_styles = {"DAY_TRADING", "DAY", "INTRADAY"}
+                    elif s_norm in ("SCALP", "SCALPING"):
+                        target_styles = {"SCALP", "SCALPING"}
+                    elif s_norm == "SWING":
+                        target_styles = {"SWING"}
+                    else:
+                        target_styles = {s_norm}
+                    opps = [o for o in opps if str(o.get("trade_style", "")).upper() in target_styles]
+
+                opps.sort(key=_radar_sort_key, reverse=True)
                 self._send_json({"opportunities": opps})
             elif path == "/api/history":
                 try:
