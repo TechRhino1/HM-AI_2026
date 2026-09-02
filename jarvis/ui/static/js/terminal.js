@@ -2373,13 +2373,18 @@
     // QUICK WATCHLIST RIBBON CONTROLLER
     // =========================================================================
     function renderWatchlistDOM() {
-        const symbols = ["XAUUSD", "BTCUSD", "EURUSD", "GBPUSD", "USDJPY"];
+        const symbols = ["XAUUSD", "BTCUSD", "ETHUSD", "SOLUSD", "EURUSD", "GBPUSD", "USDJPY", "US500", "NAS100", "WTI"];
         const baselineDefaults = {
-            "XAUUSD": { price: 4515.00, change: "+0.45%" },
-            "BTCUSD": { price: 96420.00, change: "+1.82%" },
-            "EURUSD": { price: 1.0845, change: "-0.12%" },
-            "GBPUSD": { price: 1.2980, change: "+0.08%" },
-            "USDJPY": { price: 154.20, change: "-0.34%" }
+            "XAUUSD": { price: 4380.00, change: "+0.45%" },
+            "BTCUSD": { price: 77000.00, change: "+1.82%" },
+            "ETHUSD": { price: 3400.00, change: "+1.25%" },
+            "SOLUSD": { price: 185.00, change: "+2.40%" },
+            "EURUSD": { price: 1.1580, change: "-0.12%" },
+            "GBPUSD": { price: 1.3480, change: "+0.08%" },
+            "USDJPY": { price: 158.50, change: "-0.34%" },
+            "US500": { price: 5850.00, change: "+0.35%" },
+            "NAS100": { price: 20500.00, change: "+0.55%" },
+            "WTI": { price: 76.50, change: "+0.90%" }
         };
 
         symbols.forEach(sym => {

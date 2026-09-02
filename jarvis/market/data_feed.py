@@ -125,14 +125,61 @@ class DataFeedEngine:
         seed = zlib.crc32(f"{symbol.upper()}_{timeframe}".encode("utf-8"))
         np.random.seed(seed)
         
-        base_price = 2400.0 if any(k in symbol.upper() for k in ["XAU", "GOLD"]) else (
-            1.0850 if "EUR" in symbol.upper() else (
-                1.2700 if "GBP" in symbol.upper() else (
-                    155.0 if "JPY" in symbol.upper() else 65000.0
-                )
-            )
-        )
-        vol = 0.0012 if "EUR" in symbol.upper() else (0.0025 if "XAU" in symbol.upper() else 0.005)
+        u_sym = symbol.upper()
+        if any(k in u_sym for k in ["XAU", "GOLD"]):
+            base_price = 4380.0
+            vol = 0.0025
+        elif "BTC" in u_sym:
+            base_price = 77000.0
+            vol = 0.0050
+        elif "ETH" in u_sym:
+            base_price = 3400.0
+            vol = 0.0055
+        elif "SOL" in u_sym:
+            base_price = 185.0
+            vol = 0.0065
+        elif any(k in u_sym for k in ["US500", "SPX"]):
+            base_price = 5850.0
+            vol = 0.0018
+        elif any(k in u_sym for k in ["NAS100", "USTEC", "NDX"]):
+            base_price = 20500.0
+            vol = 0.0022
+        elif any(k in u_sym for k in ["US30", "DJ"]):
+            base_price = 42500.0
+            vol = 0.0016
+        elif any(k in u_sym for k in ["WTI", "OIL", "CRUDE"]):
+            base_price = 76.50
+            vol = 0.0035
+        elif "EURUSD" in u_sym:
+            base_price = 1.1580
+            vol = 0.0012
+        elif "GBPUSD" in u_sym:
+            base_price = 1.3480
+            vol = 0.0014
+        elif "USDJPY" in u_sym:
+            base_price = 158.50
+            vol = 0.0015
+        elif "EURJPY" in u_sym:
+            base_price = 172.00
+            vol = 0.0015
+        elif "GBPJPY" in u_sym:
+            base_price = 205.00
+            vol = 0.0016
+        elif "AUDUSD" in u_sym:
+            base_price = 0.6650
+            vol = 0.0013
+        elif "NZDUSD" in u_sym:
+            base_price = 0.6050
+            vol = 0.0013
+        elif "USDCHF" in u_sym:
+            base_price = 0.8850
+            vol = 0.0012
+        elif "USDCAD" in u_sym:
+            base_price = 1.3750
+            vol = 0.0012
+        else:
+            base_price = 100.0
+            vol = 0.0020
 
         # Generate regime cycles: Bullish expansion -> Consolidation -> Pullback -> Breakout
         returns = []

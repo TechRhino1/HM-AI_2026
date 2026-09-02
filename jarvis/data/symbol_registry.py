@@ -84,6 +84,48 @@ _REGISTRY: Dict[str, SymbolSpec] = {
         typical_spread_pips=3.0, max_spread_pips=8.0,
         typical_atr_pct=1.5, margin_pct=0.2, digits=2
     ),
+    "ETHUSD": SymbolSpec(
+        canonical="ETHUSD", asset_class="CRYPTO",
+        contract_size=1.0, pip_size=0.01, pip_value_per_lot=0.01,
+        typical_spread_pips=120.0, max_spread_pips=300.0,
+        typical_atr_pct=3.0, margin_pct=0.5, digits=2, is_crypto=True
+    ),
+    "SOLUSD": SymbolSpec(
+        canonical="SOLUSD", asset_class="CRYPTO",
+        contract_size=1.0, pip_size=0.01, pip_value_per_lot=0.01,
+        typical_spread_pips=15.0, max_spread_pips=50.0,
+        typical_atr_pct=4.0, margin_pct=0.5, digits=2, is_crypto=True
+    ),
+    "US500": SymbolSpec(
+        canonical="US500", asset_class="INDEX",
+        contract_size=1.0, pip_size=0.1, pip_value_per_lot=1.0,
+        typical_spread_pips=0.6, max_spread_pips=2.5,
+        typical_atr_pct=0.8, margin_pct=0.2, digits=1
+    ),
+    "USDCHF": SymbolSpec(
+        canonical="USDCHF", asset_class="FOREX",
+        contract_size=100_000.0, pip_size=0.0001, pip_value_per_lot=10.0,
+        typical_spread_pips=1.4, max_spread_pips=3.5,
+        typical_atr_pct=0.4, margin_pct=0.1, digits=5
+    ),
+    "NZDUSD": SymbolSpec(
+        canonical="NZDUSD", asset_class="FOREX",
+        contract_size=100_000.0, pip_size=0.0001, pip_value_per_lot=10.0,
+        typical_spread_pips=1.5, max_spread_pips=3.5,
+        typical_atr_pct=0.5, margin_pct=0.1, digits=5
+    ),
+    "EURJPY": SymbolSpec(
+        canonical="EURJPY", asset_class="FOREX",
+        contract_size=100_000.0, pip_size=0.01, pip_value_per_lot=6.80,
+        typical_spread_pips=1.2, max_spread_pips=3.5,
+        typical_atr_pct=0.5, margin_pct=0.1, digits=3, is_jpy_quote=True
+    ),
+    "GBPJPY": SymbolSpec(
+        canonical="GBPJPY", asset_class="FOREX",
+        contract_size=100_000.0, pip_size=0.01, pip_value_per_lot=6.80,
+        typical_spread_pips=1.5, max_spread_pips=4.0,
+        typical_atr_pct=0.6, margin_pct=0.1, digits=3, is_jpy_quote=True
+    ),
 }
 
 # ─── Broker Alias Resolution ─────────────────────────────────────────────────
@@ -94,10 +136,17 @@ _ALIAS_MAP: Dict[str, str] = {
     "USDJPY#": "USDJPY", "USDJPY.I#": "USDJPY", "USDJPY.I": "USDJPY",
     "AUDUSD#": "AUDUSD", "AUDUSD.I#": "AUDUSD", "AUDUSD.I": "AUDUSD",
     "USDCAD#": "USDCAD", "USDCAD.I#": "USDCAD", "USDCAD.I": "USDCAD",
-    "BTCUSD#": "BTCUSD", "BTCUSD.I#": "BTCUSD", "BTCUSD.I": "BTCUSD",
+    "BTCUSD#": "BTCUSD", "BTCUSD.I#": "BTCUSD", "BTCUSD.I": "BTCUSD", "BITCOIN": "BTCUSD",
+    "ETHUSD#": "ETHUSD", "ETHUSD.I#": "ETHUSD", "ETHEREUM": "ETHUSD", "ETH": "ETHUSD",
+    "SOLUSD#": "SOLUSD", "SOLUSD.I#": "SOLUSD", "SOLANA": "SOLUSD", "SOL": "SOLUSD",
+    "US500#": "US500", "SPX500": "US500", "SP500": "US500", "US500.I#": "US500",
     "US30#": "US30", "DJ30": "US30", "WALLSTREET": "US30",
-    "NAS100#": "NAS100", "USTECH": "NAS100", "NDX100": "NAS100",
-    "USOIL": "WTI", "OIL": "WTI", "CRUDE": "WTI",
+    "NAS100#": "NAS100", "USTECH": "NAS100", "NDX100": "NAS100", "US100": "NAS100",
+    "USOIL": "WTI", "OIL": "WTI", "CRUDE": "WTI", "USOIL.I#": "WTI", "OIL.I#": "WTI", "CL": "WTI",
+    "USDCHF#": "USDCHF", "USDCHF.I#": "USDCHF",
+    "NZDUSD#": "NZDUSD", "NZDUSD.I#": "NZDUSD",
+    "EURJPY#": "EURJPY", "EURJPY.I#": "EURJPY",
+    "GBPJPY#": "GBPJPY", "GBPJPY.I#": "GBPJPY",
 }
 
 

@@ -45,7 +45,11 @@ class JarvisOrchestrator:
         trade_style: str = "ALL"
     ):
 
-        self.symbols = symbols or ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD"]
+        self.symbols = symbols or [
+            "XAUUSD", "BTCUSD", "ETHUSD", "SOLUSD",
+            "EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCHF",
+            "US500", "NAS100", "US30", "WTI"
+        ]
         self.mode = mode.lower()
         self.trade_style = trade_style
 
