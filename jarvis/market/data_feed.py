@@ -9,6 +9,8 @@ import pandas as pd
 from typing import Dict, Optional, Any
 from jarvis.application.timeout_guard import TimeoutGuard
 
+import threading
+
 logger = logging.getLogger("JARVIS_DataFeed")
 
 try:
@@ -30,11 +32,13 @@ TF_MAP = {
 }
 
 class DataFeedEngine:
+    _mt5_fetch_lock = threading.Lock()
+
     def __init__(self, mt5_client: Any = None, timeout_sec: float = 3.0):
         self.mt5_client = mt5_client
         self.timeout_sec = timeout_sec
         self._cache: Dict[str, Dict[str, Any]] = {}
-        self._cache_ttl_sec = 2.0
+        self._cache_ttl_sec = 8.0
 
     def fetch_rates(self, symbol: str, timeframe: str = "H1", num_bars: int = 300, include_current_bar: bool = False) -> pd.DataFrame:
         cache_key = f"{symbol}_{timeframe}_{num_bars}_{include_current_bar}"
@@ -53,10 +57,11 @@ class DataFeedEngine:
             resolved_sym = self.mt5_client.resolve_symbol_name(symbol) if hasattr(self.mt5_client, "resolve_symbol_name") else symbol
             mt5_tf = TF_MAP.get(timeframe, 16385)
             start_pos = 0 if include_current_bar else 1
-            rates = mt5.copy_rates_from_pos(resolved_sym, mt5_tf, start_pos, num_bars)
-            if rates is None or len(rates) == 0:
-                # Fallback to pos 0 if start_pos returns empty
-                rates = mt5.copy_rates_from_pos(resolved_sym, mt5_tf, 0, num_bars)
+            with DataFeedEngine._mt5_fetch_lock:
+                rates = mt5.copy_rates_from_pos(resolved_sym, mt5_tf, start_pos, num_bars)
+                if rates is None or len(rates) == 0:
+                    # Fallback to pos 0 if start_pos returns empty
+                    rates = mt5.copy_rates_from_pos(resolved_sym, mt5_tf, 0, num_bars)
             if rates is None or len(rates) == 0:
                 logger.warning(f"MT5 returned 0 rates for {symbol} ({timeframe}). Falling back to synthetic rates.")
                 df = self._generate_realistic_rates(symbol, timeframe, num_bars)
