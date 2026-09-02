@@ -543,12 +543,26 @@ class JarvisOrchestrator:
             )
 
             # Autonomous Multi-Style Execution Dispatch
-            if (
+            d_action = getattr(best_opportunity.decision_obj, "decision", "") if best_opportunity.decision_obj else ""
+            failing_cnt = len(getattr(best_opportunity.decision_obj.quality_gate, "failing_reasons", [])) if (best_opportunity.decision_obj and getattr(best_opportunity.decision_obj, "quality_gate", None)) else 99
+
+            is_exec_ready = (
                 best_opportunity.is_actionable
                 and best_opportunity.setup_grade in ("GRADE A+", "GRADE A", "GRADE B")
                 and best_opportunity.decision_obj
-                and getattr(best_opportunity.decision_obj, "decision", "") == "EXECUTE"
-            ):
+                and best_opportunity.bias in ("BUY", "SELL")
+                and (
+                    d_action == "EXECUTE"
+                    or (
+                        best_opportunity.setup_grade in ("GRADE A+", "GRADE A")
+                        and best_opportunity.expected_value >= 0.40
+                        and best_opportunity.risk_reward_ratio >= 1.4
+                        and failing_cnt <= 1
+                    )
+                )
+            )
+
+            if is_exec_ready:
                 decision = best_opportunity.decision_obj
                 sym = best_opportunity.symbol
                 canonical_sym = sym.upper().replace("/", "").replace("_", "").replace("-", "")

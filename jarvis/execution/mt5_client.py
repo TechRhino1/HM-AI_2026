@@ -103,6 +103,24 @@ class MT5Client:
                 elif base_u in ["BTCUSD", "BTC"]:
                     if any(k in s_name_u for k in ["BTCUSD#", "BTCUSD", "BITCOIN"]):
                         candidates.append(s)
+                elif base_u in ["ETHUSD", "ETH"]:
+                    if any(k in s_name_u for k in ["ETHUSD#", "ETHUSD", "ETHEREUM"]):
+                        candidates.append(s)
+                elif base_u in ["SOLUSD", "SOL"]:
+                    if any(k in s_name_u for k in ["SOLUSD#", "SOLUSD", "SOLANA"]):
+                        candidates.append(s)
+                elif base_u in ["NAS100", "US100", "USTEC", "NDX"]:
+                    if any(k in s_name_u for k in ["US100CASH#", "US100#", "NAS100#", "USTECH#", "US100"]):
+                        candidates.append(s)
+                elif base_u in ["US500", "SPX500", "SP500"]:
+                    if any(k in s_name_u for k in ["US500CASH#", "US500#", "SPX500#"]):
+                        candidates.append(s)
+                elif base_u in ["US30", "DJ30", "DOW"]:
+                    if any(k in s_name_u for k in ["US30CASH#", "US30#", "DJ30#"]):
+                        candidates.append(s)
+                elif base_u in ["WTI", "USOIL", "OIL", "CRUDE"]:
+                    if any(k in s_name_u for k in ["OILCASH#", "BRENTCASH#", "USOIL#", "OIL#", "WTI#"]):
+                        candidates.append(s)
                 elif base_u in s_name_u:
                     candidates.append(s)
 
@@ -275,29 +293,51 @@ class MT5Client:
                 if not tick or not sym_info:
                     return {"status": "FAILED", "reason": f"Tick or symbol metadata unavailable for {resolved}"}
 
+                vol_min = getattr(sym_info, "volume_min", 0.01)
+                vol_max = getattr(sym_info, "volume_max", 100.0)
+                vol_step = getattr(sym_info, "volume_step", 0.01)
+
+                if vol_step > 0:
+                    steps = round((volume - vol_min) / vol_step)
+                    quantized_vol = vol_min + steps * vol_step
+                else:
+                    quantized_vol = volume
+
+                quantized_vol = max(vol_min, min(vol_max, quantized_vol))
+                vol_decimals = 2 if vol_step <= 0.01 else (1 if vol_step <= 0.1 else 0)
+                final_volume = round(quantized_vol, vol_decimals)
+
                 price = tick.ask if order_type == "BUY" else tick.bid
                 type_op = getattr(mt5, "ORDER_TYPE_BUY", 0) if order_type == "BUY" else getattr(mt5, "ORDER_TYPE_SELL", 1)
                 digits = sym_info.digits
                 point = sym_info.point or (10 ** -digits)
-                min_stop_dist = max(getattr(sym_info, "trade_stops_level", 0), getattr(sym_info, "freeze_level", 0), 5) * point
+                spread_dist = abs(tick.ask - tick.bid)
+                min_stop_dist = max(
+                    getattr(sym_info, "trade_stops_level", 0) * point,
+                    getattr(sym_info, "trade_freeze_level", 0) * point,
+                    spread_dist * 1.25,
+                    10 * point
+                )
 
                 final_sl = float(sl_price)
                 final_tp = float(tp_price)
                 if order_type == "BUY":
-                    if final_sl > 0 and (price - final_sl) < min_stop_dist:
-                        final_sl = price - min_stop_dist
-                    if final_tp > 0 and (final_tp - price) < min_stop_dist:
-                        final_tp = price + min_stop_dist
+                    # BUY: SL must be strictly below current Bid; TP strictly above current Ask
+                    if final_sl > 0 and final_sl >= (tick.bid - min_stop_dist):
+                        final_sl = tick.bid - min_stop_dist
+                    if final_tp > 0 and final_tp <= (tick.ask + min_stop_dist):
+                        final_tp = tick.ask + min_stop_dist
                 else:
-                    if final_sl > 0 and (final_sl - price) < min_stop_dist:
-                        final_sl = price + min_stop_dist
-                    if final_tp > 0 and (price - final_tp) < min_stop_dist:
-                        final_tp = price - min_stop_dist
+                    # SELL: SL must be strictly ABOVE current Ask; TP strictly BELOW current Bid
+                    if final_sl > 0 and final_sl <= (tick.ask + min_stop_dist):
+                        final_sl = tick.ask + min_stop_dist
+                    if final_tp > 0 and final_tp >= (tick.bid - min_stop_dist):
+                        final_tp = tick.bid - min_stop_dist
 
                 request = {
                     "action": getattr(mt5, "TRADE_ACTION_DEAL", 1),
                     "symbol": resolved,
-                    "volume": round(volume, 2),
+                    "volume": final_volume,
                     "type": type_op,
                     "price": round(price, digits),
                     "sl": round(final_sl, digits) if final_sl > 0 else 0.0,

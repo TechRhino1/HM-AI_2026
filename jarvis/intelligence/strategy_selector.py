@@ -68,8 +68,11 @@ class StrategySelector:
                 pass
 
         is_jpy = "JPY" in symbol_name
-        is_crypto = (asset_class == "CRYPTO") or ("BTC" in symbol_name)
-        is_commodity = (asset_class == "COMMODITY") or ("XAU" in symbol_name) or ("GOLD" in symbol_name)
+        is_crypto = (asset_class == "CRYPTO") or any(k in symbol_name for k in ["BTC", "ETH", "SOL"])
+        is_gold = any(k in symbol_name for k in ["XAU", "GOLD"])
+        is_oil = any(k in symbol_name for k in ["WTI", "OIL", "CRUDE"])
+        is_commodity = (asset_class == "COMMODITY") or is_gold or is_oil
+        is_index = (asset_class == "INDEX") or any(k in symbol_name for k in ["US500", "NAS100", "US30", "SPX", "NDX", "DJ"])
         is_gbp = "GBP" in symbol_name
         is_forex_major = (asset_class == "FOREX") and not is_jpy and not is_gbp
 
@@ -85,35 +88,54 @@ class StrategySelector:
         }
 
         # Asset-Class Prior Calibration
-        if is_jpy:
-            # USDJPY: Retain strong TREND_FOLLOWING (2.2) and TREND_PULLBACK (2.0)
-            prior_weights["TREND_FOLLOWING"] = 2.2
-            prior_weights["TREND_PULLBACK"] = 2.0
+        if is_index:
+            # Equity Indices: Strong Trend Continuation (2.5), Pullbacks (2.2), and Breakouts (1.8)
+            prior_weights["TREND_FOLLOWING"] = 2.5
+            prior_weights["TREND_PULLBACK"] = 2.2
+            prior_weights["BREAKOUT_EXPANSION"] = 1.8
+            prior_weights["CHOCH_STRUCTURAL_REVERSAL"] = 1.2
+            prior_weights["LIQUIDITY_SWEEP_REVERSAL"] = 1.2
+            prior_weights["RANGE_MEAN_REVERSION"] = 0.4
+        elif is_jpy:
+            # USDJPY: Persistent trend continuation (2.4) and pullbacks (2.2)
+            prior_weights["TREND_FOLLOWING"] = 2.4
+            prior_weights["TREND_PULLBACK"] = 2.2
             prior_weights["RANGE_MEAN_REVERSION"] = 1.1
             prior_weights["BREAKOUT_EXPANSION"] = 0.0
-        elif is_commodity or is_crypto or is_gbp:
-            # XAUUSD, BTCUSD, GBPUSD: Elevate LIQUIDITY_SWEEP_REVERSAL (2.8), CHOCH (2.5), and TREND_PULLBACK (2.0)
+            prior_weights["CHOCH_STRUCTURAL_REVERSAL"] = 1.0
+            prior_weights["LIQUIDITY_SWEEP_REVERSAL"] = 1.2
+        elif is_gold or is_crypto:
+            # Gold & Crypto: Liquidity sweeps (2.8) and CHOCH reversals (2.5) beat fakeouts
             prior_weights["LIQUIDITY_SWEEP_REVERSAL"] = 2.8
             prior_weights["CHOCH_STRUCTURAL_REVERSAL"] = 2.5
             prior_weights["TREND_PULLBACK"] = 2.2
-            if is_commodity:
-                prior_weights["TREND_FOLLOWING"] = 0.05
-                prior_weights["BREAKOUT_EXPANSION"] = 0.4
-                prior_weights["RANGE_MEAN_REVERSION"] = 0.5
-            elif is_crypto:
-                prior_weights["TREND_FOLLOWING"] = 0.05
-                prior_weights["BREAKOUT_EXPANSION"] = 0.4
-                prior_weights["RANGE_MEAN_REVERSION"] = 0.5
-            elif is_gbp:
-                prior_weights["TREND_FOLLOWING"] = 0.0
-                prior_weights["BREAKOUT_EXPANSION"] = 0.0
-                prior_weights["RANGE_MEAN_REVERSION"] = 1.6
+            prior_weights["TREND_FOLLOWING"] = 0.15
+            prior_weights["BREAKOUT_EXPANSION"] = 0.4
+            prior_weights["RANGE_MEAN_REVERSION"] = 0.5
+        elif is_oil:
+            # Crude Oil (WTI): Supply/Demand zone sweeps (2.4), pullbacks (2.2), range reversion (1.6)
+            prior_weights["LIQUIDITY_SWEEP_REVERSAL"] = 2.4
+            prior_weights["TREND_PULLBACK"] = 2.2
+            prior_weights["RANGE_MEAN_REVERSION"] = 1.6
+            prior_weights["TREND_FOLLOWING"] = 1.2
+            prior_weights["CHOCH_STRUCTURAL_REVERSAL"] = 1.5
+            prior_weights["BREAKOUT_EXPANSION"] = 0.8
+        elif is_gbp:
+            # Cable: London sweep reversals (2.5), range mean reversion (2.0), no naked breakouts
+            prior_weights["LIQUIDITY_SWEEP_REVERSAL"] = 2.5
+            prior_weights["CHOCH_STRUCTURAL_REVERSAL"] = 2.2
+            prior_weights["RANGE_MEAN_REVERSION"] = 2.0
+            prior_weights["TREND_PULLBACK"] = 1.8
+            prior_weights["TREND_FOLLOWING"] = 0.2
+            prior_weights["BREAKOUT_EXPANSION"] = 0.0
         elif is_forex_major:
-            prior_weights["RANGE_MEAN_REVERSION"] *= 1.6
-            prior_weights["TREND_PULLBACK"] *= 1.5
-            prior_weights["LIQUIDITY_SWEEP_REVERSAL"] *= 1.5
-            prior_weights["TREND_FOLLOWING"] *= 0.5
-            prior_weights["BREAKOUT_EXPANSION"] = 0.0  # Zero breakout on Forex majors
+            # EURUSD, AUDUSD, USDCHF: Pullback (2.0), Range Reversion (1.8), Sweep (1.6)
+            prior_weights["TREND_PULLBACK"] = 2.0
+            prior_weights["RANGE_MEAN_REVERSION"] = 1.8
+            prior_weights["LIQUIDITY_SWEEP_REVERSAL"] = 1.6
+            prior_weights["TREND_FOLLOWING"] = 1.0
+            prior_weights["CHOCH_STRUCTURAL_REVERSAL"] = 1.2
+            prior_weights["BREAKOUT_EXPANSION"] = 0.0
 
         # 2.3 Regime Bayesian Likelihood Updating
         reg_conf = getattr(regime, "confidence", 0.75)

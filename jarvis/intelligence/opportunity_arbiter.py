@@ -312,11 +312,11 @@ class UniversalOpportunityArbiter:
         # GRADE A if Utility >= 1.35, Win Prob >= 60%, Confluence >= 65, EV >= 0.50R
         # GRADE B if Utility >= 1.00
         # GRADE C otherwise
-        if utility_score >= 1.80 and win_prob_pct >= 70.0 and confluence_score >= 75.0 and expected_value >= 0.85:
+        if utility_score >= 1.80 and (win_prob_pct >= 62.0 or ml_prob >= 0.70) and confluence_score >= 28.0 and expected_value >= 0.80:
             setup_grade = "GRADE A+"
-        elif utility_score >= 1.35 and win_prob_pct >= 60.0 and confluence_score >= 65.0 and expected_value >= 0.50:
+        elif utility_score >= 1.30 and (win_prob_pct >= 55.0 or ml_prob >= 0.60) and confluence_score >= 22.0 and expected_value >= 0.40:
             setup_grade = "GRADE A"
-        elif utility_score >= 1.00:
+        elif utility_score >= 0.95 and expected_value > 0:
             setup_grade = "GRADE B"
         else:
             setup_grade = "GRADE C"
@@ -327,8 +327,15 @@ class UniversalOpportunityArbiter:
 
         is_actionable = bool(
             bias in ("BUY", "SELL") and
-            utility_score >= 1.0 and
-            (decision_val == "EXECUTE" or (setup_grade in ("GRADE A+", "GRADE A") and gate_passed and decision_val in ("EXECUTE", "WAIT")))
+            utility_score >= 0.95 and
+            expected_value > 0 and
+            (
+                decision_val == "EXECUTE"
+                or (
+                    setup_grade in ("GRADE A+", "GRADE A", "GRADE B")
+                    and (gate_passed or (decision_val == "WAIT" and len(getattr(decision_obj.quality_gate, "failing_reasons", [])) <= 1))
+                )
+            )
         )
 
         risk_factors = getattr(decision_obj, "risk_factors", []) or []

@@ -271,13 +271,28 @@ class DecisionEngine:
         if is_micro_mode and current_drawdown_pct > 5.0:
             required_win_p = max(required_win_p, 0.52)
 
-        # 3. Dynamic AI Minimum Score: 70.0 + 5.0 * 1_{TRANSITION} + 6.0 * max(0, Spread/TypSpread - 1) - 4.0 * 1_{Confluence >= 4}
+        # 3. Dynamic AI Minimum Score (Calibrated per Execution Horizon)
         is_transition_reg = (regime.primary_regime in (MarketRegime.TRANSITION, MarketRegime.REVERSAL)) or getattr(regime, "regime_transition", False)
         spread_excess = max(0.0, spread_ratio - 1.0)
         confluence_adj = 4.0 if confluence_count >= 4 else 0.0
-        base_score = 68.0 if is_micro_mode else (78.0 if is_fx else 76.0)
+        t_style_check = (getattr(context, "trade_style", None) or getattr(context, "style", "SWING") or "SWING").upper()
+
+        if "SCALP" in t_style_check or is_micro_mode:
+            base_score = 62.0
+            floor_score_opt = 60.0
+        elif any(x in t_style_check for x in ("DAY", "INTRADAY")):
+            base_score = 65.0
+            floor_score_opt = 62.0
+        else:
+            base_score = 68.0
+            floor_score_opt = 65.0
+
+        if ev >= 1.5 and rr_ratio >= 2.0:
+            base_score = max(58.0, base_score - 4.0)
+            floor_score_opt = max(58.0, floor_score_opt - 4.0)
+
         dynamic_score = base_score + (5.0 if is_transition_reg else 0.0) + (6.0 * spread_excess) - confluence_adj
-        min_score = max(65.0, min(85.0, dynamic_score))
+        min_score = max(floor_score_opt, min(80.0, dynamic_score))
 
         # Risk-Reward minimum & SL multiplier (adapted to trade horizon)
         t_style_check = (getattr(context, "trade_style", None) or getattr(context, "style", "SWING") or "SWING").upper()
@@ -324,17 +339,15 @@ class DecisionEngine:
         else:
             floor_win_p_opt = 0.58
 
-        floor_score_opt = 65.0 if is_micro_mode else 76.0
-
         try:
             regime_str = regime.primary_regime.value if regime and hasattr(regime, "primary_regime") else "GLOBAL"
             adj = self.realtime_optimizer.get_adjustments(context.symbol, regime_str)
             required_win_p = max(floor_win_p_opt, min(0.65, required_win_p + float(adj.get("win_p_delta", 0))))
-            min_score = max(floor_score_opt, min(85.0, min_score + float(adj.get("score_delta", 0))))
-            min_rr = max(1.5, min(2.0, min_rr + float(adj.get("rr_delta", 0))))
+            min_score = max(floor_score_opt, min(80.0, min_score + float(adj.get("score_delta", 0))))
+            min_rr = max(1.3, min(2.0, min_rr + float(adj.get("rr_delta", 0))))
         except Exception:
             required_win_p = max(floor_win_p_opt, min(0.65, required_win_p))
-            min_score = max(floor_score_opt, min(85.0, min_score))
+            min_score = max(floor_score_opt, min(80.0, min_score))
 
         # 4. Macro MTF Confluence Guard
         mtf_align = getattr(context, "mtf_alignment", {})
@@ -389,12 +402,24 @@ class DecisionEngine:
         is_of_trap = (tentative_bias == "BUY" and of_trap == "BUYER_ABSORPTION_TRAP") or (tentative_bias == "SELL" and of_trap == "SELLER_ABSORPTION_TRAP")
         kz_active = SessionEngine.is_forex_killzone_active(getattr(context, "timestamp", None))
         
-        if is_crypto or is_gold:
+        is_index_asset = getattr(spec, "asset_class", "") == "INDEX" or any(k in context.symbol.upper() for k in ["US500", "NAS100", "US30", "SPX", "NDX", "DJ"])
+        is_oil_asset = any(k in context.symbol.upper() for k in ["WTI", "OIL", "CRUDE"])
+
+        if is_crypto or is_gold or is_index_asset or is_oil_asset:
             is_prime_session_valid = True
         elif is_jpy:
-            is_prime_session_valid = kz_active or (context.session.is_prime_session if hasattr(context, "session") and context.session else False) or (spread <= spec.typical_spread_pips * 1.5)
+            is_prime_session_valid = kz_active or (context.session.is_prime_session if hasattr(context, "session") and context.session else False) or (spread <= spec.typical_spread_pips * 1.5) or is_micro_mode or "SCALP" in t_style_check
         else:
-            is_prime_session_valid = kz_active or (context.session.is_prime_session if hasattr(context, "session") and context.session else False) or (regime.primary_regime in (MarketRegime.RANGE, MarketRegime.LOW_VOLATILITY, MarketRegime.CONSOLIDATION) and spread <= spec.typical_spread_pips * 1.5) or (ai_score >= 80.0 and calibrated_win_p >= 0.56)
+            is_prime_session_valid = (
+                kz_active
+                or (context.session.is_prime_session if hasattr(context, "session") and context.session else False)
+                or (spread <= spec.typical_spread_pips * 1.5)
+                or (regime.primary_regime in (MarketRegime.RANGE, MarketRegime.LOW_VOLATILITY, MarketRegime.CONSOLIDATION))
+                or is_micro_mode
+                or "SCALP" in t_style_check
+                or (calibrated_win_p >= 0.52 and ev > 0)
+                or ai_score >= 68.0
+            )
 
         # 6. Gold (XAUUSD) Trend Following Gate: Require sweep confirmation or pullback to discount/premium
         gold_trend_following_valid = True
@@ -623,16 +648,16 @@ class DecisionEngine:
         is_micro_mode = is_micro_account(account_balance)
         t_style = (getattr(context, "trade_style", None) or getattr(context, "style", "SWING") or "SWING").upper()
         if "SCALP" in t_style:
-            _min_confluence = 40
+            _min_confluence = 20
         elif any(x in t_style for x in ("DAY", "INTRADAY")):
-            _min_confluence = 50
+            _min_confluence = 24
         elif _is_forex(context.symbol):
-            _min_confluence = 70
+            _min_confluence = 30
         else:
-            _min_confluence = 60
+            _min_confluence = 26
 
-        if (rr_ratio >= 2.5 and ev > 0) or is_micro_mode:
-            _min_confluence = max(35, _min_confluence - 5)
+        if (rr_ratio >= 2.0 and ev > 0) or is_micro_mode:
+            _min_confluence = max(18, _min_confluence - 4)
 
         master_confluence_valid = _master_score >= _min_confluence
         
@@ -829,7 +854,7 @@ class DecisionEngine:
         elif decision_action == "WAIT":
             for reason in failing_reasons:
                 if "Calibrated Win Prob" in reason:
-                    waiting_reasons.append(f"Calibrated probability ({calibrated_win_p*100:.0f}%) below institutional threshold (55%).")
+                    waiting_reasons.append(f"Calibrated probability ({calibrated_win_p*100:.1f}%) below required threshold (>= 55%).")
                 elif "Order Flow" in reason:
                     waiting_reasons.append("Awaiting institutional volume / order flow momentum confirmation.")
                 elif "Premium/Discount" in reason:
