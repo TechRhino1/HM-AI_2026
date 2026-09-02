@@ -70,38 +70,50 @@ class StrategySelector:
         is_jpy = "JPY" in symbol_name
         is_crypto = (asset_class == "CRYPTO") or ("BTC" in symbol_name)
         is_commodity = (asset_class == "COMMODITY") or ("XAU" in symbol_name) or ("GOLD" in symbol_name)
-        is_forex_major = (asset_class == "FOREX") and not is_jpy
+        is_gbp = "GBP" in symbol_name
+        is_forex_major = (asset_class == "FOREX") and not is_jpy and not is_gbp
 
         # 2.2 Bayesian Prior Probability Distribution
         prior_weights = {
             "MICRO_ACCOUNT_ADAPTIVE": 0.0,
             "TREND_FOLLOWING": 1.0,
             "TREND_PULLBACK": 1.0,
-            "BREAKOUT_EXPANSION": 0.0 if is_forex_major else 1.0,
+            "BREAKOUT_EXPANSION": 0.0 if (is_forex_major or is_gbp) else 1.0,
             "LIQUIDITY_SWEEP_REVERSAL": 1.0,
             "RANGE_MEAN_REVERSION": 1.0,
             "CHOCH_STRUCTURAL_REVERSAL": 1.0
         }
 
         # Asset-Class Prior Calibration
-        if is_commodity:
-            prior_weights["TREND_FOLLOWING"] *= 1.4
-            prior_weights["TREND_PULLBACK"] *= 1.4
-            prior_weights["BREAKOUT_EXPANSION"] *= 1.2
-            prior_weights["RANGE_MEAN_REVERSION"] *= 0.5
+        if is_jpy:
+            # USDJPY: Retain strong TREND_FOLLOWING (2.2) and TREND_PULLBACK (2.0)
+            prior_weights["TREND_FOLLOWING"] = 2.2
+            prior_weights["TREND_PULLBACK"] = 2.0
+            prior_weights["RANGE_MEAN_REVERSION"] = 1.1
+            prior_weights["BREAKOUT_EXPANSION"] = 0.0
+        elif is_commodity or is_crypto or is_gbp:
+            # XAUUSD, BTCUSD, GBPUSD: Elevate LIQUIDITY_SWEEP_REVERSAL (2.8), CHOCH (2.5), and TREND_PULLBACK (2.0)
+            prior_weights["LIQUIDITY_SWEEP_REVERSAL"] = 2.8
+            prior_weights["CHOCH_STRUCTURAL_REVERSAL"] = 2.5
+            prior_weights["TREND_PULLBACK"] = 2.2
+            if is_commodity:
+                prior_weights["TREND_FOLLOWING"] = 0.05
+                prior_weights["BREAKOUT_EXPANSION"] = 0.4
+                prior_weights["RANGE_MEAN_REVERSION"] = 0.5
+            elif is_crypto:
+                prior_weights["TREND_FOLLOWING"] = 0.05
+                prior_weights["BREAKOUT_EXPANSION"] = 0.4
+                prior_weights["RANGE_MEAN_REVERSION"] = 0.5
+            elif is_gbp:
+                prior_weights["TREND_FOLLOWING"] = 0.0
+                prior_weights["BREAKOUT_EXPANSION"] = 0.0
+                prior_weights["RANGE_MEAN_REVERSION"] = 1.6
         elif is_forex_major:
             prior_weights["RANGE_MEAN_REVERSION"] *= 1.6
-            prior_weights["TREND_PULLBACK"] *= 1.3
-            prior_weights["LIQUIDITY_SWEEP_REVERSAL"] *= 1.3
+            prior_weights["TREND_PULLBACK"] *= 1.5
+            prior_weights["LIQUIDITY_SWEEP_REVERSAL"] *= 1.5
+            prior_weights["TREND_FOLLOWING"] *= 0.5
             prior_weights["BREAKOUT_EXPANSION"] = 0.0  # Zero breakout on Forex majors
-        elif is_jpy:
-            prior_weights["TREND_FOLLOWING"] *= 1.3
-            prior_weights["TREND_PULLBACK"] *= 1.4
-            prior_weights["RANGE_MEAN_REVERSION"] *= 1.1
-        elif is_crypto:
-            prior_weights["BREAKOUT_EXPANSION"] *= 1.5
-            prior_weights["TREND_FOLLOWING"] *= 1.3
-            prior_weights["CHOCH_STRUCTURAL_REVERSAL"] *= 1.3
 
         # 2.3 Regime Bayesian Likelihood Updating
         reg_conf = getattr(regime, "confidence", 0.75)
@@ -207,9 +219,34 @@ class StrategySelector:
             if not (adx_val >= 28.0 and bos_val):
                 prior_weights["BREAKOUT_EXPANSION"] = 0.0
 
-        # Eliminate BREAKOUT_EXPANSION on Forex majors
-        if is_forex_major:
+        # Eliminate BREAKOUT_EXPANSION on Forex majors and GBP
+        if is_forex_major or is_gbp:
             prior_weights["BREAKOUT_EXPANSION"] = 0.0
+
+        # Master-Trader: For XAUUSD, BTCUSD, GBPUSD - zero out naked TREND_FOLLOWING
+        # unless liquidity sweep detected or (BOS confirmed with strong trend_score >= 30.0)
+        if is_commodity or is_crypto or is_gbp:
+            sweep_detected = False
+            bos_and_trend = False
+            if context:
+                sweep_detected = bool(getattr(context.liquidity, "sweep_detected", False)) if hasattr(context, "liquidity") else False
+                bos = bool(getattr(context.structure, "bos", False)) if hasattr(context, "structure") else False
+                trend_score = abs(float(getattr(context.momentum, "trend_score", 0.0))) if hasattr(context, "momentum") else 0.0
+                bos_and_trend = bos and (trend_score >= 30.0)
+
+            if not (sweep_detected or bos_and_trend):
+                prior_weights["TREND_FOLLOWING"] = 0.0
+
+        # Master-Trader Strategy Weighting Calibration:
+        # For XAUUSD, BTCUSD, GBPUSD: Elevate LIQUIDITY_SWEEP_REVERSAL (2.8), CHOCH (2.5), and TREND_PULLBACK (2.0)
+        # For USDJPY: Retain strong TREND_FOLLOWING (2.2) and TREND_PULLBACK (2.0)
+        if is_jpy:
+            prior_weights["TREND_FOLLOWING"] = max(prior_weights.get("TREND_FOLLOWING", 0.0), 2.2)
+            prior_weights["TREND_PULLBACK"] = max(prior_weights.get("TREND_PULLBACK", 0.0), 2.0)
+        elif is_commodity or is_crypto or is_gbp:
+            prior_weights["LIQUIDITY_SWEEP_REVERSAL"] = max(prior_weights.get("LIQUIDITY_SWEEP_REVERSAL", 0.0), 2.8)
+            prior_weights["CHOCH_STRUCTURAL_REVERSAL"] = max(prior_weights.get("CHOCH_STRUCTURAL_REVERSAL", 0.0), 2.5)
+            prior_weights["TREND_PULLBACK"] = min(prior_weights.get("TREND_PULLBACK", 0.0), 2.0)
 
         # Hard blacklisting by regime
         if r in [MarketRegime.RANGE, MarketRegime.LOW_VOLATILITY]:

@@ -89,6 +89,13 @@ class DynamicRiskAndLevelsEngine:
         buffer_mult = self.alpha_base + (self.beta_vol * atr_ratio) + (self.gamma_spread * spread_ratio)
         dynamic_buffer = atr * buffer_mult
 
+        # Anti-Wick Shield: Asset-specific buffer to absorb stop-hunts and wick probes
+        is_gold = ("XAU" in sym_name) or ("GOLD" in sym_name) or (getattr(spec, "asset_class", "").upper() == "COMMODITY")
+        is_crypto = getattr(spec, "is_crypto", False) or (getattr(spec, "asset_class", "").upper() == "CRYPTO") or ("BTC" in sym_name)
+        anti_wick_mult = 0.35 if is_gold else (0.45 if is_crypto else 0.18)
+        anti_wick_buffer = atr * anti_wick_mult
+        effective_buffer = max(dynamic_buffer, anti_wick_buffer)
+
         # Regime & State Flags
         is_strong_trend = (
             regime.primary_regime in (MarketRegime.TREND_BULL, MarketRegime.TREND_BEAR)
@@ -130,11 +137,12 @@ class DynamicRiskAndLevelsEngine:
                     candidate_anchors.append(float(kl["price"]))
 
             if candidate_anchors:
-                # Outer structural boundary: anchor below entry with dynamic buffer
-                anchor = max(candidate_anchors)
-                struct_sl_dist = (entry_price - anchor) + dynamic_buffer
+                # Anti-Wick Shield: Outer structural support boundary min(candidate_anchors)
+                anchors_in_range = [a for a in candidate_anchors if (entry_price - a) <= 3.0 * atr]
+                anchor = min(anchors_in_range) if anchors_in_range else min(candidate_anchors)
+                struct_sl_dist = (entry_price - anchor) + effective_buffer
             else:
-                struct_sl_dist = atr * (0.85 if is_strong_trend else (1.0 if is_ranging else 0.95))
+                struct_sl_dist = atr * (0.85 if is_strong_trend else (1.0 if is_ranging else 0.95)) + effective_buffer
 
             if style == "SCALP":
                 sl_dist = min(0.65 * atr, max(0.20 * atr, struct_sl_dist * 0.5))
@@ -145,7 +153,8 @@ class DynamicRiskAndLevelsEngine:
                 min_target_rr = 1.8
                 asym_rr = 2.8
             else:  # SWING
-                sl_dist = min(2.50 * atr, max(0.75 * atr, struct_sl_dist))
+                max_swing_sl = 2.80 * atr if (is_gold or is_crypto) else 2.50 * atr
+                sl_dist = min(max_swing_sl, max(0.75 * atr, struct_sl_dist))
                 min_target_rr = 2.5
                 asym_rr = 4.2
 
@@ -224,11 +233,12 @@ class DynamicRiskAndLevelsEngine:
                     candidate_anchors.append(float(kl["price"]))
 
             if candidate_anchors:
-                # Outer structural boundary: anchor above entry with dynamic buffer and spread offset
-                anchor = min(candidate_anchors)
-                struct_sl_dist = (anchor - entry_price) + dynamic_buffer + spread_dist
+                # Anti-Wick Shield: Outer structural resistance boundary max(candidate_anchors)
+                anchors_in_range = [a for a in candidate_anchors if (a - entry_price) <= 3.0 * atr]
+                anchor = max(anchors_in_range) if anchors_in_range else max(candidate_anchors)
+                struct_sl_dist = (anchor - entry_price) + effective_buffer + spread_dist
             else:
-                struct_sl_dist = atr * (0.85 if is_strong_trend else (1.0 if is_ranging else 0.95)) + spread_dist
+                struct_sl_dist = atr * (0.85 if is_strong_trend else (1.0 if is_ranging else 0.95)) + effective_buffer + spread_dist
 
             if style == "SCALP":
                 sl_dist = min(0.65 * atr + spread_dist, max(0.20 * atr, struct_sl_dist * 0.5))
@@ -239,7 +249,8 @@ class DynamicRiskAndLevelsEngine:
                 min_target_rr = 1.8
                 asym_rr = 2.8
             else:  # SWING
-                sl_dist = min(2.50 * atr + spread_dist, max(0.75 * atr, struct_sl_dist))
+                max_swing_sl = 2.80 * atr if (is_gold or is_crypto) else 2.50 * atr
+                sl_dist = min(max_swing_sl + spread_dist, max(0.75 * atr, struct_sl_dist))
                 min_target_rr = 2.5
                 asym_rr = 4.2
 

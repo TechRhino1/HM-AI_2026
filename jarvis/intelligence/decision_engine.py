@@ -717,7 +717,10 @@ class DecisionEngine:
             
             # Multi-objective fitness score: EV * (1 + (WinP - 0.50)/0.50) * StrategySuitabilityWeight
             prob_factor = max(0.5, 1.0 + (strat_p - 0.50) / 0.50)
-            fitness = strat_ev * prob_factor * (0.5 + strat_weight)
+            if strat_weight <= 0.001:
+                fitness = -1e9
+            else:
+                fitness = strat_ev * prob_factor * strat_weight
 
             strategy_evaluations[strat] = {
                 "win_p": strat_p,

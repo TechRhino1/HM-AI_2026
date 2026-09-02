@@ -140,11 +140,8 @@ class BacktestEngine:
                 if risk_dist <= 0:
                     risk_dist = max(0.001, abs(open_trade["entry"] - open_trade["sl"]))
 
-                trade_strat = open_trade.get("strategy", "")
-                max_hold_bars = 16 if trade_strat == "RANGE_MEAN_REVERSION" else (36 if trade_strat in ("TREND_FOLLOWING", "BREAKOUT_EXPANSION") else 24)
-
-                # D. Time Stop: Force close after max_hold_bars if trade hasn't moved 0.35R in favor
-                if open_trade["bars_held"] >= max_hold_bars and open_trade["mfe"] < (risk_dist * 0.35):
+                # Master-Trader Stagnation Time Stop: Close at market if bars_held >= 8 and mfe < (risk_dist * 0.35)
+                if open_trade["bars_held"] >= 8 and open_trade["mfe"] < (risk_dist * 0.35):
                     exit_price = float(current_bar["close"])
                     pips = ((exit_price - open_trade["entry"]) if open_trade["type"] == "BUY" else (open_trade["entry"] - exit_price)) / spec.pip_size
                     pnl_raw = pips * spec.pip_value_per_lot * open_trade["lots"]
@@ -159,11 +156,11 @@ class BacktestEngine:
                         "symbol": symbol, "type": open_trade["type"],
                         "open_time": open_trade.get("open_time"),
                         "exit_time": bar_time,
-                        "bars_held": open_trade.get("bars_held", max_hold_bars),
+                        "bars_held": open_trade.get("bars_held", 8),
                         "entry": open_trade["entry"], "exit": exit_price,
                         "sl": open_trade["sl"], "tp": open_trade["tp"],
                         "lots": open_trade.get("initial_lots", open_trade["lots"]),
-                        "pnl": round(pnl_net, 2), "result": f"TIME_STOP_{max_hold_bars}BAR",
+                        "pnl": round(pnl_net, 2), "result": "STAGNATION_TIME_STOP_8BAR",
                         "strategy": open_trade["strategy"], "regime": open_trade["regime"],
                         "score": open_trade["score"],
                         "planned_rr": open_trade.get("planned_rr", 0.0),
@@ -174,44 +171,55 @@ class BacktestEngine:
                     open_trade = None
                     continue
 
-                # High-Yield Dynamic Scale-Out & Trade Management Ratchet
-                first_target = open_trade.get("first_target_price")
-                partial_vol_pct = open_trade.get("first_target_volume_pct", 0.50)
-                profit_floor_r = 0.10  # Guaranteed +0.10R profit floor for runner
+                # Master-Trader Chop Protection: Advance SL to breakeven + buffer if held >= 8 bars to prevent chop decay
+                if open_trade["bars_held"] >= 8 and not open_trade.get("be_locked", False):
+                    open_trade["be_locked"] = True
+                    be_buffer = max(spec.pip_size * 2, risk_dist * 0.05)
+                    if open_trade["type"] == "BUY":
+                        open_trade["sl"] = max(open_trade["sl"], round(open_trade["entry"] + be_buffer, spec.digits))
+                    else:
+                        open_trade["sl"] = min(open_trade["sl"], round(open_trade["entry"] - be_buffer, spec.digits))
 
-                # Stage 1 (Primary Cash Bank): Take Partial Profit using dynamic first target & partial volume pct
-                if not open_trade.get("partial_closed", False) and open_trade["lots"] > 0.01:
+                # Master-Trader Stage 1 Fast Cash Lock: +0.80R for Forex, +1.0R for Gold & Crypto
+                fast_cash_r = 1.00 if (is_gold or is_crypto) else 0.80
+                fast_cash_dist = risk_dist * fast_cash_r
+                profit_floor_dist = risk_dist * 0.10  # Guaranteed +0.10R profit floor for runner
+
+                if not open_trade.get("partial_closed", False) and open_trade["lots"] >= 0.01:
                     is_target_hit = False
                     partial_exit_p = 0.0
-                    if first_target is not None and first_target > 0:
-                        if open_trade["type"] == "BUY" and high >= first_target:
-                            is_target_hit = True
-                            partial_exit_p = first_target
-                        elif open_trade["type"] == "SELL" and low <= first_target:
-                            is_target_hit = True
-                            partial_exit_p = first_target
-                    else:
-                        partial_trigger_dist = risk_dist * (1.10 if is_fx else 1.00)
-                        if favorable >= partial_trigger_dist:
-                            is_target_hit = True
-                            partial_exit_p = (open_trade["entry"] + partial_trigger_dist) if open_trade["type"] == "BUY" else (open_trade["entry"] - partial_trigger_dist)
+                    if open_trade["type"] == "BUY" and high >= (open_trade["entry"] + fast_cash_dist):
+                        is_target_hit = True
+                        partial_exit_p = open_trade["entry"] + fast_cash_dist
+                    elif open_trade["type"] == "SELL" and low <= (open_trade["entry"] - fast_cash_dist):
+                        is_target_hit = True
+                        partial_exit_p = open_trade["entry"] - fast_cash_dist
 
                     if is_target_hit:
-                        partial_lots = round(open_trade["lots"] * partial_vol_pct, 2)
-                        if partial_lots >= 0.01:
+                        # Bank 50% volume immediately into realized equity
+                        partial_lots = round(open_trade["lots"] * 0.50, 2)
+                        if partial_lots >= 0.01 and open_trade["lots"] > partial_lots:
                             pips_p = ((partial_exit_p - open_trade["entry"]) if open_trade["type"] == "BUY" else (open_trade["entry"] - partial_exit_p)) / spec.pip_size
                             pnl_p = (pips_p * spec.pip_value_per_lot * partial_lots) - (partial_lots * self.commission_per_lot)
                             balance += pnl_p
                             open_trade["realized_pnl"] = open_trade.get("realized_pnl", 0.0) + pnl_p
                             open_trade["lots"] = round(open_trade["lots"] - partial_lots, 2)
-                            open_trade["partial_closed"] = True
-                            open_trade["be_locked"] = True
-                            if open_trade["type"] == "BUY":
-                                runner_floor_sl = round(open_trade["entry"] + (risk_dist * profit_floor_r), spec.digits)
-                                open_trade["sl"] = max(open_trade["sl"], runner_floor_sl)
-                            else:
-                                runner_floor_sl = round(open_trade["entry"] - (risk_dist * profit_floor_r), spec.digits)
-                                open_trade["sl"] = min(open_trade["sl"], runner_floor_sl)
+                        elif partial_lots >= 0.01:
+                            pips_p = ((partial_exit_p - open_trade["entry"]) if open_trade["type"] == "BUY" else (open_trade["entry"] - partial_exit_p)) / spec.pip_size
+                            pnl_p = (pips_p * spec.pip_value_per_lot * open_trade["lots"]) - (open_trade["lots"] * self.commission_per_lot)
+                            balance += pnl_p
+                            open_trade["realized_pnl"] = open_trade.get("realized_pnl", 0.0) + pnl_p
+
+                        open_trade["partial_closed"] = True
+                        open_trade["be_locked"] = True
+
+                        # Advance remaining SL to Entry + (0.10 * risk_dist) (guaranteed risk-free trade)
+                        if open_trade["type"] == "BUY":
+                            runner_floor_sl = round(open_trade["entry"] + profit_floor_dist, spec.digits)
+                            open_trade["sl"] = max(open_trade["sl"], runner_floor_sl)
+                        else:
+                            runner_floor_sl = round(open_trade["entry"] - profit_floor_dist, spec.digits)
+                            open_trade["sl"] = min(open_trade["sl"], runner_floor_sl)
 
                 # Stage 2 (Dynamic Runner Trail): Trail remaining runner using runner_trail_distance_atr
                 if open_trade.get("partial_closed", False):

@@ -125,6 +125,7 @@ class MarketContextEngine:
             mtf_alignment["H4"] = h4_bias
             mtf_alignment["H1"] = h1_bias
             mtf_alignment["M15"] = m15_bias
+            mtf_alignment["M5"] = self.structure_engine.analyze_structure(df_timing).bias if not df_timing.empty else "NEUTRAL"
             
             weighted_score = (
                 _score_bias(h4_bias) * 0.40 +
