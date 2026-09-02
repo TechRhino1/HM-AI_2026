@@ -50,7 +50,10 @@
         tvVolumeSeries: null,
         tvPriceLines: [],
         tvActiveTradeLines: [],
-        showOverlays: true
+        showOverlays: true,
+        activeRiskPreset: 1.00,
+        activeDockTab: "positions",
+        dockCollapsed: false
     };
 
     // DOM Elements Cache
@@ -111,6 +114,15 @@
         deskTp: document.getElementById("desk-tp"),
         btnBuyAction: document.getElementById("btn-buy-action"),
         btnSellAction: document.getElementById("btn-sell-action"),
+        planBias: document.getElementById("plan-bias"),
+        deskWinProbBadge: document.getElementById("desk-win-prob-badge"),
+        payoffRiskAmt: document.getElementById("payoff-risk-amt"),
+        payoffRewardAmt: document.getElementById("payoff-reward-amt"),
+        payoffRrRatio: document.getElementById("payoff-rr-ratio"),
+        payoffRiskPct: document.getElementById("payoff-risk-pct"),
+        planVolatility: document.getElementById("plan-volatility"),
+        btnToggleDock: document.getElementById("btn-toggle-dock"),
+        tradingDock: document.getElementById("trading-dock"),
 
         // Chart Stage
         chartMainPanel: document.getElementById("chart-main-panel"),
@@ -142,8 +154,6 @@
         planTp: document.getElementById("plan-tp"),
         planRiskAmt: document.getElementById("plan-risk-amt"),
         planCalcLots: document.getElementById("plan-calc-lots"),
-        btnBuyAction: document.getElementById("btn-buy-action"),
-        btnSellAction: document.getElementById("btn-sell-action"),
         cognitionRr: document.getElementById("cognition-rr"),
         cognitionStrat: document.getElementById("cognition-strat"),
         gatePassCountTag: document.getElementById("gate-pass-count-tag"),
@@ -195,6 +205,8 @@
         { id: "swing", title: "Trade Style: SWING (D1/H4/H1)", desc: "Switch trading engine to Multi-Day Swing Horizon", shortcut: "1", action: () => window.setTradeStyle("SWING") },
         { id: "day", title: "Trade Style: DAY TRADING (H1/M15/M5)", desc: "Switch trading engine to Intraday Horizon", shortcut: "2", action: () => window.setTradeStyle("DAY_TRADING") },
         { id: "scalp", title: "Trade Style: SCALP (M15/M5/M1)", desc: "Switch trading engine to Micro Scalp Horizon", shortcut: "3", action: () => window.setTradeStyle("SCALP") },
+        { id: "sync_bracket", title: "⚡ Sync AI Bracket to Desk", desc: "Auto-fill optimal Entry, SL, TP from AI Decision", shortcut: "Space", action: () => window.syncAiPlanToDesk() },
+        { id: "dock_toggle", title: "↕ Toggle Trading Dock", desc: "Collapse or expand Positions & History dock", shortcut: "Tab", action: () => window.toggleDockCollapse() },
         { id: "safe", title: "Toggle Emergency Safe Mode", desc: "Pause or unpause all autonomous executions", shortcut: "Esc", action: () => toggleSafeMode() },
         { id: "refresh", title: "Force Refresh Telemetry", desc: "Poll latest MT5 broker state immediately", shortcut: "F5", action: () => refreshData() }
     ];
@@ -924,6 +936,7 @@
     function renderHistoryDOM(trades) {
         if (el.historyCount) el.historyCount.innerText = (trades ? trades.length : 0) + ' Executed';
         const tbody = el.historyTbody || document.getElementById('history-tbody');
+        renderDockAnalytics(trades);
         if (!tbody) return;
         if (!trades || trades.length === 0) {
             tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; color:var(--text-dim); padding:16px;">No Recent History</td></tr>';
@@ -968,6 +981,80 @@
             </tr>`;
         }
         tbody.innerHTML = html;
+    }
+
+    function renderDockAnalytics(trades) {
+        const winRateEl = document.getElementById("analytics-win-rate");
+        const profitFactorEl = document.getElementById("analytics-profit-factor");
+        const netPnlEl = document.getElementById("analytics-net-pnl");
+        const maxDdEl = document.getElementById("analytics-max-dd");
+        const totalTradesEl = document.getElementById("analytics-total-trades");
+        const expectancyEl = document.getElementById("analytics-expectancy");
+
+        if (!trades || !Array.isArray(trades) || trades.length === 0) {
+            if (winRateEl) winRateEl.textContent = "--%";
+            if (profitFactorEl) profitFactorEl.textContent = "--";
+            if (netPnlEl) netPnlEl.textContent = "$0.00";
+            if (maxDdEl) maxDdEl.textContent = "0.0%";
+            if (totalTradesEl) totalTradesEl.textContent = "0";
+            if (expectancyEl) expectancyEl.textContent = "1 : 2.4";
+            return;
+        }
+
+        let wins = 0;
+        let losses = 0;
+        let grossWin = 0;
+        let grossLoss = 0;
+        let netPnl = 0;
+        let runningPeak = 0;
+        let maxDd = 0;
+        let equityCurve = 0;
+
+        for (const t of trades) {
+            const pnl = Number(t.realized_pnl !== undefined ? t.realized_pnl : (t.profit || 0));
+            netPnl += pnl;
+            equityCurve += pnl;
+            if (equityCurve > runningPeak) runningPeak = equityCurve;
+            const dd = runningPeak - equityCurve;
+            if (dd > maxDd) maxDd = dd;
+
+            if (pnl > 0) {
+                wins++;
+                grossWin += pnl;
+            } else if (pnl < 0) {
+                losses++;
+                grossLoss += Math.abs(pnl);
+            }
+        }
+
+        const total = trades.length;
+        const winRate = total > 0 ? (wins / total) * 100 : 0;
+        const profitFactor = grossLoss > 0 ? (grossWin / grossLoss) : (grossWin > 0 ? 99.9 : 1.0);
+        const avgWin = wins > 0 ? (grossWin / wins) : 0;
+        const avgLoss = losses > 0 ? (grossLoss / losses) : 1;
+        const avgRr = avgLoss > 0 ? (avgWin / avgLoss) : 1.0;
+
+        if (winRateEl) {
+            winRateEl.textContent = `${winRate.toFixed(1)}%`;
+            winRateEl.style.color = winRate >= 50 ? "var(--neon-bull)" : "var(--neon-bear)";
+        }
+        if (profitFactorEl) {
+            profitFactorEl.textContent = profitFactor >= 99 ? "∞" : profitFactor.toFixed(2);
+            profitFactorEl.style.color = profitFactor >= 1.5 ? "var(--accent-cyan)" : (profitFactor >= 1.0 ? "var(--neon-bull)" : "var(--neon-bear)");
+        }
+        if (netPnlEl) {
+            netPnlEl.textContent = `${netPnl >= 0 ? '+' : ''}$${netPnl.toFixed(2)}`;
+            netPnlEl.style.color = netPnl >= 0 ? "var(--neon-bull)" : "var(--neon-bear)";
+        }
+        if (maxDdEl) {
+            maxDdEl.textContent = `${maxDd > 0 ? '-' : ''}$${maxDd.toFixed(2)}`;
+        }
+        if (totalTradesEl) {
+            totalTradesEl.textContent = String(total);
+        }
+        if (expectancyEl) {
+            expectancyEl.textContent = `1 : ${avgRr.toFixed(1)}`;
+        }
     }
 
     async function fetchNews() {
@@ -1057,10 +1144,12 @@
         if (el.accFreeMargin) el.accFreeMargin.textContent = `$${(acc.free_margin || 0).toFixed(2)}`;
 
         // Render Sub-components
+        renderWatchlistDOM();
         renderScannerRadarDOM(state.radarOpportunities);
         renderActiveTradesDOM(state.positions);
         const activeDec = getDecisionForSymbol(state.symbol);
         renderDevilAdvocateDOM(activeDec);
+        window.recalculateDeskPayoff();
 
         // Synchronize 1-Click Desk input values for active symbol
         if (el.deskActiveSymbol) el.deskActiveSymbol.textContent = state.symbol;
@@ -2249,8 +2338,10 @@
             if (el.deskTp) el.deskTp.value = "";
         }
 
+        renderWatchlistDOM();
         updateMarketStatusDisplay(sym);
         renderScannerRadarDOM(state.radarOpportunities);
+        window.recalculateDeskPayoff();
 
         if (state.chartMode === "tv_live") {
             if (!state.tvChartInstance) {
@@ -2272,7 +2363,267 @@
         if (state.chartMode === "tv_pro") {
             initTradingViewAdvancedWidget();
         }
+
+        window.logSystemEvent("info", `Switched active chart & intelligence engine to ${sym}`);
     };
+
+    window.setSymbol = window.selectSymbol;
+
+    // =========================================================================
+    // QUICK WATCHLIST RIBBON CONTROLLER
+    // =========================================================================
+    function renderWatchlistDOM() {
+        const symbols = ["XAUUSD", "BTCUSD", "EURUSD", "GBPUSD", "USDJPY"];
+        const baselineDefaults = {
+            "XAUUSD": { price: 4515.00, change: "+0.45%" },
+            "BTCUSD": { price: 96420.00, change: "+1.82%" },
+            "EURUSD": { price: 1.0845, change: "-0.12%" },
+            "GBPUSD": { price: 1.2980, change: "+0.08%" },
+            "USDJPY": { price: 154.20, change: "-0.34%" }
+        };
+
+        symbols.forEach(sym => {
+            const btn = document.getElementById(`wl-btn-${sym}`);
+            const prcEl = document.getElementById(`wl-prc-${sym}`);
+            const chgEl = document.getElementById(`wl-chg-${sym}`);
+
+            if (btn) {
+                btn.classList.toggle("active", sym === state.symbol);
+            }
+
+            let livePrice = baselineDefaults[sym].price;
+            let chgStr = baselineDefaults[sym].change;
+
+            // Search in active positions
+            const pos = (state.positions || []).find(p => isSameSymbol(p.symbol, sym));
+            if (pos && pos.current_price) {
+                livePrice = pos.current_price;
+            } else {
+                // Search in radar
+                const opp = (state.radarOpportunities || []).find(o => isSameSymbol(o.symbol, sym));
+                if (opp && opp.current_price) {
+                    livePrice = opp.current_price;
+                } else if (sym === state.symbol && state.candles && state.candles.length > 0) {
+                    const lastCandle = state.candles[state.candles.length - 1];
+                    livePrice = lastCandle.close;
+                    if (state.candles.length > 1) {
+                        const firstCandle = state.candles[0];
+                        const diffPct = ((lastCandle.close - firstCandle.open) / firstCandle.open) * 100;
+                        chgStr = `${diffPct >= 0 ? '+' : ''}${diffPct.toFixed(2)}%`;
+                    }
+                }
+            }
+
+            if (prcEl) {
+                prcEl.textContent = formatPrice(livePrice, sym);
+            }
+            if (chgEl) {
+                chgEl.textContent = chgStr;
+                chgEl.className = `wl-change ${chgStr.startsWith('+') ? 'positive' : 'negative'}`;
+            }
+        });
+    }
+
+    // =========================================================================
+    // TABBED TRADING DOCK CONTROLLER
+    // =========================================================================
+    window.switchDockTab = function (tabName) {
+        state.activeDockTab = tabName || "positions";
+        const tabs = ["positions", "history", "analytics", "logs"];
+
+        tabs.forEach(t => {
+            const btn = document.getElementById(`dock-tab-btn-${t}`);
+            const pane = document.getElementById(`dock-pane-${t}`);
+            if (btn) btn.classList.toggle("active", t === tabName);
+            if (pane) pane.style.display = (t === tabName) ? "flex" : "none";
+        });
+
+        if (tabName === "analytics") {
+            fetchHistory();
+        }
+    };
+
+    window.toggleDockCollapse = function () {
+        const dock = document.getElementById("trading-dock");
+        const btn = document.getElementById("btn-toggle-dock");
+        if (!dock) return;
+
+        state.dockCollapsed = !state.dockCollapsed;
+        dock.classList.toggle("collapsed", state.dockCollapsed);
+
+        if (btn) {
+            btn.textContent = state.dockCollapsed ? "↕ Restore Dock" : "↕ Minimize Dock";
+        }
+
+        setTimeout(() => {
+            if (state.tvChartInstance && el.tvLiveContainer) {
+                state.tvChartInstance.applyOptions({
+                    width: el.tvLiveContainer.clientWidth,
+                    height: el.tvLiveContainer.clientHeight
+                });
+            }
+        }, 60);
+    };
+
+    // =========================================================================
+    // SMART RISK CALCULATOR & AI BRACKET SYNC
+    // =========================================================================
+    window.setRiskPreset = function (pct) {
+        state.activeRiskPreset = Number(pct) || 1.00;
+        document.querySelectorAll(".risk-preset-btn").forEach(btn => {
+            const bPct = Number(btn.getAttribute("data-pct") || 1.00);
+            btn.classList.toggle("active", Math.abs(bPct - state.activeRiskPreset) < 0.01);
+        });
+
+        // Auto-calculate lots based on live equity and stop-loss distance
+        const equity = state.account ? (state.account.equity || 10000) : 10000;
+        const targetRiskDollars = equity * (state.activeRiskPreset / 100);
+        
+        let slVal = el.deskSl && el.deskSl.value ? Number(el.deskSl.value) : 0;
+        const currentPrc = el.chartLivePrice && el.chartLivePrice.textContent !== "--" ? Number(el.chartLivePrice.textContent) : 0;
+
+        if (!slVal) {
+            const activeDec = getDecisionForSymbol(state.symbol);
+            if (activeDec && activeDec.stop_loss) slVal = Number(activeDec.stop_loss);
+        }
+
+        let calcLots = 0.01;
+        if (slVal > 0 && currentPrc > 0 && Math.abs(currentPrc - slVal) > 1e-4) {
+            const dist = Math.abs(currentPrc - slVal);
+            const contractSize = state.symbol.includes("XAU") ? 100 : (state.symbol.includes("BTC") ? 1 : 100000);
+            calcLots = targetRiskDollars / (dist * contractSize);
+            calcLots = Math.max(0.01, Math.min(50.0, Math.round(calcLots * 100) / 100));
+        }
+
+        if (el.deskLots) {
+            el.deskLots.value = calcLots.toFixed(2);
+        }
+
+        window.recalculateDeskPayoff();
+    };
+
+    window.syncAiPlanToDesk = function () {
+        const sym = state.symbol;
+        const activeDec = getDecisionForSymbol(sym);
+        if (!activeDec) {
+            window.logSystemEvent("warn", `No AI decision bracket currently available for ${sym}.`);
+            return;
+        }
+
+        const hasValidBracket = activeDec.stop_loss && activeDec.entry_price && (Math.abs(activeDec.stop_loss - activeDec.entry_price) > 1e-5);
+        if (el.deskSl) el.deskSl.value = hasValidBracket ? formatPrice(activeDec.stop_loss, sym) : "";
+        if (el.deskTp) el.deskTp.value = (hasValidBracket && activeDec.take_profit) ? formatPrice(activeDec.take_profit, sym) : "";
+
+        const winProb = activeDec.probabilities && activeDec.probabilities[activeDec.bias ? activeDec.bias.toLowerCase() : "buy"]
+            ? activeDec.probabilities[activeDec.bias ? activeDec.bias.toLowerCase() : "buy"]
+            : (activeDec.model_confidence || 0.75);
+
+        if (el.deskWinProb) el.deskWinProb.value = `${Math.round(winProb * 100)}%`;
+        if (el.deskWinProbBadge) el.deskWinProbBadge.textContent = `Win Prob: ${Math.round(winProb * 100)}%`;
+
+        window.setRiskPreset(state.activeRiskPreset || 1.00);
+        window.logSystemEvent("bull", `Synced AI ${activeDec.strategy || 'Structural'} Bracket to Order Ticket: SL ${el.deskSl ? el.deskSl.value : '--'}, TP ${el.deskTp ? el.deskTp.value : '--'}.`);
+    };
+
+    window.recalculateDeskPayoff = function () {
+        const lots = el.deskLots ? (Number(el.deskLots.value) || 0.01) : 0.01;
+        const sl = el.deskSl ? Number(el.deskSl.value) : 0;
+        const tp = el.deskTp ? Number(el.deskTp.value) : 0;
+        const prc = el.chartLivePrice && el.chartLivePrice.textContent !== "--" ? Number(el.chartLivePrice.textContent) : 0;
+        const equity = state.account ? (state.account.equity || 10000) : 10000;
+
+        const contractSize = state.symbol.includes("XAU") ? 100 : (state.symbol.includes("BTC") ? 1 : 100000);
+
+        let riskAmt = 0;
+        let rewardAmt = 0;
+        let rrRatio = "--";
+
+        if (sl > 0 && prc > 0) {
+            const slDist = Math.abs(prc - sl);
+            riskAmt = lots * slDist * contractSize;
+        }
+        if (tp > 0 && prc > 0) {
+            const tpDist = Math.abs(tp - prc);
+            rewardAmt = lots * tpDist * contractSize;
+        }
+        if (riskAmt > 0 && rewardAmt > 0) {
+            rrRatio = (rewardAmt / riskAmt).toFixed(2);
+        }
+
+        const riskPct = equity > 0 ? ((riskAmt / equity) * 100).toFixed(2) : "1.00";
+
+        if (el.payoffRiskAmt) el.payoffRiskAmt.textContent = riskAmt > 0 ? `-$${riskAmt.toFixed(2)}` : "-$0.00";
+        if (el.payoffRewardAmt) el.payoffRewardAmt.textContent = rewardAmt > 0 ? `+$${rewardAmt.toFixed(2)}` : "+$0.00";
+        if (el.payoffRrRatio) el.payoffRrRatio.textContent = rrRatio !== "--" ? `1 : ${rrRatio}` : "1 : --";
+        if (el.payoffRiskPct) el.payoffRiskPct.textContent = `${riskPct}%`;
+        if (el.planCalcLots) el.planCalcLots.textContent = `${lots.toFixed(2)} Lots`;
+        if (el.planRiskAmt) el.planRiskAmt.textContent = riskAmt > 0 ? `$${riskAmt.toFixed(2)}` : "--";
+    };
+
+    // =========================================================================
+    // REAL-TIME SYSTEM & ARBITER LOG STREAM
+    // =========================================================================
+    window.logSystemEvent = function (type, message) {
+        const stream = document.getElementById("system-logs-stream");
+        if (!stream) return;
+
+        const now = new Date();
+        const timeStr = now.toTimeString().substring(0, 8);
+        const tagMap = {
+            info: { label: "INFO", class: "tag-info" },
+            warn: { label: "WARN", class: "tag-warn" },
+            bull: { label: "AI PASS", class: "tag-bull" },
+            bear: { label: "DEVIL", class: "tag-bear" }
+        };
+        const tagInfo = tagMap[type] || tagMap.info;
+
+        const row = document.createElement("div");
+        row.className = "log-entry";
+        row.innerHTML = `
+            <span class="log-time">[${timeStr}]</span>
+            <span class="log-tag ${tagInfo.class}">${tagInfo.label}</span>
+            <span class="log-msg">${message}</span>
+        `;
+
+        stream.prepend(row);
+        while (stream.children.length > 40) {
+            stream.removeChild(stream.lastChild);
+        }
+    };
+
+    // =========================================================================
+    // GLOBAL KEYBOARD SHORTCUTS ENGINE
+    // =========================================================================
+    document.addEventListener("keydown", (e) => {
+        if (e.target.matches("input, textarea, select")) {
+            if (e.key === "Escape") {
+                e.target.blur();
+                window.closeAllDropdowns();
+            }
+            return;
+        }
+
+        if (e.key === "1") { window.setSymbol("XAUUSD"); }
+        else if (e.key === "2") { window.setSymbol("BTCUSD"); }
+        else if (e.key === "3") { window.setSymbol("EURUSD"); }
+        else if (e.key === "4") { window.setSymbol("GBPUSD"); }
+        else if (e.key === "5") { window.setSymbol("USDJPY"); }
+        else if (e.key === " " || e.code === "Space") {
+            e.preventDefault();
+            window.syncAiPlanToDesk();
+        }
+        else if (e.key.toLowerCase() === "b" && !e.ctrlKey && !e.metaKey) {
+            window.executeManualTrade("BUY");
+        }
+        else if (e.key.toLowerCase() === "s" && !e.ctrlKey && !e.metaKey) {
+            window.executeManualTrade("SELL");
+        }
+        else if (e.key === "Escape") {
+            window.closeAllDropdowns();
+            window.closeNewsDetailModal();
+            window.toggleCommandPalette(false);
+        }
+    });
 
     // =========================================================================
     // CUSTOM DROPDOWN INTERACTION SYSTEM
@@ -2514,8 +2865,7 @@
         const middlePanel = document.getElementById("panel-middle");
         const rightPanel = document.getElementById("panel-right");
         const chartPanel = document.getElementById("chart-main-panel");
-        const posSection = document.getElementById("section-positions");
-        const histSection = document.getElementById("section-history");
+        const tradingDock = document.getElementById("trading-dock");
 
         if (window.innerWidth <= 900) {
             if (active === "chart") {
@@ -2523,8 +2873,7 @@
                 if (middlePanel) {
                     middlePanel.style.display = "flex";
                     if (chartPanel) chartPanel.style.display = "flex";
-                    if (posSection) posSection.style.display = "none";
-                    if (histSection) histSection.style.display = "none";
+                    if (tradingDock) tradingDock.style.display = "none";
                 }
                 if (rightPanel) rightPanel.style.display = "none";
             } else if (active === "radar") {
@@ -2546,8 +2895,10 @@
                 if (middlePanel) {
                     middlePanel.style.display = "flex";
                     if (chartPanel) chartPanel.style.display = "none";
-                    if (posSection) posSection.style.display = "flex";
-                    if (histSection) histSection.style.display = "flex";
+                    if (tradingDock) {
+                        tradingDock.style.display = "flex";
+                        tradingDock.classList.remove("collapsed");
+                    }
                 }
                 if (rightPanel) rightPanel.style.display = "none";
             } else if (active === "cognition") {
@@ -2564,8 +2915,7 @@
             if (middlePanel) {
                 middlePanel.style.display = "flex";
                 if (chartPanel) chartPanel.style.display = "flex";
-                if (posSection) posSection.style.display = "flex";
-                if (histSection) histSection.style.display = "flex";
+                if (tradingDock) tradingDock.style.display = "flex";
             }
             if (rightPanel) rightPanel.style.display = "flex";
         }
@@ -2586,14 +2936,12 @@
             const middlePanel = document.getElementById("panel-middle");
             const rightPanel = document.getElementById("panel-right");
             const chartPanel = document.getElementById("chart-main-panel");
-            const posSection = document.getElementById("section-positions");
-            const histSection = document.getElementById("section-history");
+            const tradingDock = document.getElementById("trading-dock");
             if (leftPanel) leftPanel.style.display = "flex";
             if (middlePanel) {
                 middlePanel.style.display = "flex";
                 if (chartPanel) chartPanel.style.display = "flex";
-                if (posSection) posSection.style.display = "flex";
-                if (histSection) histSection.style.display = "flex";
+                if (tradingDock) tradingDock.style.display = "flex";
             }
             if (rightPanel) rightPanel.style.display = "flex";
         } else {

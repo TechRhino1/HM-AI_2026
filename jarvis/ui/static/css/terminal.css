@@ -966,52 +966,114 @@ header.terminal-hud {
 .pane-subheader .action-hint { color: var(--neon-bull); font-size: 8.5px; font-weight: 700; }
 
 /* ==========================================================================
-   MODULE A: Verified MT5 Account Card
+   MODULE A: Quick Asset Watchlist Ribbon & Scroll Utilities
    ========================================================================== */
-.account-hud-card {
-    background: rgba(10, 14, 23, 0.7);
+.quick-watchlist-ribbon {
+    background: rgba(10, 14, 23, 0.75);
     border: 1px solid var(--border-subtle);
     border-radius: 4px;
-    padding: 6px 8px;
-    margin-bottom: 6px;
+    padding: 5px 6px;
+    margin-bottom: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 
-.account-hud-header {
+.watchlist-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 4px;
-    padding-bottom: 3px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding-bottom: 2px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
-.account-title-group {
-    display: flex;
-    align-items: baseline;
-    gap: 5px;
+.watchlist-title {
+    font-size: 8.5px;
+    font-weight: 800;
+    color: var(--accent-cyan);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
 }
 
-.account-name-tag { font-weight: 800; font-size: 11px; color: #ffffff; }
-.account-company-sub { font-size: 9px; font-weight: 600; color: var(--text-dim); }
-.account-leverage-tag { font-family: var(--font-mono); font-size: 8.5px; font-weight: 700; background: var(--accent-cyan-subtle); color: var(--accent-cyan); padding: 1px 4px; border-radius: 2px; }
+.watchlist-hint {
+    font-size: 8px;
+    font-weight: 700;
+    color: var(--text-dim);
+}
 
-.account-grid {
+.watchlist-items-row {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 3px 6px;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 3px;
 }
 
-.account-item { 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center; 
-    background: rgba(0, 0, 0, 0.25);
-    padding: 2px 5px;
+.wl-item-btn {
+    background: rgba(18, 26, 43, 0.7);
+    border: 1px solid rgba(51, 65, 85, 0.4);
     border-radius: 3px;
-    border: 1px solid rgba(255, 255, 255, 0.02);
+    padding: 3px 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    cursor: pointer;
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    text-align: left;
+    outline: none;
 }
-.account-item-lbl { font-size: 8.5px; color: var(--text-dim); text-transform: uppercase; font-weight: 600; }
-.account-item-val { font-family: var(--font-mono); font-size: 10px; font-weight: 700; color: var(--text-primary); }
+
+.wl-item-btn:hover {
+    background: rgba(28, 44, 72, 0.95);
+    border-color: var(--accent-cyan);
+    transform: translateY(-1px);
+}
+
+.wl-item-btn.active {
+    background: rgba(56, 189, 248, 0.15);
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.3);
+}
+
+.wl-item-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.wl-symbol {
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1;
+}
+
+.wl-change {
+    font-family: var(--font-mono);
+    font-size: 7.5px;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.wl-change.positive { color: var(--neon-bull); }
+.wl-change.negative { color: var(--neon-bear); }
+
+.wl-price {
+    font-size: 8.5px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    line-height: 1.1;
+}
+
+.left-panel-scrollable,
+.right-panel-scrollable {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
 
 /* ==========================================================================
    MODULE B: High-Probability Scanner Radar Cards
@@ -1665,7 +1727,159 @@ header.terminal-hud {
 
 /* ==========================================================================
    ACTIVE TRADES & TRADE HISTORY TABLES
+/* ==========================================================================
+   CONSOLIDATED TABBED TRADING DOCK (POSITIONS, HISTORY, ANALYTICS, LOGS)
    ========================================================================== */
+.trading-dock-panel {
+    flex: 1;
+    min-height: 140px;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-panel);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--card-radius);
+    overflow: hidden;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.trading-dock-panel.collapsed {
+    flex: 0 0 32px !important;
+    min-height: 32px !important;
+    max-height: 32px !important;
+}
+
+.trading-dock-panel.collapsed .dock-content-wrapper {
+    display: none !important;
+}
+
+.chart-panel {
+    flex: 1.8;
+    min-height: 280px;
+    display: flex;
+    flex-direction: column;
+    transition: flex 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dock-header {
+    background: rgba(14, 20, 34, 0.95);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 3px 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    min-height: 28px;
+}
+
+.dock-tabs-group {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    overflow-x: auto;
+}
+
+.dock-tab-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--text-secondary);
+    font-family: var(--font-sans);
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 3px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+}
+
+.dock-tab-btn:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.dock-tab-btn.active {
+    background: rgba(56, 189, 248, 0.18);
+    border-color: rgba(56, 189, 248, 0.4);
+    color: var(--accent-cyan);
+    font-weight: 800;
+}
+
+.dock-tab-badge {
+    font-family: var(--font-mono);
+    font-size: 8.5px;
+    font-weight: 800;
+    background: rgba(0, 0, 0, 0.4);
+    color: #ffffff;
+    padding: 1px 4px;
+    border-radius: 2px;
+}
+
+.dock-live-dot {
+    width: 5px;
+    height: 5px;
+    background: var(--neon-bull);
+    border-radius: 50%;
+    animation: pulse-glow 1.5s infinite;
+}
+
+.dock-actions-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.btn-dock-action {
+    background: rgba(18, 26, 43, 0.8);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    white-space: nowrap;
+}
+
+.btn-dock-action:hover {
+    color: #ffffff;
+    border-color: var(--accent-cyan);
+}
+
+.btn-dock-action.btn-danger {
+    background: rgba(255, 59, 92, 0.15);
+    border-color: var(--neon-bear);
+    color: var(--neon-bear);
+}
+.btn-dock-action.btn-danger:hover {
+    background: var(--neon-bear);
+    color: #ffffff;
+}
+
+.dock-content-wrapper {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.dock-pane {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Positions Table */
 .positions-hud-container { 
     width: 100%; 
     overflow-x: auto; 
@@ -1680,11 +1894,11 @@ header.terminal-hud {
     font-family: var(--font-mono); 
     font-size: 10px; 
     text-align: left; 
-    min-width: 500px;
+    min-width: 550px;
 }
 
 .positions-table th {
-    background: rgba(18, 26, 43, 0.95);
+    background: rgba(14, 20, 34, 0.95);
     color: var(--text-dim);
     font-size: 8px;
     font-weight: 700;
@@ -1749,27 +1963,167 @@ header.terminal-hud {
     color: #ffffff;
 }
 
-/* ==========================================================================
-   RIGHT COLUMN: DEVIL'S ADVOCATE & 1-CLICK EXECUTION DESK
-   ========================================================================== */
-.devil-panel {
-    display: flex;
-    flex-direction: column;
+/* Dock Analytics Grid */
+.dock-analytics-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+    padding: 8px;
 }
 
-.devil-header-badge {
+.analytics-card {
+    background: rgba(10, 15, 26, 0.7);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.analytics-lbl {
+    font-size: 8px;
+    font-weight: 700;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.analytics-val {
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.analytics-sub {
+    font-size: 7.5px;
+    color: var(--text-secondary);
+}
+
+/* System Logs Stream */
+.system-logs-stream {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    background: rgba(6, 9, 16, 0.6);
+}
+
+.log-entry {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    line-height: 1.35;
+    padding: 1px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+}
+
+.log-time { color: var(--text-dim); font-size: 8.5px; }
+.log-tag {
+    font-size: 8px;
+    font-weight: 800;
+    padding: 1px 4px;
+    border-radius: 2px;
+    text-transform: uppercase;
+}
+.log-tag.tag-info { background: rgba(56, 189, 248, 0.15); color: var(--accent-cyan); }
+.log-tag.tag-warn { background: rgba(245, 158, 11, 0.15); color: var(--devil-amber); }
+.log-tag.tag-bull { background: rgba(0, 245, 155, 0.15); color: var(--neon-bull); }
+.log-tag.tag-bear { background: rgba(255, 59, 92, 0.15); color: var(--neon-bear); }
+.log-msg { color: #cbd5e1; flex: 1; }
+
+/* ==========================================================================
+   RIGHT COLUMN: SUPERCHARGED INSTITUTIONAL ORDER TICKET
+   ========================================================================== */
+.order-ticket-synthesis-card {
+    background: rgba(10, 15, 26, 0.75);
+    border: 1px solid var(--border-subtle);
+    border-radius: 4px;
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ticket-synthesis-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.ticket-symbol-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.ticket-symbol {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 900;
+    color: #ffffff;
+}
+
+.ticket-bias-badge {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    font-weight: 800;
+    padding: 1px 5px;
+    border-radius: 3px;
+    background: rgba(0, 245, 155, 0.15);
+    color: var(--neon-bull);
+    border: 1px solid rgba(0, 245, 155, 0.35);
+}
+
+.btn-sync-ai {
+    background: rgba(56, 189, 248, 0.12);
+    border: 1px solid var(--accent-cyan);
+    color: var(--accent-cyan);
+    font-family: var(--font-sans);
+    font-size: 9px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 3px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    transition: var(--transition-fast);
+}
+
+.btn-sync-ai:hover {
+    background: var(--accent-cyan);
+    color: #000000;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+}
+
+.ticket-strategy-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 9px;
+    color: var(--text-dim);
+}
+
+.strategy-val {
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.win-prob-tag {
     font-family: var(--font-mono);
     font-size: 8.5px;
     font-weight: 800;
-    color: var(--devil-amber);
-    background: var(--devil-amber-subtle);
-    padding: 1px 5px;
-    border-radius: 3px;
-    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: var(--neon-bull);
+    margin-left: auto;
 }
 
-.manual-trade-desk {
-    background: rgba(10, 14, 23, 0.7);
+.ticket-risk-manager-card {
+    background: rgba(10, 15, 26, 0.75);
     border: 1px solid var(--border-subtle);
     border-radius: 4px;
     padding: 6px 8px;
@@ -1778,52 +2132,57 @@ header.terminal-hud {
     gap: 5px;
 }
 
-.desk-header {
+.risk-presets-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    font-size: 10px;
+}
+
+.risk-title {
+    font-size: 8px;
     font-weight: 800;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
 }
-.desk-title { color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.04em; }
 
-.desk-market-closed-banner {
-    background: rgba(255, 59, 92, 0.12);
-    border: 1px solid rgba(255, 59, 92, 0.4);
-    border-radius: 4px;
-    padding: 4px 6px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
+.risk-hint {
+    font-size: 7.5px;
+    font-weight: 700;
+    color: var(--accent-cyan);
 }
-.desk-market-icon { font-size: 12px; }
-.desk-market-info { display: flex; flex-direction: column; font-size: 8.5px; }
-.desk-market-info b { color: var(--neon-bear); }
-.desk-market-info span { color: var(--text-secondary); }
 
-.desk-summary-banner {
-    background: rgba(0, 0, 0, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 3px;
-    padding: 4px 6px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+.risk-presets-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3px;
 }
-.desk-summary-banner-title {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+
+.risk-preset-btn {
+    background: rgba(18, 26, 43, 0.85);
+    border: 1px solid rgba(51, 65, 85, 0.5);
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
     font-size: 9px;
     font-weight: 700;
-    color: var(--text-dim);
+    padding: 3px 0;
+    border-radius: 3px;
+    cursor: pointer;
+    text-align: center;
+    transition: var(--transition-fast);
 }
-.desk-summary-banner-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 2px 4px;
-    font-size: 8.5px;
-    color: var(--text-secondary);
+
+.risk-preset-btn:hover {
+    color: #ffffff;
+    border-color: var(--accent-cyan);
+}
+
+.risk-preset-btn.active {
+    background: rgba(56, 189, 248, 0.2);
+    border-color: var(--accent-cyan);
+    color: #ffffff;
+    font-weight: 800;
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.25);
 }
 
 .desk-inputs-grid {
@@ -1847,22 +2206,51 @@ header.terminal-hud {
 }
 .desk-input:focus { border-color: var(--accent-cyan); }
 
+.payoff-hud-box {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3px;
+    background: rgba(6, 9, 16, 0.8);
+    border: 1px solid rgba(51, 65, 85, 0.4);
+    border-radius: 3px;
+    padding: 4px 6px;
+    margin-top: 2px;
+}
+
+.payoff-metric {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.payoff-lbl {
+    font-size: 7.5px;
+    font-weight: 700;
+    color: var(--text-dim);
+    text-transform: uppercase;
+}
+
+.payoff-val {
+    font-size: 9.5px;
+    font-weight: 800;
+}
+
 .desk-action-buttons {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 6px;
-    margin-top: 2px;
+    margin-top: 3px;
 }
 
 .btn-desk-buy {
-    background: linear-gradient(135deg, rgba(0, 245, 155, 0.2), rgba(0, 245, 155, 0.05));
-    border: 1px solid var(--neon-bull);
+    background: linear-gradient(135deg, rgba(0, 245, 155, 0.25), rgba(0, 245, 155, 0.08));
+    border: 1.5px solid var(--neon-bull);
     color: var(--neon-bull);
     font-family: var(--font-sans);
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: 800;
-    padding: 7px 0;
-    border-radius: 3px;
+    padding: 8px 0;
+    border-radius: 4px;
     cursor: pointer;
     text-transform: uppercase;
     transition: var(--transition-fast);
@@ -1870,18 +2258,18 @@ header.terminal-hud {
 .btn-desk-buy:hover {
     background: var(--neon-bull);
     color: #000000;
-    box-shadow: var(--neon-bull-glow);
+    box-shadow: 0 0 16px rgba(0, 245, 155, 0.45);
 }
 
 .btn-desk-sell {
-    background: linear-gradient(135deg, rgba(255, 59, 92, 0.2), rgba(255, 59, 92, 0.05));
-    border: 1px solid var(--neon-bear);
+    background: linear-gradient(135deg, rgba(255, 59, 92, 0.25), rgba(255, 59, 92, 0.08));
+    border: 1.5px solid var(--neon-bear);
     color: var(--neon-bear);
     font-family: var(--font-sans);
-    font-size: 10.5px;
+    font-size: 11px;
     font-weight: 800;
-    padding: 7px 0;
-    border-radius: 3px;
+    padding: 8px 0;
+    border-radius: 4px;
     cursor: pointer;
     text-transform: uppercase;
     transition: var(--transition-fast);
@@ -1889,12 +2277,11 @@ header.terminal-hud {
 .btn-desk-sell:hover {
     background: var(--neon-bear);
     color: #ffffff;
-    box-shadow: var(--neon-bear-glow);
+    box-shadow: 0 0 16px rgba(255, 59, 92, 0.45);
 }
 
-/* Section Cards */
-.section-card {
-    background: rgba(10, 14, 23, 0.7);
+.structure-matrix-card {
+    background: rgba(10, 15, 26, 0.7);
     border: 1px solid var(--border-subtle);
     border-radius: 4px;
     padding: 6px 8px;

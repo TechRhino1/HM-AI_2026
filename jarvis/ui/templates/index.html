@@ -265,54 +265,68 @@
          ========================================================================== -->
     <main class="terminal-workspace" id="terminal-workspace">
         
-        <!-- LEFT COLUMN: Verified Account Card + Radar / News Switcher Tabs -->
+        <!-- LEFT COLUMN: Quick Asset Watchlist + Scanner Radar / News Feed -->
         <aside id="panel-left" class="terminal-panel left-column">
-            <div class="panel-header">
+            <!-- Sleek Quick Asset Watchlist Ribbon -->
+            <div class="quick-watchlist-ribbon" id="quick-watchlist-ribbon">
+                <div class="watchlist-header">
+                    <span class="watchlist-title">⚡ QUICK WATCHLIST</span>
+                    <span class="watchlist-hint">1-CLICK LOAD</span>
+                </div>
+                <div class="watchlist-items-row" id="watchlist-items-row">
+                    <button class="wl-item-btn active" data-symbol="XAUUSD" onclick="window.setSymbol('XAUUSD')" id="wl-btn-XAUUSD">
+                        <div class="wl-item-top">
+                            <span class="wl-symbol">XAUUSD</span>
+                            <span class="wl-change positive" id="wl-chg-XAUUSD">+0.45%</span>
+                        </div>
+                        <div class="wl-price mono-number" id="wl-prc-XAUUSD">4515.00</div>
+                    </button>
+                    <button class="wl-item-btn" data-symbol="BTCUSD" onclick="window.setSymbol('BTCUSD')" id="wl-btn-BTCUSD">
+                        <div class="wl-item-top">
+                            <span class="wl-symbol">BTCUSD</span>
+                            <span class="wl-change positive" id="wl-chg-BTCUSD">+1.82%</span>
+                        </div>
+                        <div class="wl-price mono-number" id="wl-prc-BTCUSD">96420.00</div>
+                    </button>
+                    <button class="wl-item-btn" data-symbol="EURUSD" onclick="window.setSymbol('EURUSD')" id="wl-btn-EURUSD">
+                        <div class="wl-item-top">
+                            <span class="wl-symbol">EURUSD</span>
+                            <span class="wl-change negative" id="wl-chg-EURUSD">-0.12%</span>
+                        </div>
+                        <div class="wl-price mono-number" id="wl-prc-EURUSD">1.0845</div>
+                    </button>
+                    <button class="wl-item-btn" data-symbol="GBPUSD" onclick="window.setSymbol('GBPUSD')" id="wl-btn-GBPUSD">
+                        <div class="wl-item-top">
+                            <span class="wl-symbol">GBPUSD</span>
+                            <span class="wl-change positive" id="wl-chg-GBPUSD">+0.08%</span>
+                        </div>
+                        <div class="wl-price mono-number" id="wl-prc-GBPUSD">1.2980</div>
+                    </button>
+                    <button class="wl-item-btn" data-symbol="USDJPY" onclick="window.setSymbol('USDJPY')" id="wl-btn-USDJPY">
+                        <div class="wl-item-top">
+                            <span class="wl-symbol">USDJPY</span>
+                            <span class="wl-change negative" id="wl-chg-USDJPY">-0.34%</span>
+                        </div>
+                        <div class="wl-price mono-number" id="wl-prc-USDJPY">154.20</div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Left Panel Tabs: High-Probability Radar vs Macroeconomic Calendar -->
+            <div class="panel-header" style="margin-top:2px;">
                 <div class="tab-switcher">
                     <button id="tab-btn-radar" class="tab-btn active" onclick="switchLeftTab('radar')">📡 Setups Radar</button>
                     <button id="tab-btn-news" class="tab-btn" onclick="switchLeftTab('news')">📰 Macro News</button>
                 </div>
                 <span id="left-panel-counter" class="panel-counter">0 Monitored</span>
             </div>
-            <div class="panel-content">
-                <!-- Verified MT5 Account Card -->
-                <section class="account-hud-card">
-                    <div class="account-hud-header">
-                        <div class="account-title-group">
-                            <span id="acc-name" class="account-name-tag">Demo Account</span>
-                            <span id="acc-company" class="account-company-sub">Broker Gateway</span>
-                        </div>
-                        <span id="acc-leverage" class="account-leverage-tag">1:1000</span>
-                    </div>
-                    <div class="account-grid">
-                        <div class="account-item">
-                            <span class="account-item-lbl">Account #</span>
-                            <span id="acc-login" class="account-item-val mono-number">--</span>
-                        </div>
-                        <div class="account-item">
-                            <span class="account-item-lbl">Balance</span>
-                            <span id="acc-balance" class="account-item-val mono-number">$0.00</span>
-                        </div>
-                        <div class="account-item">
-                            <span class="account-item-lbl">Live Equity</span>
-                            <span id="acc-equity" class="account-item-val mono-number" style="color:var(--neon-bull);">$0.00</span>
-                        </div>
-                        <div class="account-item">
-                            <span class="account-item-lbl">Floating PnL</span>
-                            <span id="acc-profit" class="account-item-val mono-number" style="color:var(--neon-bull);">$0.00</span>
-                        </div>
-                        <div class="account-item">
-                            <span class="account-item-lbl">Free Margin</span>
-                            <span id="acc-free-margin" class="account-item-val mono-number">$0.00</span>
-                        </div>
-                    </div>
-                </section>
 
-                <!-- TAB 1: MODULE B (Upcoming Trades & Scanner Radar) -->
+            <div class="panel-content left-panel-scrollable">
+                <!-- TAB 1: High-Probability Radar Scanner -->
                 <div id="tab-content-radar" class="left-tab-pane active">
                     <div class="pane-subheader">
                         <span>High-Probability Radar</span>
-                        <span class="action-hint">1-CLICK LOAD</span>
+                        <span class="action-hint">AUTO-SYNTHESIZED</span>
                     </div>
                     <!-- Quick-Filter Pills for Radar Setups -->
                     <div class="radar-filter-pills" id="radar-filter-pills">
@@ -336,14 +350,13 @@
                         <!-- Rendered dynamically by terminal.js -->
                     </div>
                 </div>
-
             </div>
         </aside>
 
-        <!-- MIDDLE COLUMN: Multi-Pane Chart + Active Trades HUD + SQLite Trade History -->
+        <!-- MIDDLE COLUMN: 70% Multi-Pane Chart + Institutional Tabbed Trading Dock -->
         <div id="panel-middle" class="middle-column-stack">
-            <!-- 1. TradingView Multi-Pane Financial Chart Stage -->
-            <section id="chart-main-panel" class="terminal-panel chart-panel" style="flex: 1.3; min-height: 250px;">
+            <!-- 1. TradingView Multi-Pane Financial Chart Stage (Spacious High-Focus Canvas) -->
+            <section id="chart-main-panel" class="terminal-panel chart-panel">
                 <div class="panel-header">
                     <div class="chart-header-bar">
                         <div class="chart-symbol-info">
@@ -406,122 +419,198 @@
                 </div>
             </section>
 
-            <!-- 2. Active Trades (Live Positions HUD with 1-Click Close) -->
-            <section id="section-positions" class="terminal-panel" style="flex: 0.9; min-height: 120px;">
-                <div class="panel-header">
-                    <div class="panel-title-wrap">
-                        <span class="panel-title">Active Trades (Live Positions HUD)</span>
-                        <span id="pos-count" class="panel-counter">0 Open</span>
+            <!-- 2. Consolidated Institutional Tabbed Trading Dock (Positions, History, Analytics, Arbiter Logs) -->
+            <section id="trading-dock" class="terminal-panel trading-dock-panel">
+                <div class="dock-header">
+                    <div class="dock-tabs-group">
+                        <button id="dock-tab-btn-positions" class="dock-tab-btn active" onclick="window.switchDockTab('positions')">
+                            <span>💼 Open Positions</span>
+                            <span id="pos-count" class="dock-tab-badge">0</span>
+                        </button>
+                        <button id="dock-tab-btn-history" class="dock-tab-btn" onclick="window.switchDockTab('history')">
+                            <span>📜 Trade History</span>
+                            <span id="history-count" class="dock-tab-badge">0</span>
+                        </button>
+                        <button id="dock-tab-btn-analytics" class="dock-tab-btn" onclick="window.switchDockTab('analytics')">
+                            <span>📊 Analytics & Edge</span>
+                        </button>
+                        <button id="dock-tab-btn-logs" class="dock-tab-btn" onclick="window.switchDockTab('logs')">
+                            <span>⚡ Arbiter Logs</span>
+                            <span class="dock-live-dot"></span>
+                        </button>
                     </div>
-                    <button class="btn-terminal btn-danger" style="font-size:9.5px; padding:2px 8px;" onclick="closeAllPositions()">
-                        ✕ Close All Positions
-                    </button>
-                </div>
-                <div class="panel-content positions-hud-container" style="padding:0;">
-                    <table class="positions-table">
-                        <thead>
-                            <tr>
-                                <th>Ticket</th>
-                                <th>Symbol</th>
-                                <th>Side</th>
-                                <th>Lots</th>
-                                <th>Entry Price</th>
-                                <th>Live Price</th>
-                                <th>Stop Loss (Trail)</th>
-                                <th>Take Profit</th>
-                                <th>Floating PnL</th>
-                                <th>TP / SL Proximity</th>
-                                <th>Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="positions-tbody">
-                            <tr><td colspan="11" style="text-align:center; color:var(--text-dim); padding:16px;">No Active Positions Open</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </section>
 
-            <!-- 3. Self-Learning Trade History (SQLite) -->
-            <section id="section-history" class="terminal-panel" style="flex: 0.8; min-height: 110px;">
-                <div class="panel-header">
-                    <div class="panel-title-wrap">
-                        <span class="panel-title">Self-Learning Trade History (SQLite)</span>
-                        <span id="history-count" class="panel-counter">0 Recent</span>
+                    <div class="dock-actions-group">
+                        <button class="btn-dock-action btn-danger" onclick="closeAllPositions()" title="Emergency 1-Click Close for All Open Positions">
+                            ✕ Close All
+                        </button>
+                        <button id="btn-toggle-dock" class="btn-dock-action" onclick="window.toggleDockCollapse()" title="Minimize or Maximize Trading Dock">
+                            ↕ Minimize Dock
+                        </button>
                     </div>
                 </div>
-                <div class="panel-content positions-hud-container" style="padding:0;">
-                    <table class="positions-table">
-                        <thead>
-                            <tr>
-                                <th>Ticket</th>
-                                <th>Symbol</th>
-                                <th>Action</th>
-                                <th>Executor</th>
-                                <th>Lots</th>
-                                <th>Entry</th>
-                                <th>SL</th>
-                                <th>TP</th>
-                                <th>Realized PnL</th>
-                                <th>Execution Time</th>
-                            </tr>
-                        </thead>
-                        <tbody id="history-tbody">
-                            <tr><td colspan="10" style="text-align:center; color:var(--text-dim); padding:16px;">Fetching SQLite Trade History...</td></tr>
-                        </tbody>
-                    </table>
+
+                <div class="dock-content-wrapper">
+                    <!-- DOCK TAB 1: Live Open Positions Table -->
+                    <div id="dock-pane-positions" class="dock-pane active">
+                        <div class="positions-hud-container">
+                            <table class="positions-table">
+                                <thead>
+                                    <tr>
+                                        <th>Ticket</th>
+                                        <th>Symbol</th>
+                                        <th>Side</th>
+                                        <th>Lots</th>
+                                        <th>Entry Price</th>
+                                        <th>Live Price</th>
+                                        <th>Stop Loss (Trail)</th>
+                                        <th>Take Profit</th>
+                                        <th>Floating PnL</th>
+                                        <th>TP / SL Proximity</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="positions-tbody">
+                                    <tr><td colspan="11" style="text-align:center; color:var(--text-dim); padding:16px;">No Active Positions Open</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- DOCK TAB 2: SQLite Closed Trade History -->
+                    <div id="dock-pane-history" class="dock-pane" style="display:none;">
+                        <div class="positions-hud-container">
+                            <table class="positions-table">
+                                <thead>
+                                    <tr>
+                                        <th>Ticket</th>
+                                        <th>Symbol</th>
+                                        <th>Action</th>
+                                        <th>Executor</th>
+                                        <th>Lots</th>
+                                        <th>Entry</th>
+                                        <th>SL</th>
+                                        <th>TP</th>
+                                        <th>Realized PnL</th>
+                                        <th>Execution Time</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="history-tbody">
+                                    <tr><td colspan="10" style="text-align:center; color:var(--text-dim); padding:16px;">Fetching SQLite Trade History...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- DOCK TAB 3: Performance & Real-Time Edge Analytics Grid -->
+                    <div id="dock-pane-analytics" class="dock-pane" style="display:none;">
+                        <div class="dock-analytics-grid">
+                            <div class="analytics-card">
+                                <span class="analytics-lbl">Win Rate</span>
+                                <span id="analytics-win-rate" class="analytics-val text-bull mono-number">--%</span>
+                                <span class="analytics-sub">Profitable closed setups</span>
+                            </div>
+                            <div class="analytics-card">
+                                <span class="analytics-lbl">Profit Factor</span>
+                                <span id="analytics-profit-factor" class="analytics-val text-cyan mono-number">--</span>
+                                <span class="analytics-sub">Gross Win / Gross Loss</span>
+                            </div>
+                            <div class="analytics-card">
+                                <span class="analytics-lbl">Realized Net PnL</span>
+                                <span id="analytics-net-pnl" class="analytics-val text-bull mono-number">$0.00</span>
+                                <span class="analytics-sub">Cumulative account profit</span>
+                            </div>
+                            <div class="analytics-card">
+                                <span class="analytics-lbl">Max Historical Drawdown</span>
+                                <span id="analytics-max-dd" class="analytics-val text-amber mono-number">--%</span>
+                                <span class="analytics-sub">Peak-to-valley variance</span>
+                            </div>
+                            <div class="analytics-card">
+                                <span class="analytics-lbl">Total Executed Trades</span>
+                                <span id="analytics-total-trades" class="analytics-val mono-number">0</span>
+                                <span class="analytics-sub">Database registered trades</span>
+                            </div>
+                            <div class="analytics-card">
+                                <span class="analytics-lbl">Avg Risk/Reward</span>
+                                <span id="analytics-expectancy" class="analytics-val text-cyan mono-number">1 : 2.4</span>
+                                <span class="analytics-sub">Mathematical trade edge</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- DOCK TAB 4: Arbiter & Live System Telemetry Stream -->
+                    <div id="dock-pane-logs" class="dock-pane" style="display:none;">
+                        <div class="system-logs-stream" id="system-logs-stream">
+                            <div class="log-entry">
+                                <span class="log-time">[SYSTEM]</span>
+                                <span class="log-tag tag-info">READY</span>
+                                <span class="log-msg">HM AI 4.0 Institutional Terminal Controller initialized and synchronized.</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
         </div>
 
-        <!-- RIGHT COLUMN: THE DEVIL'S ADVOCATE & 1-CLICK EXECUTION DESK -->
+        <!-- RIGHT COLUMN: UNIFIED INSTITUTIONAL ORDER TICKET & AI QUALITY GATES -->
         <aside id="panel-right" class="terminal-panel devil-panel">
             <div class="panel-header">
                 <div class="tab-switcher">
-                    <button id="tab-btn-desk" class="tab-btn active" onclick="switchRightTab('desk')">⚡ Desk & Plan</button>
-                    <button id="tab-btn-cognition" class="tab-btn" onclick="switchRightTab('cognition')">🛡️ AI Cognition & Gates</button>
+                    <button id="tab-btn-desk" class="tab-btn active" onclick="switchRightTab('desk')">⚡ Order Ticket</button>
+                    <button id="tab-btn-cognition" class="tab-btn" onclick="switchRightTab('cognition')">🛡️ AI Cognition (14 Gates)</button>
                 </div>
                 <span class="devil-header-badge">LIVE AI</span>
             </div>
-            <div class="panel-content" style="gap: 6px; padding: 6px;">
+            <div class="panel-content right-panel-scrollable">
                 
-                <!-- TAB 1: 1-CLICK EXECUTION DESK & TRADE PLAN -->
+                <!-- TAB 1: UNIFIED INSTITUTIONAL ORDER TICKET & RISK PAYOFF -->
                 <div id="tab-content-desk" class="right-tab-pane active">
-                    <!-- SECTION 1: 1-CLICK EXECUTION DESK -->
-                    <section class="manual-trade-desk">
-                        <div class="desk-header">
-                            <span class="desk-title">⚡ 1-Click Execution Desk</span>
-                            <span id="desk-active-symbol" class="mono-number" style="font-weight:800; color:#fff;">XAUUSD</span>
+                    
+                    <!-- Market Closed Notification Banner -->
+                    <div id="desk-market-status-banner" class="desk-market-closed-banner" style="display:none;">
+                        <span class="desk-market-icon">🔒</span>
+                        <div class="desk-market-info">
+                            <b id="desk-market-title">MARKET CLOSED FOR WEEKEND</b>
+                            <span id="desk-market-time">Re-opens Mon Aug 24, 02:30 AM IST</span>
+                        </div>
+                    </div>
+
+                    <!-- Section 1: AI Decision Synthesis Strip -->
+                    <section class="order-ticket-synthesis-card">
+                        <div class="ticket-synthesis-top">
+                            <div class="ticket-symbol-wrap">
+                                <span class="ticket-symbol" id="desk-active-symbol">XAUUSD</span>
+                                <span class="ticket-bias-badge" id="plan-bias">BULLISH</span>
+                            </div>
+                            <button id="btn-sync-ai-plan" class="btn-sync-ai" onclick="window.syncAiPlanToDesk()" title="Auto-populate optimal Entry, SL, and TP from AI Decision Engine">
+                                <span>⚡</span> Sync AI Bracket
+                            </button>
+                        </div>
+                        <div class="ticket-strategy-row">
+                            <span class="strategy-label">Strategy:</span>
+                            <span id="plan-strategy-pill" class="strategy-val">SYNTHESIZING...</span>
+                            <span class="win-prob-tag" id="desk-win-prob-badge">Win Prob: --%</span>
+                        </div>
+                    </section>
+
+                    <!-- Section 2: Interactive Dynamic Risk Manager -->
+                    <section class="ticket-risk-manager-card">
+                        <div class="risk-presets-header">
+                            <span class="risk-title">CAPITAL AT RISK PRESET</span>
+                            <span class="risk-hint">AUTO-CALCULATES LOTS</span>
+                        </div>
+                        <div class="risk-presets-grid" id="risk-presets-grid">
+                            <button class="risk-preset-btn" data-pct="0.25" onclick="window.setRiskPreset(0.25)">0.25%</button>
+                            <button class="risk-preset-btn" data-pct="0.50" onclick="window.setRiskPreset(0.50)">0.50%</button>
+                            <button class="risk-preset-btn active" data-pct="1.00" onclick="window.setRiskPreset(1.00)">1.00%</button>
+                            <button class="risk-preset-btn" data-pct="2.00" onclick="window.setRiskPreset(2.00)">2.00%</button>
                         </div>
 
-                        <!-- Market Closed Notification Banner -->
-                        <div id="desk-market-status-banner" class="desk-market-closed-banner" style="display:none;">
-                            <span class="desk-market-icon">🔒</span>
-                            <div class="desk-market-info">
-                                <b id="desk-market-title">MARKET CLOSED FOR WEEKEND</b>
-                                <span id="desk-market-time">Re-opens Mon Aug 24, 02:30 AM IST</span>
-                            </div>
-                        </div>
-
-                        <!-- Live Trade Preview Summary Banner -->
-                        <div id="desk-summary-banner" class="desk-summary-banner">
-                            <div class="desk-summary-banner-title">
-                                <span id="desk-banner-title">XAUUSD — PENDING ANALYSIS</span>
-                                <span id="desk-banner-status" class="radar-action-pill badge-no-setup">SCANNING</span>
-                            </div>
-                            <div class="desk-summary-banner-grid">
-                                <span>Entry: <b id="desk-banner-entry" class="mono-number">--</b></span>
-                                <span>SL: <b id="desk-banner-sl" class="mono-number">--</b></span>
-                                <span>TP: <b id="desk-banner-tp" class="mono-number">--</b></span>
-                                <span>R:R: <b id="desk-banner-rr" class="mono-number">--</b></span>
-                                <span>Risk: <b id="desk-banner-risk" class="mono-number">--%</b></span>
-                                <span>Prob: <b id="desk-banner-prob" class="mono-number">--%</b></span>
-                            </div>
-                        </div>
-
-                        <div class="desk-inputs-grid">
+                        <!-- Ticket Inputs Grid -->
+                        <div class="desk-inputs-grid" style="margin-top:6px;">
                             <div class="desk-field">
                                 <span class="desk-field-lbl">Volume (Lots)</span>
-                                <input id="desk-lots" class="desk-input mono-number" type="number" step="0.01" value="0.01" min="0.01">
+                                <input id="desk-lots" class="desk-input mono-number" type="number" step="0.01" value="0.01" min="0.01" oninput="window.recalculateDeskPayoff()">
                             </div>
                             <div class="desk-field">
                                 <span class="desk-field-lbl">Win Probability</span>
@@ -529,49 +618,75 @@
                             </div>
                             <div class="desk-field">
                                 <span class="desk-field-lbl">Stop Loss ($)</span>
-                                <input id="desk-sl" class="desk-input mono-number" type="number" step="0.001" placeholder="Auto SL">
+                                <input id="desk-sl" class="desk-input mono-number" type="number" step="0.001" placeholder="Auto SL" oninput="window.recalculateDeskPayoff()">
                             </div>
                             <div class="desk-field">
                                 <span class="desk-field-lbl">Take Profit ($)</span>
-                                <input id="desk-tp" class="desk-input mono-number" type="number" step="0.001" placeholder="Auto TP">
+                                <input id="desk-tp" class="desk-input mono-number" type="number" step="0.001" placeholder="Auto TP" oninput="window.recalculateDeskPayoff()">
                             </div>
                         </div>
+
+                        <!-- Real-Time Payoff & Risk-Reward HUD -->
+                        <div class="payoff-hud-box">
+                            <div class="payoff-metric">
+                                <span class="payoff-lbl">Est. Risk ($)</span>
+                                <span id="payoff-risk-amt" class="payoff-val text-bear mono-number">-$0.00</span>
+                            </div>
+                            <div class="payoff-metric">
+                                <span class="payoff-lbl">Est. Reward ($)</span>
+                                <span id="payoff-reward-amt" class="payoff-val text-bull mono-number">+$0.00</span>
+                            </div>
+                            <div class="payoff-metric">
+                                <span class="payoff-lbl">Live R:R Ratio</span>
+                                <span id="payoff-rr-ratio" class="payoff-val text-cyan mono-number">1 : --</span>
+                            </div>
+                            <div class="payoff-metric">
+                                <span class="payoff-lbl">Account Risk %</span>
+                                <span id="payoff-risk-pct" class="payoff-val mono-number">1.00%</span>
+                            </div>
+                        </div>
+
+                        <!-- 1-Click Execution Action Buttons -->
                         <div class="desk-action-buttons">
-                            <button id="btn-buy-action" class="btn-desk-buy" onclick="executeManualTrade('BUY')">BUY / LONG</button>
-                            <button id="btn-sell-action" class="btn-desk-sell" onclick="executeManualTrade('SELL')">SELL / SHORT</button>
+                            <button id="btn-buy-action" class="btn-desk-buy" onclick="executeManualTrade('BUY')">
+                                <span>▲ BUY / LONG</span>
+                            </button>
+                            <button id="btn-sell-action" class="btn-desk-sell" onclick="executeManualTrade('SELL')">
+                                <span>▼ SELL / SHORT</span>
+                            </button>
                         </div>
                     </section>
 
-                    <!-- SECTION 2: TRADE PLAN & TARGETS -->
-                    <div class="section-card">
+                    <!-- Section 3: Structural Key Levels Matrix -->
+                    <div class="section-card structure-matrix-card">
                         <div class="section-card-header cyan">
-                            <span>📐 Trade Plan & Key Levels</span>
-                            <span id="plan-strategy-pill" class="pill">SYNTHESIZING...</span>
+                            <span>📐 AI Structural Reference Levels</span>
+                            <span id="decision-rr" class="pill">R:R --</span>
                         </div>
                         <div class="plan-grid-3col">
                             <div class="plan-grid-item">
                                 <span class="plan-grid-lbl">Entry Target</span>
-                                <span id="plan-entry" class="plan-grid-val">--</span>
+                                <span id="plan-entry" class="plan-grid-val mono-number">--</span>
                             </div>
                             <div class="plan-grid-item">
                                 <span class="plan-grid-lbl">Stop Loss</span>
-                                <span id="plan-sl" class="plan-grid-val" style="color:var(--neon-bear);">--</span>
+                                <span id="plan-sl" class="plan-grid-val text-bear mono-number">--</span>
                             </div>
                             <div class="plan-grid-item">
                                 <span class="plan-grid-lbl">Take Profit</span>
-                                <span id="plan-tp" class="plan-grid-val" style="color:var(--neon-bull);">--</span>
-                            </div>
-                            <div class="plan-grid-item">
-                                <span class="plan-grid-lbl">Risk/Reward</span>
-                                <span id="decision-rr" class="plan-grid-val">--</span>
-                            </div>
-                            <div class="plan-grid-item">
-                                <span class="plan-grid-lbl">Est. Risk ($)</span>
-                                <span id="plan-risk-amt" class="plan-grid-val" style="color:var(--accent-cyan);">--</span>
+                                <span id="plan-tp" class="plan-grid-val text-bull mono-number">--</span>
                             </div>
                             <div class="plan-grid-item">
                                 <span class="plan-grid-lbl">Calculated Lots</span>
-                                <span id="plan-calc-lots" class="plan-grid-val">--</span>
+                                <span id="plan-calc-lots" class="plan-grid-val mono-number">--</span>
+                            </div>
+                            <div class="plan-grid-item">
+                                <span class="plan-grid-lbl">Est. Risk ($)</span>
+                                <span id="plan-risk-amt" class="plan-grid-val text-cyan mono-number">--</span>
+                            </div>
+                            <div class="plan-grid-item">
+                                <span class="plan-grid-lbl">Volatility Filter</span>
+                                <span id="plan-volatility" class="plan-grid-val" style="color:var(--text-secondary); font-size:10px;">NORMAL</span>
                             </div>
                         </div>
                     </div>
@@ -592,11 +707,11 @@
                         <div class="cognition-telemetry-grid">
                             <div class="cognition-stat-tile">
                                 <span class="stat-tile-label">Win Probability</span>
-                                <span id="decision-win-prob" class="stat-tile-val mono-number" style="color:var(--neon-bull);">--%</span>
+                                <span id="decision-win-prob" class="stat-tile-val mono-number text-bull">--%</span>
                             </div>
                             <div class="cognition-stat-tile">
                                 <span class="stat-tile-label">Expected Value</span>
-                                <span id="decision-ev" class="stat-tile-val mono-number" style="color:var(--accent-cyan);">--</span>
+                                <span id="decision-ev" class="stat-tile-val mono-number text-cyan">--</span>
                             </div>
                             <div class="cognition-stat-tile">
                                 <span class="stat-tile-label">Risk/Reward</span>
@@ -622,7 +737,7 @@
                             <div class="devil-gauge-card">
                                 <div style="display:flex; justify-content:space-between; align-items:center;">
                                     <span class="gauge-lbl">Invalidation Multiplier</span>
-                                    <span id="devil-risk-coeff" class="gauge-val" style="color:var(--accent-cyan);">1.00x</span>
+                                    <span id="devil-risk-coeff" class="gauge-val text-cyan">1.00x</span>
                                 </div>
                                 <div class="gauge-bar-track">
                                     <div id="devil-risk-fill" class="gauge-bar-fill" style="width:100%; background:linear-gradient(90deg, #38bdf8, #00f59b);"></div>
@@ -631,7 +746,7 @@
                         </div>
 
                         <!-- 14-Point Quality Gate Checks Grid -->
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px; margin-bottom:3px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px; margin-bottom:3px;">
                             <span style="font-size:8.5px; font-weight:800; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em;">14-Point Quality Gate Matrix</span>
                             <span id="gate-pass-count-tag" style="font-family:var(--font-mono); font-size:8.5px; font-weight:700; color:var(--accent-cyan);">-- / 14</span>
                         </div>
