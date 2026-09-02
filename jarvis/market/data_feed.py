@@ -99,20 +99,20 @@ class DataFeedEngine:
         """
         Fetches multi-timeframe OHLCV rates mapped by role.
         Configures timeframes dynamically based on trade_style:
-        - SWING: macro=D1, context=H4, primary=H1, setup=H1, timing=M15
-        - DAY_TRADING / INTRADAY / DAY: macro=H1, context=M15, primary=M5, setup=M15, timing=M5
+        - SWING: macro=D1, context=H4, primary=H1, setup=H4, timing=M15
+        - DAY_TRADING / INTRADAY / DAY: macro=H4, context=H1, primary=M15, setup=H1, timing=M5
         - SCALP: macro=H1, context=M15, primary=M5, setup=M5, timing=M1
         """
         if timeframes is None:
             style = (trade_style or "SWING").upper()
             if style == "SWING":
-                timeframes = {"macro": "D1", "context": "H4", "primary": "H1", "setup": "H1", "timing": "M15"}
+                timeframes = {"macro": "D1", "context": "H4", "primary": "H1", "setup": "H4", "timing": "M15"}
             elif style in ("DAY_TRADING", "INTRADAY", "DAY"):
-                timeframes = {"macro": "H1", "context": "M15", "primary": "M5", "setup": "M15", "timing": "M5"}
+                timeframes = {"macro": "H4", "context": "H1", "primary": "M15", "setup": "H1", "timing": "M5"}
             elif style == "SCALP":
                 timeframes = {"macro": "H1", "context": "M15", "primary": "M5", "setup": "M5", "timing": "M1"}
             else:
-                timeframes = {"macro": "D1", "context": "H4", "primary": "H1", "setup": "H1", "timing": "M15"}
+                timeframes = {"macro": "D1", "context": "H4", "primary": "H1", "setup": "H4", "timing": "M15"}
 
         result = {}
         for role, tf in timeframes.items():

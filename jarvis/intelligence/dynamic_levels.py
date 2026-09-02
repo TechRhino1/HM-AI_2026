@@ -43,7 +43,8 @@ class DynamicRiskAndLevelsEngine:
         regime: RegimeOutput,
         tentative_bias: str,
         account_balance: float = 10000.0,
-        risk_per_trade_pct: float = 0.5
+        risk_per_trade_pct: float = 0.5,
+        trade_style: str = "SWING"
     ) -> Dict[str, Any]:
         """
         Calculate dynamic structural SL, liquidity-anchored TP, and adaptive scale-out parameters.
@@ -65,6 +66,7 @@ class DynamicRiskAndLevelsEngine:
         vol = context.volatility
         c_price = context.current_price
         sym_name = str(context.symbol).upper()
+        style = (trade_style or getattr(context, "trade_style", "SWING") or "SWING").upper()
 
         spec = resolve_symbol(context.symbol)
         digits = spec.digits
@@ -131,10 +133,21 @@ class DynamicRiskAndLevelsEngine:
                 # Outer structural boundary: anchor below entry with dynamic buffer
                 anchor = max(candidate_anchors)
                 struct_sl_dist = (entry_price - anchor) + dynamic_buffer
-                # Bound SL distance: min 0.35 ATR, max 2.2 ATR
-                sl_dist = min(2.2 * atr, max(0.35 * atr, struct_sl_dist))
             else:
-                sl_dist = atr * (0.85 if is_strong_trend else (1.0 if is_ranging else 0.95))
+                struct_sl_dist = atr * (0.85 if is_strong_trend else (1.0 if is_ranging else 0.95))
+
+            if style == "SCALP":
+                sl_dist = min(0.65 * atr, max(0.20 * atr, struct_sl_dist * 0.5))
+                min_target_rr = 1.3
+                asym_rr = 2.0
+            elif style in ("DAY_TRADING", "DAY", "INTRADAY"):
+                sl_dist = min(1.30 * atr, max(0.45 * atr, struct_sl_dist * 0.8))
+                min_target_rr = 1.8
+                asym_rr = 2.8
+            else:  # SWING
+                sl_dist = min(2.50 * atr, max(0.75 * atr, struct_sl_dist))
+                min_target_rr = 2.5
+                asym_rr = 4.2
 
             sl_price = round(entry_price - sl_dist, digits)
             risk_dist = max(spec.pip_size * 5, abs(entry_price - sl_price))
@@ -165,26 +178,15 @@ class DynamicRiskAndLevelsEngine:
                 if kl.get("price", 0) > entry_price:
                     opposing_targets.append(float(kl["price"]))
 
-            # Filter targets offering at least 1.5R
-            valid_targets = [t for t in opposing_targets if (t - entry_price) >= (risk_dist * 1.5)]
+            # Filter targets offering at least min_target_rr
+            valid_targets = [t for t in opposing_targets if (t - entry_price) >= (risk_dist * min_target_rr)]
 
             if valid_targets:
                 target_cand = min(valid_targets)
-                if is_strong_trend:
-                    tp_dist = min(target_cand - entry_price, risk_dist * 5.0)
-                else:
-                    tp_dist = min(target_cand - entry_price, risk_dist * 3.5)
+                max_tp_mult = asym_rr * (1.25 if is_strong_trend else 1.0)
+                tp_dist = min(target_cand - entry_price, risk_dist * max_tp_mult)
             else:
-                # Dynamic volatility-anchored asymmetric target multiplier (1.5R to 3.5R+)
-                if is_strong_trend:
-                    tp_mult = 4.2 if ("XAU" in sym_name or "GOLD" in sym_name) else 3.5
-                elif is_breakout or vol_state in ("EXPANSION", "EXTREME"):
-                    tp_mult = 3.5
-                elif is_ranging or vol_state == "COMPRESSION":
-                    tp_mult = 2.2 if ("XAU" in sym_name or "GOLD" in sym_name) else 2.0
-                else:
-                    tp_mult = 2.8 if ("XAU" in sym_name or "GOLD" in sym_name) else 2.5
-                tp_dist = risk_dist * tp_mult
+                tp_dist = risk_dist * asym_rr
 
             tp_price = round(entry_price + tp_dist, digits)
             rr_ratio = round(tp_dist / (risk_dist + 1e-9), 2)
@@ -225,9 +227,21 @@ class DynamicRiskAndLevelsEngine:
                 # Outer structural boundary: anchor above entry with dynamic buffer and spread offset
                 anchor = min(candidate_anchors)
                 struct_sl_dist = (anchor - entry_price) + dynamic_buffer + spread_dist
-                sl_dist = min(2.2 * atr + spread_dist, max(0.35 * atr, struct_sl_dist))
             else:
-                sl_dist = atr * (0.85 if is_strong_trend else (1.0 if is_ranging else 0.95)) + spread_dist
+                struct_sl_dist = atr * (0.85 if is_strong_trend else (1.0 if is_ranging else 0.95)) + spread_dist
+
+            if style == "SCALP":
+                sl_dist = min(0.65 * atr + spread_dist, max(0.20 * atr, struct_sl_dist * 0.5))
+                min_target_rr = 1.3
+                asym_rr = 2.0
+            elif style in ("DAY_TRADING", "DAY", "INTRADAY"):
+                sl_dist = min(1.30 * atr + spread_dist, max(0.45 * atr, struct_sl_dist * 0.8))
+                min_target_rr = 1.8
+                asym_rr = 2.8
+            else:  # SWING
+                sl_dist = min(2.50 * atr + spread_dist, max(0.75 * atr, struct_sl_dist))
+                min_target_rr = 2.5
+                asym_rr = 4.2
 
             sl_price = round(entry_price + sl_dist, digits)
             risk_dist = max(spec.pip_size * 5, abs(sl_price - entry_price))
@@ -258,25 +272,15 @@ class DynamicRiskAndLevelsEngine:
                 if 0 < kl.get("price", 0) < entry_price:
                     opposing_targets.append(float(kl["price"]))
 
-            # Filter targets offering at least 1.5R
-            valid_targets = [t for t in opposing_targets if (entry_price - t) >= (risk_dist * 1.5)]
+            # Filter targets offering at least min_target_rr
+            valid_targets = [t for t in opposing_targets if (entry_price - t) >= (risk_dist * min_target_rr)]
 
             if valid_targets:
                 target_cand = max(valid_targets)
-                if is_strong_trend:
-                    tp_dist = min(entry_price - target_cand, risk_dist * 5.0)
-                else:
-                    tp_dist = min(entry_price - target_cand, risk_dist * 3.5)
+                max_tp_mult = asym_rr * (1.25 if is_strong_trend else 1.0)
+                tp_dist = min(entry_price - target_cand, risk_dist * max_tp_mult)
             else:
-                if is_strong_trend:
-                    tp_mult = 4.2 if ("XAU" in sym_name or "GOLD" in sym_name) else 3.5
-                elif is_breakout or vol_state in ("EXPANSION", "EXTREME"):
-                    tp_mult = 3.5
-                elif is_ranging or vol_state == "COMPRESSION":
-                    tp_mult = 2.2 if ("XAU" in sym_name or "GOLD" in sym_name) else 2.0
-                else:
-                    tp_mult = 2.8 if ("XAU" in sym_name or "GOLD" in sym_name) else 2.5
-                tp_dist = risk_dist * tp_mult
+                tp_dist = risk_dist * asym_rr
 
             tp_price = round(entry_price - tp_dist, digits)
             rr_ratio = round(tp_dist / (risk_dist + 1e-9), 2)
@@ -292,12 +296,21 @@ class DynamicRiskAndLevelsEngine:
             # Bias is HOLD / MONITOR — compute a structural reference bracket
             is_bear_tilt = (st.bias == "BEARISH") or (getattr(context.momentum, "trend_score", 0.0) < 0)
             entry_price = round(context.bid if is_bear_tilt else context.ask, digits)
-            sl_dist = atr * 1.0
-            tp_dist = sl_dist * 2.0
+            if style == "SCALP":
+                sl_dist = 0.40 * atr
+                tp_dist = sl_dist * 2.0
+                rr_ratio = 2.0
+            elif style in ("DAY_TRADING", "DAY", "INTRADAY"):
+                sl_dist = 0.80 * atr
+                tp_dist = sl_dist * 2.8
+                rr_ratio = 2.8
+            else:
+                sl_dist = atr * 1.5
+                tp_dist = sl_dist * 4.2
+                rr_ratio = 4.2
             sl_price = round(entry_price + sl_dist if is_bear_tilt else entry_price - sl_dist, digits)
             tp_price = round(entry_price - tp_dist if is_bear_tilt else entry_price + tp_dist, digits)
             risk_dist = abs(entry_price - sl_price)
-            rr_ratio = 2.0
             first_target_price = None
 
         # 5. Adaptive Scale-Out Volume % Calculation

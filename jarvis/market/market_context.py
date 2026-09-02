@@ -46,10 +46,10 @@ class MarketContextEngine:
         """
         style = (trade_style or "SWING").upper()
         if style in ("DAY_TRADING", "INTRADAY", "DAY"):
-            df_macro = mtf_data.get("macro", mtf_data.get("H1", pd.DataFrame()))
-            df_context = mtf_data.get("context", mtf_data.get("M15", pd.DataFrame()))
-            df_primary = mtf_data.get("primary", mtf_data.get("M5", pd.DataFrame()))
-            df_setup = mtf_data.get("setup", mtf_data.get("M15", pd.DataFrame()))
+            df_macro = mtf_data.get("macro", mtf_data.get("H4", pd.DataFrame()))
+            df_context = mtf_data.get("context", mtf_data.get("H1", pd.DataFrame()))
+            df_primary = mtf_data.get("primary", mtf_data.get("M15", pd.DataFrame()))
+            df_setup = mtf_data.get("setup", mtf_data.get("H1", pd.DataFrame()))
             df_timing = mtf_data.get("timing", mtf_data.get("M5", pd.DataFrame()))
         elif style == "SCALP":
             df_macro = mtf_data.get("macro", mtf_data.get("H1", pd.DataFrame()))
@@ -61,7 +61,7 @@ class MarketContextEngine:
             df_macro = mtf_data.get("macro", mtf_data.get("D1", pd.DataFrame()))
             df_context = mtf_data.get("context", mtf_data.get("H4", pd.DataFrame()))
             df_primary = mtf_data.get("primary", mtf_data.get("H1", pd.DataFrame()))
-            df_setup = mtf_data.get("setup", mtf_data.get("H1", mtf_data.get("M15", pd.DataFrame())))
+            df_setup = mtf_data.get("setup", mtf_data.get("H4", mtf_data.get("H1", pd.DataFrame())))
             df_timing = mtf_data.get("timing", mtf_data.get("M15", mtf_data.get("M5", pd.DataFrame())))
 
         if df_primary.empty:
@@ -117,19 +117,19 @@ class MarketContextEngine:
             return 1.0 if b == "BULLISH" else (-1.0 if b == "BEARISH" else 0.0)
 
         if style in ("DAY_TRADING", "INTRADAY", "DAY"):
-            # When trade_style == "DAY_TRADING": H1 (40%), M15 (35%), M5 (25%)
-            h1_bias = self.structure_engine.analyze_structure(df_macro).bias if not df_macro.empty else "NEUTRAL"
-            m15_bias = self.structure_engine.analyze_structure(df_context).bias if not df_context.empty else "NEUTRAL"
-            m5_bias = structure_primary.bias if not df_primary.empty else "NEUTRAL"
+            # When trade_style == "DAY_TRADING": H4 (40%), H1 (35%), M15 (25%)
+            h4_bias = self.structure_engine.analyze_structure(df_macro).bias if not df_macro.empty else "NEUTRAL"
+            h1_bias = self.structure_engine.analyze_structure(df_context).bias if not df_context.empty else "NEUTRAL"
+            m15_bias = structure_primary.bias if not df_primary.empty else "NEUTRAL"
             
+            mtf_alignment["H4"] = h4_bias
             mtf_alignment["H1"] = h1_bias
             mtf_alignment["M15"] = m15_bias
-            mtf_alignment["M5"] = m5_bias
             
             weighted_score = (
-                _score_bias(h1_bias) * 0.40 +
-                _score_bias(m15_bias) * 0.35 +
-                _score_bias(m5_bias) * 0.25
+                _score_bias(h4_bias) * 0.40 +
+                _score_bias(h1_bias) * 0.35 +
+                _score_bias(m15_bias) * 0.25
             )
         elif style == "SCALP":
             h1_bias = self.structure_engine.analyze_structure(df_macro).bias if not df_macro.empty else "NEUTRAL"

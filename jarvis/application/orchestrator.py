@@ -42,7 +42,7 @@ class JarvisOrchestrator:
         symbols: Optional[List[str]] = None,
         mode: str = "live",
         magic_number: int = 888999,
-        trade_style: str = "SWING"
+        trade_style: str = "ALL"
     ):
 
         self.symbols = symbols or ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY", "BTCUSD"]
@@ -284,7 +284,12 @@ class JarvisOrchestrator:
         if account and account.balance > 0 and account.equity < account.balance:
             dd_pct = ((account.balance - account.equity) / account.balance) * 100.0
         decision = self.decision_engine.evaluate(
-            context, regime, analyst_reports, devil_report, account_balance=account.equity if account else 10000.0, current_drawdown_pct=dd_pct, mtf_data=mtf_data, recent_candles=self._df_to_candles(mtf_data.get("primary") if isinstance(mtf_data, dict) else None)
+            context, regime, analyst_reports, devil_report,
+            account_balance=account.equity if account else 10000.0,
+            current_drawdown_pct=dd_pct,
+            mtf_data=mtf_data,
+            recent_candles=self._df_to_candles(mtf_data.get("primary") if isinstance(mtf_data, dict) else None),
+            trade_style=active_trade_style
         )
         self.state_manager.record_decision(symbol, decision)
 
@@ -297,7 +302,7 @@ class JarvisOrchestrator:
                 return "SCALP"
             return s
 
-        orch_style = (self.trade_style or "SWING").upper()
+        orch_style = (self.trade_style or "ALL").upper()
         is_exec_style_match = (orch_style == "ALL") or (_normalize_style(active_trade_style) == _normalize_style(orch_style))
 
         positions = self.state_manager.positions
@@ -532,6 +537,95 @@ class JarvisOrchestrator:
                 f"({best_opportunity.trade_style} {best_opportunity.bias}) | Utility={best_opportunity.utility_score:.3f} | "
                 f"WinP={best_opportunity.win_prob:.0f}% | EV={best_opportunity.expected_value:.2f}R | Confluence={best_opportunity.confluence_score:.1f}"
             )
+
+            # Autonomous Multi-Style Execution Dispatch
+            if (
+                best_opportunity.is_actionable
+                and best_opportunity.setup_grade in ("GRADE A+", "GRADE A", "GRADE B")
+                and best_opportunity.decision_obj
+                and getattr(best_opportunity.decision_obj, "decision", "") == "EXECUTE"
+            ):
+                decision = best_opportunity.decision_obj
+                sym = best_opportunity.symbol
+                canonical_sym = sym.upper().replace("/", "").replace("_", "").replace("-", "")
+
+                # Check if order execution was already fired in run_cycle_for_symbol
+                already_fired = False
+                for s, st, r in raw_results:
+                    if s == sym and st == best_opportunity.trade_style:
+                        exec_item = r.get("execution")
+                        if exec_item and exec_item.get("status") == "FILLED":
+                            already_fired = True
+                        break
+
+                if not already_fired:
+                    with self._execution_lock:
+                        if canonical_sym in self._execution_in_progress:
+                            already_fired = True
+
+                last_exec = self._last_execution_time.get(canonical_sym, 0)
+                if (time.time() - last_exec) < self._SAME_SYMBOL_COOLDOWN_SEC:
+                    already_fired = True
+
+                if not already_fired:
+                    account = self.state_manager.account or self.mt5_client.get_account_snapshot()
+                    positions = self.state_manager.positions
+                    _spec = _resolve_sym(sym)
+                    sym_info = {
+                        "name": sym,
+                        "trade_contract_size": _spec.contract_size,
+                        "volume_min": 0.01,
+                        "volume_max": 100.0,
+                        "volume_step": 0.01
+                    }
+                    ctx = best_opportunity.context
+                    cur_spread = ctx.volatility.current_spread_pips if ctx and hasattr(ctx, "volatility") else _spec.typical_spread_pips
+
+                    active_sym_positions = [
+                        p for p in positions if (p.symbol == sym or (sym == "XAUUSD" and "GOLD" in p.symbol)
+                                                  or canonical_sym in p.symbol.upper())
+                    ]
+
+                    auth_res = self.risk_engine.authorize_execution(
+                        decision, account, positions, sym_info,
+                        current_spread_pips=cur_spread,
+                        max_allowed_spread_pips=_spec.max_spread_pips,
+                        context=ctx,
+                        is_second_trade=(len(active_sym_positions) == 1)
+                    )
+
+                    if auth_res.get("authorized"):
+                        decision.execution_authorized = True
+                        lots = auth_res.get("lots", 0.01)
+                        if account:
+                            lots = min(lots, get_max_lot_cap(account.equity))
+
+                        risk_dist = abs(decision.entry_price - decision.stop_loss)
+                        est_risk_usd = lots * (_spec.contract_size or 100000.0) * risk_dist
+                        self.risk_engine.reserve_risk(canonical_sym, est_risk_usd)
+
+                        with self._execution_lock:
+                            self._execution_in_progress.add(canonical_sym)
+
+                        exec_res = None
+                        try:
+                            logger.info(f"🚀 Autonomous Multi-Style Execution dispatched for {best_opportunity.symbol} ({best_opportunity.trade_style})")
+                            exec_res = self.execution_engine.execute_decision(decision, lots)
+                            if exec_res and exec_res.get("status") == "FILLED":
+                                self.risk_engine.commit_risk(canonical_sym)
+                            else:
+                                self.risk_engine.release_risk(canonical_sym)
+                        except Exception as e:
+                            self.risk_engine.release_risk(canonical_sym)
+                            logger.error(f"Arbiter execution error for {canonical_sym}: {e}", exc_info=True)
+                        finally:
+                            with self._execution_lock:
+                                self._execution_in_progress.discard(canonical_sym)
+                                if exec_res and exec_res.get("status") == "FILLED":
+                                    self._last_execution_time[canonical_sym] = time.time()
+                                    logger.info(f"Execution lock released for {canonical_sym}. Cooldown {self._SAME_SYMBOL_COOLDOWN_SEC}s started.")
+                else:
+                    logger.info(f"🚀 Autonomous Multi-Style Execution dispatched for {best_opportunity.symbol} ({best_opportunity.trade_style})")
 
         # 3. Convert ranked opportunities to radar items for state manager and dashboard
         radar_results = [cand.to_radar_item() for cand in ranked_candidates]

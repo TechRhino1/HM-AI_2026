@@ -88,7 +88,8 @@ class DecisionEngine:
         self,
         context: MarketContext,
         regime: RegimeOutput,
-        analyst_reports: Dict[str, AnalystReport]
+        analyst_reports: Dict[str, AnalystReport],
+        trade_style: str = "SWING"
     ):
         st = context.structure
         vol = context.volatility
@@ -120,12 +121,14 @@ class DecisionEngine:
         spec = resolve_symbol(context.symbol)
         digits = spec.digits
 
+        style = trade_style or getattr(context, "trade_style", "SWING") or "SWING"
         levels = self.dynamic_levels_engine.calculate_levels(
             context=context,
             regime=regime,
             tentative_bias=tentative_bias,
             account_balance=10000.0,
-            risk_per_trade_pct=0.5
+            risk_per_trade_pct=0.5,
+            trade_style=style
         )
 
         return (
@@ -455,10 +458,12 @@ class DecisionEngine:
         risk_per_trade_pct: float = 0.5,
         current_drawdown_pct: float = 0.0,
         mtf_data=None,
-        recent_candles: Optional[List[Dict[str, Any]]] = None
+        recent_candles: Optional[List[Dict[str, Any]]] = None,
+        trade_style: str = "SWING"
     ) -> DecisionObject:
+        style = trade_style or getattr(context, "trade_style", "SWING") or "SWING"
         tentative_bias, entry_price, sl_price, tp_price, risk_dist, rr_ratio, first_target_price, first_target_volume_pct = self._compute_bias_and_levels(
-            context, regime, analyst_reports
+            context, regime, analyst_reports, trade_style=style
         )
 
         # §B-5: Devil's Advocate Threat Feedback Adjustment

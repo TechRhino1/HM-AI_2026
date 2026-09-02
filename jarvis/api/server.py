@@ -121,7 +121,7 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                                 regime = rc.classify_regime(ctx)
                                 tentative_bias = "BUY" if ctx.structure.bias == "BULLISH" else ("SELL" if ctx.structure.bias == "BEARISH" else ("SELL" if getattr(ctx.momentum, "trend_score", 0.0) < 0 else "BUY"))
                                 reports, devil = ac.run_all_parallel(ctx, regime, tentative_bias)
-                                d = de.evaluate(ctx, regime, reports, devil, account_balance=account.equity if account else 10000.0, mtf_data=mtf)
+                                d = de.evaluate(ctx, regime, reports, devil, account_balance=account.equity if account else 10000.0, mtf_data=mtf, trade_style=t_style)
                                 
                                 active_state_style = getattr(cls.state_manager, "trade_style", "SWING")
                                 if t_style.upper() == active_state_style.upper() or (t_style == "DAY_TRADING" and active_state_style in ("DAY", "INTRADAY")):

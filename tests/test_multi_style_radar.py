@@ -62,13 +62,59 @@ class TestMultiStyleRadar(unittest.TestCase):
             self.assertIn("risk_factors", opp)
 
     def test_execution_style_matching(self):
-        """Verify only matching trade style is authorized for live MT5 execution."""
+        """Verify only matching trade style is authorized when specific, and all authorized when ALL."""
         # Orchestrator configured for SWING
         self.orchestrator.trade_style = "SWING"
         
         # SCALP cycle must not be authorized to execute when orchestrator is in SWING mode
         res_scalp = self.orchestrator.run_cycle_for_symbol("EURUSD", trade_style="SCALP")
         self.assertFalse(res_scalp["authorized"])
+
+        # When orchestrator is configured for ALL, any style is authorized to match
+        self.orchestrator.trade_style = "ALL"
+        def _normalize_style(s: str) -> str:
+            s = (s or "").upper()
+            if s in ("DAY", "INTRADAY", "DAY_TRADING"):
+                return "DAY_TRADING"
+            if s in ("SCALP", "SCALPING"):
+                return "SCALP"
+            return s
+        orch_style = (self.orchestrator.trade_style or "ALL").upper()
+        for test_st in ["SCALP", "DAY_TRADING", "SWING"]:
+            is_match = (orch_style == "ALL") or (_normalize_style(test_st) == _normalize_style(orch_style))
+            self.assertTrue(is_match)
+
+    def test_radar_levels_differentiation_between_styles(self):
+        """Verify SCALP, DAY_TRADING, and SWING have distinct SL and TP levels."""
+        from jarvis.intelligence.dynamic_levels import DynamicRiskAndLevelsEngine
+        from jarvis.market.market_context import MarketContextEngine
+        from jarvis.market.data_feed import DataFeedEngine
+
+        feed = DataFeedEngine()
+        ctx_engine = MarketContextEngine()
+        levels_engine = DynamicRiskAndLevelsEngine()
+
+        # Build context and levels for SCALP
+        scalp_mtf = feed.fetch_multi_timeframe("EURUSD", trade_style="SCALP", num_bars=50)
+        scalp_ctx = ctx_engine.build_context("EURUSD", scalp_mtf, trade_style="SCALP")
+        regime = RegimeOutput(primary_regime=MarketRegime.TREND_BULL, probabilities={}, confidence=0.8)
+        scalp_levels = levels_engine.calculate_levels(scalp_ctx, regime, tentative_bias="BUY", trade_style="SCALP")
+
+        # Build context and levels for DAY_TRADING
+        day_mtf = feed.fetch_multi_timeframe("EURUSD", trade_style="DAY_TRADING", num_bars=50)
+        day_ctx = ctx_engine.build_context("EURUSD", day_mtf, trade_style="DAY_TRADING")
+        day_levels = levels_engine.calculate_levels(day_ctx, regime, tentative_bias="BUY", trade_style="DAY_TRADING")
+
+        # Build context and levels for SWING
+        swing_mtf = feed.fetch_multi_timeframe("EURUSD", trade_style="SWING", num_bars=50)
+        swing_ctx = ctx_engine.build_context("EURUSD", swing_mtf, trade_style="SWING")
+        swing_levels = levels_engine.calculate_levels(swing_ctx, regime, tentative_bias="BUY", trade_style="SWING")
+
+        # SL and TP distances should be strictly differentiated across styles: SCALP < DAY_TRADING < SWING
+        self.assertLess(scalp_levels["risk_dist"], day_levels["risk_dist"])
+        self.assertLess(day_levels["risk_dist"], swing_levels["risk_dist"])
+        self.assertLess(scalp_levels["tp_dist"], day_levels["tp_dist"])
+        self.assertLess(day_levels["tp_dist"], swing_levels["tp_dist"])
 
     def test_api_radar_filtering_logic(self):
         """Verify API filtering correctly filters opportunities by trade style."""

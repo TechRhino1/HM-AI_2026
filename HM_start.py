@@ -117,7 +117,7 @@ def _start_background_tunnel(port: int = 8501, custom_subdomain: str = "hm2026")
             p_idx += 1
             time.sleep(3)
 
-def hm_start(mode: str = "live", port: int = 8501, host: str = "0.0.0.0"):
+def hm_start(mode: str = "live", port: int = 8501, host: str = "0.0.0.0", trade_style: str = "ALL"):
     local_ip = get_local_wifi_ip()
     mobile_url = _TUNNEL_STATE["url"]
 
@@ -129,6 +129,7 @@ def hm_start(mode: str = "live", port: int = 8501, host: str = "0.0.0.0"):
     print("                 HM AI 4.0 — INSTITUTIONAL QUANTITATIVE TRADING PLATFORM", flush=True)
     print("=" * 95, flush=True)
     print(f" -> Mode                       : {mode.upper()}", flush=True)
+    print(f" -> Trade Style                : {trade_style.upper()}", flush=True)
     print(f" -> Remote Access Server       : http://{host}:{port}", flush=True)
     print(f" -> Permanent Local Wi-Fi Link : http://{local_ip}:{port}", flush=True)
     print(f" -> Global Mobile HTTPS Link   : {mobile_url}", flush=True)
@@ -136,10 +137,10 @@ def hm_start(mode: str = "live", port: int = 8501, host: str = "0.0.0.0"):
     print("=" * 95, flush=True)
 
     # 2. Start Autonomous Orchestrator
-    orchestrator = JarvisOrchestrator(mode=mode)
+    orchestrator = JarvisOrchestrator(mode=mode, trade_style=trade_style)
     orch_thread = threading.Thread(target=orchestrator.start, daemon=True, name="hm_orchestrator")
     orch_thread.start()
-    logger.info(f"Autonomous Multi-Asset Trading Engine active ({mode.upper()} mode).")
+    logger.info(f"Autonomous Multi-Asset Trading Engine active ({mode.upper()} mode, style {trade_style.upper()}).")
 
     # 3. Start Remote Access Web Terminal & REST API Server with auto-recovery
     logger.info(f"Starting Remote Access Web Terminal at http://{host}:{port}...")
