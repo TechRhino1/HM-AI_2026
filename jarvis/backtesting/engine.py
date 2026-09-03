@@ -14,6 +14,7 @@ from jarvis.data.schemas import AccountSnapshot, PositionSnapshot
 from jarvis.data.symbol_registry import resolve as resolve_symbol
 from jarvis.backtesting.metrics import PerformanceMetricsCalculator
 from jarvis.risk.loss_cooldown import LossCooldownManager
+from jarvis.historical.historical_engine import HISTORICAL_DATA_ENGINE
 
 class BacktestEngine:
     def __init__(
@@ -36,20 +37,32 @@ class BacktestEngine:
 
     def run_backtest(
         self,
-        df_h1: pd.DataFrame,
+        df_h1: Optional[pd.DataFrame] = None,
         symbol: str = "XAUUSD",
         spread_pips: float = 2.0,
         slippage_delta: float = 0.05,
-        start_bar_idx: int = 50
+        start_bar_idx: int = 50,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        timeframe: str = "H1"
     ) -> Dict[str, Any]:
         balance = self.initial_balance
         equity = self.initial_balance
         trades: List[Dict[str, Any]] = []
         open_trade: Optional[Dict[str, Any]] = None
 
-        total_bars = len(df_h1)
+        if df_h1 is None or (isinstance(df_h1, pd.DataFrame) and df_h1.empty):
+            df_h1 = HISTORICAL_DATA_ENGINE.get_market_data(
+                symbol=symbol,
+                timeframe=timeframe,
+                start=start_date,
+                end=end_date,
+                auto_download=True
+            )
+
+        total_bars = len(df_h1) if df_h1 is not None else 0
         if total_bars < 20:
-            return {"symbol": symbol, "final_balance": balance, "metrics": PerformanceMetricsCalculator.calculate_metrics([], balance), "trades": []}
+            return {"symbol": symbol, "final_balance": balance, "metrics": PerformanceMetricsCalculator.calculate_metrics([], balance), "trades": [], "dataset_version": 1}
 
         effective_start = max(20, min(total_bars - 2, start_bar_idx))
         spec = resolve_symbol(symbol)
@@ -439,10 +452,12 @@ class BacktestEngine:
             open_trade = None
 
         metrics = PerformanceMetricsCalculator.calculate_metrics(trades, self.initial_balance)
+        ver = HISTORICAL_DATA_ENGINE.get_dataset_version(symbol, timeframe=timeframe) or 1
         return {
             "symbol": symbol,
             "metrics": metrics,
             "trades": trades,
             "final_balance": round(balance, 2),
-            "rejection_stats": rejection_stats
+            "rejection_stats": rejection_stats,
+            "dataset_version": ver
         }

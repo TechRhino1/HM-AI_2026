@@ -268,6 +268,26 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                 sym = query.get("symbol", ["XAUUSD"])[0]
                 status = SessionEngine.get_market_trading_status(sym)
                 self._send_json(status)
+            elif path == "/api/historical/manifest":
+                from jarvis.historical.historical_engine import HISTORICAL_DATA_ENGINE
+                datasets = HISTORICAL_DATA_ENGINE.list_datasets()
+                stats = HISTORICAL_DATA_ENGINE.get_engine_stats()
+                self._send_json({"datasets": datasets, "stats": stats})
+            elif path == "/api/historical/status":
+                from jarvis.historical.historical_engine import HISTORICAL_DATA_ENGINE
+                self._send_json(HISTORICAL_DATA_ENGINE.get_engine_stats())
+            elif path == "/api/historical/data":
+                from jarvis.historical.historical_engine import HISTORICAL_DATA_ENGINE
+                sym = query.get("symbol", ["XAUUSD"])[0]
+                tf = query.get("timeframe", query.get("tf", ["H1"]))[0]
+                bars = int(query.get("num_bars", query.get("bars", [200]))[0])
+                with_reg = query.get("with_regimes", ["false"])[0].lower() in ("true", "1")
+                df = HISTORICAL_DATA_ENGINE.get_market_data(sym, tf, num_bars=bars, with_regimes=with_reg)
+                records = df.to_dict(orient="records") if not df.empty else []
+                for r in records:
+                    if "time" in r:
+                        r["time"] = str(r["time"])
+                self._send_json({"symbol": sym, "timeframe": tf, "count": len(records), "data": records})
             elif path == "/api/candles":
                 sym = query.get("symbol", ["XAUUSD"])[0]
                 tf = query.get("tf", ["H1"])[0]
@@ -479,6 +499,29 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                 if hasattr(self, "orchestrator") and self.orchestrator:
                     self.orchestrator.trade_style = style
                 self._send_json({"status": "SUCCESS", "trade_style": style})
+            elif path == "/api/historical/download":
+                from jarvis.historical.historical_engine import HISTORICAL_DATA_ENGINE
+                sym = data.get("symbol", "XAUUSD").upper()
+                tf = data.get("timeframe", "H1").upper()
+                months = int(data.get("months", 6))
+                from datetime import datetime, timezone, timedelta
+                end = datetime.now(timezone.utc)
+                start = end - timedelta(days=months * 30)
+                res = HISTORICAL_DATA_ENGINE.download(sym, tf, start=start, end=end, force=data.get("force", False))
+                self._send_json(res)
+            elif path == "/api/historical/replay":
+                from jarvis.historical.historical_engine import HISTORICAL_DATA_ENGINE
+                from jarvis.historical.replay_engine import MarketReplayEngine, RealisticExecutionSimulator
+                sym = data.get("symbol", "XAUUSD").upper()
+                tf = data.get("timeframe", "H1").upper()
+                bars = int(data.get("bars", 150))
+                df = HISTORICAL_DATA_ENGINE.get_market_data(sym, tf, num_bars=bars)
+                sim = RealisticExecutionSimulator()
+                engine = MarketReplayEngine(df, symbol=sym, timeframe=tf, simulator=sim)
+                def dummy_strat(b, h, s):
+                    pass
+                res = engine.run_replay(dummy_strat, start_idx=20)
+                self._send_json(res)
             elif path == "/api/action/set_mode":
                 mode_str = data.get("mode", "PAPER").upper()
                 try:
