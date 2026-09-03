@@ -21,7 +21,7 @@ import threading
 from typing import Dict, List, Optional, Any, Set
 from datetime import datetime, timezone
 
-from jarvis.data.schemas import PositionSnapshot, MarketContext, AccountSnapshot
+from jarvis.data.schemas import PositionSnapshot, MarketContext, AccountSnapshot, MarketRegime
 from jarvis.execution.mt5_client import MT5Client
 from jarvis.application.state_manager import StateManager, GLOBAL_STATE
 from jarvis.application.event_bus import EventBus, GLOBAL_EVENT_BUS
@@ -253,10 +253,47 @@ class PositionMonitorEngine:
                 if act:
                     actions.append(act)
 
-            # ── 2. Autonomous Dynamic Trailing & R-Multiple Management (ALL positions) ──
+            # ── 1.5 Adversarial Order Flow Shield ───────────────────────────
+            shield_triggered, shield_action = self._check_adversarial_order_flow_shield(pos, ctx, c_price, atr, digits)
+            if shield_triggered:
+                if shield_action == "CLOSE":
+                    logger.warning(
+                        f"🛡️ ADVERSARIAL ORDER FLOW SHIELD: Closing underwater/flat #{pos.ticket} ({pos.symbol} {pos.type}) "
+                        f"to prevent full stop-out."
+                    )
+                    self.mt5_client.close_position(pos.ticket)
+                    return
+                elif shield_action is not None and isinstance(shield_action, (int, float)):
+                    shield_sl = float(shield_action)
+                    if pos.type == "BUY" and shield_sl > new_sl and shield_sl < c_price:
+                        new_sl = shield_sl
+                        actions.append(f"ADVERSARIAL_SHIELD@{new_sl:.4f}")
+                    elif pos.type == "SELL" and (new_sl == 0 or shield_sl < new_sl) and shield_sl > c_price:
+                        new_sl = shield_sl
+                        actions.append(f"ADVERSARIAL_SHIELD@{new_sl:.4f}")
+
+            # ── 2. Autonomous Horizon-Adaptive Trailing & R-Multiple Management ──
             if pos.ticket not in self._initial_risk_dist:
                 self._initial_risk_dist[pos.ticket] = abs(pos.open_price - pos.sl) if pos.sl > 0 else (1.5 * atr)
             risk_dist = max(self._initial_risk_dist[pos.ticket], pip_size * 5)
+
+            style = self._determine_position_style(pos, ctx)
+            if style == "SCALP":
+                s0_trigger, s0_lock = 0.65, 0.08
+                s1_trigger, s1_lock = 1.10, 0.40
+                s2_trigger, s2_atr  = 1.50, 0.80
+            elif style in ("DAY_TRADING", "DAY", "INTRADAY"):
+                s0_trigger, s0_lock = 0.85, 0.12
+                s1_trigger, s1_lock = 1.40, 0.60
+                s2_trigger, s2_atr  = 1.80, 1.20
+            elif style == "SWING":
+                s0_trigger, s0_lock = 1.10, 0.20
+                s1_trigger, s1_lock = 1.80, 0.85
+                s2_trigger, s2_atr  = 2.20, 1.80
+            else:  # LEGACY / Untagged baseline
+                s0_trigger, s0_lock = 0.80, 0.10
+                s1_trigger, s1_lock = 1.20, 0.40
+                s2_trigger, s2_atr  = 1.50, 1.20
 
             if pos.type == "BUY":
                 prev_high = self._highest_favorable_price.get(pos.ticket, pos.open_price)
@@ -264,23 +301,23 @@ class PositionMonitorEngine:
                 self._highest_favorable_price[pos.ticket] = high_price
                 self._peak_favorable_price[pos.ticket] = high_price
                 favorable_dist = max(0.0, high_price - pos.open_price)
-                r_multiple = favorable_dist / max(risk_dist, 1e-6)
+                r_multiple = round(favorable_dist / max(risk_dist, 1e-6), 4)
 
-                # Stage 2 (Dynamic Chandelier Trail): R >= 1.50 -> trail at current_price - 1.20 * atr
-                if r_multiple >= 1.50:
-                    cand_sl = round(c_price - (1.20 * atr), digits)
+                # Stage 2 (Horizon-Adaptive Chandelier Trail)
+                if r_multiple >= s2_trigger:
+                    cand_sl = round(c_price - (s2_atr * atr), digits)
                     if cand_sl > new_sl and cand_sl < c_price:
                         new_sl = cand_sl
                         actions.append(f"STAGE2_CHANDELIER@{new_sl:.4f}")
-                # Stage 1 (Profit Floor): R >= 1.20 -> open_price + 0.40 * risk_dist
-                elif r_multiple >= 1.20:
-                    cand_sl = round(pos.open_price + (0.40 * risk_dist), digits)
+                # Stage 1 (Profit Floor Lock)
+                elif r_multiple >= s1_trigger:
+                    cand_sl = round(pos.open_price + (s1_lock * risk_dist), digits)
                     if cand_sl > new_sl and cand_sl < c_price:
                         new_sl = cand_sl
                         actions.append(f"STAGE1_PROFIT_FLOOR@{new_sl:.4f}")
-                # Stage 0 (Zero-Risk Lock): R >= 0.80 -> open_price + 0.10 * risk_dist
-                elif r_multiple >= 0.80:
-                    cand_sl = round(pos.open_price + (0.10 * risk_dist), digits)
+                # Stage 0 (Zero-Risk Lock)
+                elif r_multiple >= s0_trigger:
+                    cand_sl = round(pos.open_price + (s0_lock * risk_dist), digits)
                     if cand_sl > new_sl and cand_sl < c_price:
                         new_sl = cand_sl
                         actions.append(f"STAGE0_ZERO_RISK@{new_sl:.4f}")
@@ -311,23 +348,23 @@ class PositionMonitorEngine:
                 self._highest_favorable_price[pos.ticket] = low_price
                 self._peak_favorable_price[pos.ticket] = low_price
                 favorable_dist = max(0.0, pos.open_price - low_price)
-                r_multiple = favorable_dist / max(risk_dist, 1e-6)
+                r_multiple = round(favorable_dist / max(risk_dist, 1e-6), 4)
 
-                # Stage 2 (Dynamic Chandelier Trail): R >= 1.50 -> trail at current_price + 1.20 * atr
-                if r_multiple >= 1.50:
-                    cand_sl = round(c_price + (1.20 * atr), digits)
+                # Stage 2 (Horizon-Adaptive Chandelier Trail)
+                if r_multiple >= s2_trigger:
+                    cand_sl = round(c_price + (s2_atr * atr), digits)
                     if (new_sl == 0 or cand_sl < new_sl) and cand_sl > c_price:
                         new_sl = cand_sl
                         actions.append(f"STAGE2_CHANDELIER@{new_sl:.4f}")
-                # Stage 1 (Profit Floor): R >= 1.20 -> open_price - 0.40 * risk_dist
-                elif r_multiple >= 1.20:
-                    cand_sl = round(pos.open_price - (0.40 * risk_dist), digits)
+                # Stage 1 (Profit Floor Lock)
+                elif r_multiple >= s1_trigger:
+                    cand_sl = round(pos.open_price - (s1_lock * risk_dist), digits)
                     if (new_sl == 0 or cand_sl < new_sl) and cand_sl > c_price:
                         new_sl = cand_sl
                         actions.append(f"STAGE1_PROFIT_FLOOR@{new_sl:.4f}")
-                # Stage 0 (Zero-Risk Lock): R >= 0.80 -> open_price - 0.10 * risk_dist
-                elif r_multiple >= 0.80:
-                    cand_sl = round(pos.open_price - (0.10 * risk_dist), digits)
+                # Stage 0 (Zero-Risk Lock)
+                elif r_multiple >= s0_trigger:
+                    cand_sl = round(pos.open_price - (s0_lock * risk_dist), digits)
                     if (new_sl == 0 or cand_sl < new_sl) and cand_sl > c_price:
                         new_sl = cand_sl
                         actions.append(f"STAGE0_ZERO_RISK@{new_sl:.4f}")
@@ -388,23 +425,59 @@ class PositionMonitorEngine:
             if act:
                 actions.append(act)
 
-            # ── 7. Regime-Adaptive Time-Decay Stale Trade Exit (E2) ────────────
-            if hasattr(pos, "open_time") and pos.open_time:
+            # ── 7. Horizon-Adaptive Stagnation & Time-Decay Auto-Exit ────────
+            open_dur_sec = self._get_position_duration_sec(pos)
+            if open_dur_sec > 0:
+                current_r = ((c_price - pos.open_price) if pos.type == "BUY" else (pos.open_price - c_price)) / max(risk_dist, 1e-6)
+
+                # Scalp: 45 min max hold without progress (R < 0.50R) -> Close position
+                if style == "SCALP" and open_dur_sec >= 2700.0 and current_r < 0.50:
+                    logger.info(
+                        f"⏳ SCALP STAGNATION EXIT: Closing position #{pos.ticket} ({symbol}) after "
+                        f"{open_dur_sec/60:.1f}m hold without progress (R={current_r:.2f} < 0.50R, PnL: ${pos.profit:.2f})."
+                    )
+                    self.mt5_client.close_position(pos.ticket)
+                    return
+
+                # Day: 6 hours max hold without progress (R < 0.75R) -> Close position
+                elif style in ("DAY_TRADING", "DAY", "INTRADAY") and open_dur_sec >= 21600.0 and current_r < 0.75:
+                    logger.info(
+                        f"⏳ DAY TRADING STAGNATION EXIT: Closing position #{pos.ticket} ({symbol}) after "
+                        f"{open_dur_sec/3600:.1f}h hold without progress (R={current_r:.2f} < 0.75R, PnL: ${pos.profit:.2f})."
+                    )
+                    self.mt5_client.close_position(pos.ticket)
+                    return
+
+                # Swing: 36 hours max hold in compression -> Close position
+                elif style == "SWING" and open_dur_sec >= 129600.0:
+                    is_comp = (
+                        getattr(ctx.volatility, "state", "").upper() == "COMPRESSION"
+                        or (regime and hasattr(regime, "primary_regime") and regime.primary_regime in (
+                            MarketRegime.COMPRESSION, MarketRegime.CONSOLIDATION, MarketRegime.LOW_VOLATILITY, MarketRegime.RANGE
+                        ))
+                        or getattr(ctx.momentum, "adx", 0.0) < 18.0
+                    )
+                    if is_comp:
+                        logger.info(
+                            f"⏳ SWING COMPRESSION STAGNATION EXIT: Closing position #{pos.ticket} ({symbol}) after "
+                            f"{open_dur_sec/3600:.1f}h hold in compression (PnL: ${pos.profit:.2f})."
+                        )
+                        self.mt5_client.close_position(pos.ticket)
+                        return
+
+                # Fallback Regime-Adaptive Time-Decay Stale Trade Exit
                 try:
-                    open_dt = datetime.strptime(pos.open_time, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-                    open_dur_sec = (datetime.now(timezone.utc) - open_dt).total_seconds()
-                    
                     regime_str = getattr(regime, "primary_regime", None)
                     r_name = getattr(regime_str, "value", str(regime_str or "DEFAULT")).upper()
                     if "TREND" in r_name:
-                        max_stall_sec = 43200.0  # 12 hours for trending setups
+                        max_stall_sec = 43200.0
                     elif "RANGE" in r_name or "LOW_VOLATILITY" in r_name:
-                        max_stall_sec = 28800.0  # 8 hours for range mean-reversion
+                        max_stall_sec = 28800.0
                     elif "BREAKOUT" in r_name:
-                        max_stall_sec = 21600.0  # 6 hours for breakout follow-through
+                        max_stall_sec = 21600.0
                     else:
-                        max_stall_sec = 86400.0  # 24 hours standard
-                    
+                        max_stall_sec = 86400.0
+
                     if open_dur_sec >= max_stall_sec:
                         trend_score = getattr(ctx.momentum, "trend_score", 0.0)
                         profit_ratio = abs(pos.profit / (balance + 1e-9))
@@ -416,7 +489,6 @@ class PositionMonitorEngine:
                             self.mt5_client.close_position(pos.ticket)
                             return
                         elif profit_ratio >= 0.005:
-                            # If slightly in profit after max stall, ratchet SL to breakeven + buffer to protect capital
                             be_cand = round((pos.open_price + (atr * STAGE1_BE_BUFFER)), digits) if pos.type == "BUY" else round((pos.open_price - (atr * STAGE1_BE_BUFFER)), digits)
                             if pos.type == "BUY" and be_cand > new_sl and be_cand < c_price:
                                 new_sl = be_cand
@@ -825,6 +897,105 @@ class PositionMonitorEngine:
             for tag in ("MANUAL", "DESK")
         )
         return is_wrong_magic or (pos.magic == 0) or has_manual_comment
+
+    def _determine_position_style(self, pos: PositionSnapshot, ctx: Optional[MarketContext] = None) -> str:
+        """
+        Determine position style (SCALP, DAY_TRADING, SWING) from comment, tag, or duration.
+        """
+        comment = (pos.comment or "").upper()
+        tag = str(getattr(pos, "tag", "") or "").upper()
+        trade_style = str(getattr(pos, "trade_style", "") or "").upper()
+
+        for text in (comment, tag, trade_style):
+            if "SCALP" in text:
+                return "SCALP"
+            if "SWING" in text:
+                return "SWING"
+            if "DAY" in text or "INTRADAY" in text:
+                return "DAY_TRADING"
+
+        # Check duration
+        dur_sec = self._get_position_duration_sec(pos)
+        if dur_sec > 24.0 * 3600:
+            return "SWING"
+        elif dur_sec > 2.0 * 3600:
+            return "DAY_TRADING"
+
+        return "LEGACY"
+
+    def _get_position_duration_sec(self, pos: PositionSnapshot) -> float:
+        """Returns elapsed open duration of a position in seconds."""
+        if not hasattr(pos, "open_time") or not pos.open_time:
+            return 0.0
+        try:
+            if isinstance(pos.open_time, str):
+                if "T" in pos.open_time:
+                    open_dt = datetime.fromisoformat(pos.open_time.replace("Z", "+00:00"))
+                else:
+                    open_dt = datetime.strptime(pos.open_time, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+            elif isinstance(pos.open_time, datetime):
+                open_dt = pos.open_time if pos.open_time.tzinfo else pos.open_time.replace(tzinfo=timezone.utc)
+            else:
+                return 0.0
+            now = datetime.now(timezone.utc)
+            if open_dt.tzinfo is None:
+                open_dt = open_dt.replace(tzinfo=timezone.utc)
+            return max(0.0, (now - open_dt).total_seconds())
+        except Exception:
+            return 0.0
+
+    def _check_adversarial_order_flow_shield(
+        self,
+        pos: PositionSnapshot,
+        ctx: MarketContext,
+        c_price: float,
+        atr: float,
+        digits: int
+    ) -> Tuple[bool, Optional[Any]]:
+        """
+        Adversarial Order Flow Shield:
+        If counter volume delta > 35% or absorption trap detected while holding open trade:
+          - If in profit: Immediately ratchet SL to Bid/Ask +/- 0.15x ATR.
+          - If underwater / flat: Close position to prevent full stop-out.
+        """
+        of_data = getattr(ctx, "order_flow", {})
+        if not of_data or not isinstance(of_data, dict):
+            return False, None
+
+        delta_score = float(of_data.get("delta_score", 0.0))
+        delta_ratio = float(of_data.get("delta_ratio", 0.0))
+        absorption_trap = of_data.get("absorption_trap")
+
+        is_adversarial = False
+        if pos.type == "BUY":
+            counter_delta = (delta_score < -35.0) or (delta_ratio < -0.35)
+            counter_trap = absorption_trap in ("SELLER_ABSORPTION_TRAP", "ABSORPTION_TRAP", "BEARISH_ABSORPTION_TRAP")
+            if counter_delta or counter_trap:
+                is_adversarial = True
+        elif pos.type == "SELL":
+            counter_delta = (delta_score > 35.0) or (delta_ratio > 0.35)
+            counter_trap = absorption_trap in ("BUYER_ABSORPTION_TRAP", "ABSORPTION_TRAP", "BULLISH_ABSORPTION_TRAP")
+            if counter_delta or counter_trap:
+                is_adversarial = True
+
+        if not is_adversarial:
+            return False, None
+
+        is_in_profit = (pos.profit > 0.0) or ((c_price > pos.open_price) if pos.type == "BUY" else (c_price < pos.open_price))
+
+        if is_in_profit:
+            # In profit -> ratchet SL to Bid/Ask +/- 0.15x ATR
+            if pos.type == "BUY":
+                bid_price = getattr(ctx, "bid", c_price)
+                cand_sl = round(bid_price - (0.15 * atr), digits)
+                return True, cand_sl
+            else:
+                ask_price = getattr(ctx, "ask", c_price)
+                cand_sl = round(ask_price + (0.15 * atr), digits)
+                return True, cand_sl
+        else:
+            # Underwater or flat -> close position
+            return True, "CLOSE"
 
     def _get_context(self, symbol: str) -> Optional[MarketContext]:
         """Returns cached context or fetches fresh context if TTL expired."""

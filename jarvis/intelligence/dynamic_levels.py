@@ -9,6 +9,7 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone
 import logging
 import numpy as np
+import pandas as pd
 
 logger = logging.getLogger("JARVIS_DynamicLevels")
 
@@ -18,6 +19,7 @@ from jarvis.data.schemas import (
     MarketRegime
 )
 from jarvis.data.symbol_registry import resolve as resolve_symbol
+from jarvis.intelligence.institutional_entry_engine import InstitutionalEntryEngine, INSTITUTIONAL_ENTRY_ENGINE
 
 
 class DynamicRiskAndLevelsEngine:
@@ -31,11 +33,13 @@ class DynamicRiskAndLevelsEngine:
         self,
         alpha_base: float = 0.12,     # Baseline buffer coefficient (12% ATR)
         beta_vol: float = 0.05,       # Volatility ratio sensitivity coefficient
-        gamma_spread: float = 0.05    # Spread ratio sensitivity coefficient
+        gamma_spread: float = 0.05,   # Spread ratio sensitivity coefficient
+        institutional_engine: Optional[InstitutionalEntryEngine] = None
     ):
         self.alpha_base = alpha_base
         self.beta_vol = beta_vol
         self.gamma_spread = gamma_spread
+        self.institutional_engine = institutional_engine or INSTITUTIONAL_ENTRY_ENGINE
 
     def calculate_levels(
         self,
@@ -44,7 +48,8 @@ class DynamicRiskAndLevelsEngine:
         tentative_bias: str,
         account_balance: float = 10000.0,
         risk_per_trade_pct: float = 0.5,
-        trade_style: str = "SWING"
+        trade_style: str = "SWING",
+        mtf_data: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Calculate dynamic structural SL, liquidity-anchored TP, and adaptive scale-out parameters.
@@ -345,24 +350,61 @@ class DynamicRiskAndLevelsEngine:
         is_extreme_val = 1.0 if vol_state == "EXTREME" else 0.0
         runner_trail_distance_atr = round(1.0 + (0.4 * is_expansion_val) + (0.8 * is_extreme_val), 2)
 
-        return {
+        base_result = {
             "bias": tentative_bias,
             "entry_price": entry_price,
             "sl_price": sl_price,
             "tp_price": tp_price,
+            "tp1_price": first_target_price,
+            "tp2_price": tp_price,
             "risk_dist": risk_dist,
             "tp_dist": tp_dist,
             "rr_ratio": rr_ratio,
             "first_target_price": first_target_price,
             "first_target_volume_pct": first_target_volume_pct,
-            "runner_trail_distance_atr": runner_trail_distance_atr
+            "runner_trail_distance_atr": runner_trail_distance_atr,
+            "entry_type": "DYNAMIC_STRUCTURAL",
+            "protocol_details": {"protocol": "BASELINE_DYNAMIC_LEVELS"}
         }
+
+        # Seamless Institutional Entry Engine Integration
+        if mtf_data and any(isinstance(v, pd.DataFrame) and not v.empty for v in mtf_data.values()):
+            try:
+                inst_res = self.institutional_engine.calculate_entry_and_levels(
+                    context=context,
+                    regime=regime,
+                    tentative_bias=tentative_bias,
+                    trade_style=style,
+                    mtf_data=mtf_data
+                )
+                if inst_res and isinstance(inst_res, dict):
+                    return {
+                        "bias": tentative_bias,
+                        "entry_price": inst_res.get("entry_price", entry_price),
+                        "sl_price": inst_res.get("sl_price", sl_price),
+                        "tp_price": inst_res.get("tp_price", tp_price),
+                        "tp1_price": inst_res.get("tp1_price", first_target_price),
+                        "tp2_price": inst_res.get("tp2_price", tp_price),
+                        "risk_dist": inst_res.get("risk_dist", risk_dist),
+                        "tp_dist": inst_res.get("tp_dist", tp_dist),
+                        "rr_ratio": inst_res.get("rr_ratio", rr_ratio),
+                        "first_target_price": inst_res.get("tp1_price", first_target_price),
+                        "first_target_volume_pct": inst_res.get("first_target_volume_pct", first_target_volume_pct),
+                        "runner_trail_distance_atr": inst_res.get("runner_trail_atr", runner_trail_distance_atr),
+                        "entry_type": inst_res.get("entry_type", "INSTITUTIONAL"),
+                        "protocol_details": inst_res.get("protocol_details", {})
+                    }
+            except Exception as e:
+                logger.warning(f"InstitutionalEntryEngine execution failed: {e}. Falling back to baseline dynamic levels.")
+
+        return base_result
 
     def calculate_manual_trade_levels(
         self,
         symbol: str,
         action: str,
-        current_price: Optional[float] = None
+        current_price: Optional[float] = None,
+        trade_style: str = "SWING"
     ) -> Dict[str, Any]:
         """
         Calculate AI-assisted dynamic structural SL, TP1, and TP2 for manual orders.
@@ -380,6 +422,7 @@ class DynamicRiskAndLevelsEngine:
         spread_dist = spread_pips * pip_size
 
         ctx: Optional[MarketContext] = None
+        mtf_data_fetched: Optional[Dict[str, Any]] = None
 
         # 1. Try to retrieve context from global state manager if available
         try:
@@ -394,14 +437,16 @@ class DynamicRiskAndLevelsEngine:
                 from jarvis.market.data_feed import DataFeedEngine
                 from jarvis.market.market_context import MarketContextEngine
                 df_engine = DataFeedEngine()
-                mtf = df_engine.fetch_multi_timeframe(symbol)
+                mtf = df_engine.fetch_multi_timeframe(symbol, trade_style=trade_style)
                 if mtf and any(not df.empty for df in mtf.values()):
+                    mtf_data_fetched = mtf
                     ce = MarketContextEngine()
                     ctx = ce.build_context(
                         symbol,
                         mtf,
                         current_spread_pips=spread_pips,
-                        max_allowed_spread_pips=spec.max_spread_pips
+                        max_allowed_spread_pips=spec.max_spread_pips,
+                        trade_style=trade_style
                     )
             except Exception as ex:
                 logger.debug(f"Could not build context via data feed for {symbol}: {ex}")
@@ -474,7 +519,9 @@ class DynamicRiskAndLevelsEngine:
         levels = self.calculate_levels(
             context=ctx,
             regime=regime,
-            tentative_bias=norm_action
+            tentative_bias=norm_action,
+            trade_style=trade_style,
+            mtf_data=mtf_data_fetched
         )
 
         entry = float(levels.get("entry_price", ctx.current_price))
@@ -489,7 +536,7 @@ class DynamicRiskAndLevelsEngine:
         rr = float(levels.get("rr_ratio", 2.0))
 
         # Calculate dynamic TP1 (1.0R - 1.2R) and dynamic TP2 (2.0R - 3.5R)
-        first_target = levels.get("first_target_price")
+        first_target = levels.get("tp1_price") or levels.get("first_target_price")
         if first_target is not None and first_target > 0:
             if norm_action == "BUY" and first_target > entry:
                 tp1 = round(float(first_target), digits)
@@ -510,7 +557,9 @@ class DynamicRiskAndLevelsEngine:
             "risk_dist": float(risk_dist),
             "rr": float(rr),
             "entry_price": float(entry),
-            "bias": norm_action
+            "bias": norm_action,
+            "entry_type": levels.get("entry_type", "MANUAL_LIMIT"),
+            "protocol_details": levels.get("protocol_details", {})
         }
 
 
