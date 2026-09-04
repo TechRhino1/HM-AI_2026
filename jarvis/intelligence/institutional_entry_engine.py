@@ -350,6 +350,21 @@ class InstitutionalEntryEngine:
                 sl_price = round(entry_price + (1.20 * d1_atr) + spread_dist, digits)
                 risk_dist = sl_price - entry_price
 
+        # Asset-Class Structural Bounds
+        sym_name = str(context.symbol).upper()
+        is_gold = ("XAU" in sym_name) or ("GOLD" in sym_name) or (getattr(spec, "asset_class", "").upper() == "COMMODITY") or ("WTI" in sym_name) or ("OIL" in sym_name)
+        is_crypto = getattr(spec, "is_crypto", False) or (getattr(spec, "asset_class", "").upper() == "CRYPTO") or ("BTC" in sym_name) or ("ETH" in sym_name) or ("SOL" in sym_name)
+        is_index = ("US500" in sym_name) or ("NAS100" in sym_name) or ("US30" in sym_name) or (getattr(spec, "asset_class", "").upper() == "INDEX")
+        is_forex = (getattr(spec, "asset_class", "").upper() == "FOREX") and not (is_gold or is_crypto or is_index)
+
+        max_risk_cap = 1.15 * d1_atr if is_index else (1.25 * d1_atr if is_forex else (2.0 * d1_atr if is_crypto else 2.80 * d1_atr))
+        if risk_dist > max_risk_cap:
+            risk_dist = max_risk_cap
+            if bias == "BUY":
+                sl_price = round(entry_price - risk_dist, digits)
+            else:
+                sl_price = round(entry_price + risk_dist, digits)
+
         # 6. Targets: TP1 at 2.0R - 2.5R (50% scale-out), TP2 at 3.5R - 5.0R+
         tp1_r = 2.20
         tp2_r = 4.00

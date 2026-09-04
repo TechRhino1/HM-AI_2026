@@ -284,10 +284,10 @@ class DecisionEngine:
             base_score = 65.0
             floor_score_opt = 62.0
         else:
-            base_score = 68.0
-            floor_score_opt = 65.0
+            base_score = 78.0 if is_fx else 68.0
+            floor_score_opt = 76.0 if is_fx else 65.0
 
-        if ev >= 1.5 and rr_ratio >= 2.0:
+        if not is_fx and ev >= 1.5 and rr_ratio >= 2.0:
             base_score = max(58.0, base_score - 4.0)
             floor_score_opt = max(58.0, floor_score_opt - 4.0)
 
@@ -315,16 +315,20 @@ class DecisionEngine:
             min_sl_atr_mult = 0.45
             max_spread = spec.max_spread_pips
         elif is_crypto:
-            min_rr = 1.8
+            min_rr = 2.0
             min_sl_atr_mult = 0.50
-            max_spread = spec.max_spread_pips
+            max_spread = spec.max_spread_pips * 0.95
+        elif any(k in sym_name for k in ["US500", "NAS100", "US30", "SPX", "NDX"]):
+            min_rr = 1.8
+            min_sl_atr_mult = 0.35
+            max_spread = spec.max_spread_pips * 0.90
         elif is_jpy:
             min_rr = 1.8
-            min_sl_atr_mult = 0.50
+            min_sl_atr_mult = 0.45
             max_spread = spec.max_spread_pips
         else:  # Forex Majors
-            min_rr = 1.7
-            min_sl_atr_mult = 0.50
+            min_rr = 2.0  # Raised from 1.7 to ensure positive payoff after round-turn commissions
+            min_sl_atr_mult = 0.40
             max_spread = spec.max_spread_pips
 
         # Real-time per-symbol optimizer adjustments
@@ -439,6 +443,14 @@ class DecisionEngine:
                 if not (sweep_confirmed or st_zone in ("PREMIUM", "EQUILIBRIUM") or bos_active or (strong_expansion and ts < 0)):
                     gold_trend_following_valid = False
 
+        # 7. Crypto Macro Trend Filter: Prevent buying into severe macro bear structural downtrends
+        crypto_macro_trend_valid = True
+        if is_crypto and tentative_bias == "BUY":
+            if regime.primary_regime in (MarketRegime.STRONG_TREND_BEAR, MarketRegime.TREND_BEAR):
+                has_reversal = bool(getattr(context.structure, "choch", False) and getattr(context.liquidity, "sweep_detected", False))
+                if not (has_reversal and ai_score >= 78.0 and calibrated_win_p >= 0.60):
+                    crypto_macro_trend_valid = False
+
         # Institutional Quality Gate Matrix
         regime_viable = regime.primary_regime != MarketRegime.EVENT_RISK
         if regime.primary_regime == MarketRegime.WEAK_TREND:
@@ -465,6 +477,7 @@ class DecisionEngine:
             "No Order Flow Absorption Trap": not is_of_trap,
             "Forex Prime Session": is_prime_session_valid,
             "Gold Trend Following Alignment": gold_trend_following_valid,
+            "Crypto Macro Trend Filter": crypto_macro_trend_valid,
             "Margin Capacity Limit": account_balance >= 10.0 and planned_risk_dollars > 0
         }
 
@@ -498,14 +511,14 @@ class DecisionEngine:
             atr_val = context.volatility.atr if context.volatility.atr > 0 else (entry_price * 0.005)
             if tentative_bias == "BUY" and entry_price < threat_lvl < tp_price:
                 adjusted_tp = round(threat_lvl - (atr_val * 0.1), spec.digits)
-                if adjusted_tp >= entry_price + (risk_dist * 1.5):
+                if adjusted_tp >= entry_price + (risk_dist * 1.0):
                     logger.info(f"[{context.symbol}] Devil's Advocate threat level {threat_lvl} detected ahead of TP! Tucking TP: {tp_price} -> {adjusted_tp}")
                     tp_price = adjusted_tp
                     tp_dist = tp_price - entry_price
                     rr_ratio = round(tp_dist / (risk_dist + 1e-9), 2)
             elif tentative_bias == "SELL" and tp_price < threat_lvl < entry_price:
                 adjusted_tp = round(threat_lvl + (atr_val * 0.1), spec.digits)
-                if adjusted_tp <= entry_price - (risk_dist * 1.5):
+                if adjusted_tp <= entry_price - (risk_dist * 1.0):
                     logger.info(f"[{context.symbol}] Devil's Advocate threat level {threat_lvl} detected ahead of TP! Tucking TP: {tp_price} -> {adjusted_tp}")
                     tp_price = adjusted_tp
                     tp_dist = entry_price - tp_price

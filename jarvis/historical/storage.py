@@ -105,28 +105,30 @@ class StorageEngine:
             if rc not in clean_df.columns:
                 raise ValueError(f"Missing required OHLC column: '{rc}'")
 
+        # Handle volume and tick_volume seamlessly with NaN filling
         if "tick_volume" not in clean_df.columns:
             clean_df["tick_volume"] = 1
         if "volume" not in clean_df.columns:
-            clean_df["volume"] = clean_df["tick_volume"].astype(float)
-        else:
-            clean_df["volume"] = clean_df["volume"].astype(float)
-            clean_df["tick_volume"] = clean_df["volume"].astype(np.int64)
+            clean_df["volume"] = clean_df["tick_volume"]
+
+        clean_df["volume"] = clean_df["volume"].fillna(clean_df["tick_volume"]).fillna(1.0).astype(float)
+        clean_df["tick_volume"] = clean_df["tick_volume"].fillna(clean_df["volume"]).fillna(1).astype(np.int64)
 
         if "spread" not in clean_df.columns:
             clean_df["spread"] = 0.0
+        else:
+            clean_df["spread"] = clean_df["spread"].fillna(0.0).astype(float)
+
         if "real_volume" not in clean_df.columns:
             clean_df["real_volume"] = 0
+        else:
+            clean_df["real_volume"] = clean_df["real_volume"].fillna(0).astype(np.int64)
 
         # Type enforcement
         clean_df["open"] = clean_df["open"].astype(float)
         clean_df["high"] = clean_df["high"].astype(float)
         clean_df["low"] = clean_df["low"].astype(float)
         clean_df["close"] = clean_df["close"].astype(float)
-        clean_df["volume"] = clean_df["volume"].astype(float)
-        clean_df["tick_volume"] = clean_df["tick_volume"].astype(np.int64)
-        clean_df["spread"] = clean_df["spread"].astype(float)
-        clean_df["real_volume"] = clean_df["real_volume"].astype(np.int64)
 
         # Deduplicate by timestamp and sort ascending
         clean_df = clean_df.drop_duplicates(subset=["time"]).sort_values("time").reset_index(drop=True)

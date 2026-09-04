@@ -115,10 +115,10 @@ class LossCooldownManager:
         # 0.15 is 15% max drawdown threshold
         drawdown_scaler = max(0.0, 1.0 - (current_drawdown / 0.15))
         
-        # 4. Loss streak scaling
+        # 4. Smooth loss streak scaling (bounded so recovery trades are not artificially impaired)
         loss_scaler = 1.0
         if self.consecutive_losses >= 3:
-            loss_scaler = 0.5 ** max(0, self.consecutive_losses - 2)
+            loss_scaler = max(0.75, 1.0 - (0.08 * (self.consecutive_losses - 2)))
             
         # Final risk calculation
         final_risk_pct = min(base_risk_pct, f_trade_pct * drawdown_scaler * loss_scaler)

@@ -95,9 +95,22 @@ class DynamicRiskAndLevelsEngine:
         dynamic_buffer = atr * buffer_mult
 
         # Anti-Wick Shield: Asset-specific buffer to absorb stop-hunts and wick probes
-        is_gold = ("XAU" in sym_name) or ("GOLD" in sym_name) or (getattr(spec, "asset_class", "").upper() == "COMMODITY")
-        is_crypto = getattr(spec, "is_crypto", False) or (getattr(spec, "asset_class", "").upper() == "CRYPTO") or ("BTC" in sym_name)
-        anti_wick_mult = 0.35 if is_gold else (0.45 if is_crypto else 0.18)
+        # Asset-Class Specific Intelligence
+        is_gold = ("XAU" in sym_name) or ("GOLD" in sym_name) or (getattr(spec, "asset_class", "").upper() == "COMMODITY") or ("WTI" in sym_name) or ("OIL" in sym_name)
+        is_crypto = getattr(spec, "is_crypto", False) or (getattr(spec, "asset_class", "").upper() == "CRYPTO") or ("BTC" in sym_name) or ("ETH" in sym_name) or ("SOL" in sym_name)
+        is_index = ("US500" in sym_name) or ("NAS100" in sym_name) or ("US30" in sym_name) or (getattr(spec, "asset_class", "").upper() == "INDEX")
+        is_forex = (getattr(spec, "asset_class", "").upper() == "FOREX") and not (is_gold or is_crypto or is_index)
+
+        # Anti-Wick Shield: Asset-specific buffer to absorb stop-hunts and wick probes
+        if is_gold:
+            anti_wick_mult = 0.35
+        elif is_crypto:
+            anti_wick_mult = 0.50
+        elif is_index:
+            anti_wick_mult = 0.10
+        else:  # Forex
+            anti_wick_mult = 0.15
+
         anti_wick_buffer = atr * anti_wick_mult
         effective_buffer = max(dynamic_buffer, anti_wick_buffer)
 
@@ -154,14 +167,37 @@ class DynamicRiskAndLevelsEngine:
                 min_target_rr = 1.3
                 asym_rr = 2.0
             elif style in ("DAY_TRADING", "DAY", "INTRADAY"):
-                sl_dist = min(1.30 * atr, max(0.45 * atr, struct_sl_dist * 0.8))
-                min_target_rr = 1.8
-                asym_rr = 2.8
+                if is_index:
+                    sl_dist = min(0.90 * atr, max(0.35 * atr, struct_sl_dist * 0.7))
+                    min_target_rr = 2.0
+                    asym_rr = 3.0
+                elif is_forex:
+                    sl_dist = min(1.05 * atr, max(0.40 * atr, struct_sl_dist * 0.75))
+                    min_target_rr = 2.2
+                    asym_rr = 3.2
+                else:
+                    sl_dist = min(1.30 * atr, max(0.45 * atr, struct_sl_dist * 0.8))
+                    min_target_rr = 1.8
+                    asym_rr = 2.8
             else:  # SWING
-                max_swing_sl = 2.80 * atr if (is_gold or is_crypto) else 2.50 * atr
-                sl_dist = min(max_swing_sl, max(0.75 * atr, struct_sl_dist))
-                min_target_rr = 2.5
-                asym_rr = 4.2
+                if is_index:
+                    max_swing_sl = 1.15 * atr  # Tighter index SL prevents large asymmetric losses
+                    min_target_rr = 2.0
+                    asym_rr = 3.2
+                elif is_forex:
+                    max_swing_sl = 1.25 * atr  # Tight Forex SL ensures positive payoff after commission
+                    min_target_rr = 2.2
+                    asym_rr = 3.6
+                elif is_gold:
+                    max_swing_sl = 2.80 * atr  # Retain winning commodity runner parameters
+                    min_target_rr = 2.0 if is_ranging else 2.5
+                    asym_rr = 2.2 if is_ranging else 4.2
+                else:  # Crypto
+                    max_swing_sl = 2.00 * atr
+                    min_target_rr = 2.0 if is_ranging else 2.5
+                    asym_rr = 2.8 if is_ranging else 4.0
+
+                sl_dist = min(max_swing_sl, max(0.65 * atr if (is_index or is_forex) else 0.75 * atr, struct_sl_dist))
 
             sl_price = round(entry_price - sl_dist, digits)
             risk_dist = max(spec.pip_size * 5, abs(entry_price - sl_price))
@@ -250,14 +286,37 @@ class DynamicRiskAndLevelsEngine:
                 min_target_rr = 1.3
                 asym_rr = 2.0
             elif style in ("DAY_TRADING", "DAY", "INTRADAY"):
-                sl_dist = min(1.30 * atr + spread_dist, max(0.45 * atr, struct_sl_dist * 0.8))
-                min_target_rr = 1.8
-                asym_rr = 2.8
+                if is_index:
+                    sl_dist = min(0.90 * atr + spread_dist, max(0.35 * atr, struct_sl_dist * 0.7))
+                    min_target_rr = 2.0
+                    asym_rr = 3.0
+                elif is_forex:
+                    sl_dist = min(1.05 * atr + spread_dist, max(0.40 * atr, struct_sl_dist * 0.75))
+                    min_target_rr = 2.2
+                    asym_rr = 3.2
+                else:
+                    sl_dist = min(1.30 * atr + spread_dist, max(0.45 * atr, struct_sl_dist * 0.8))
+                    min_target_rr = 1.8
+                    asym_rr = 2.8
             else:  # SWING
-                max_swing_sl = 2.80 * atr if (is_gold or is_crypto) else 2.50 * atr
-                sl_dist = min(max_swing_sl + spread_dist, max(0.75 * atr, struct_sl_dist))
-                min_target_rr = 2.5
-                asym_rr = 4.2
+                if is_index:
+                    max_swing_sl = 1.15 * atr  # Tighter index SL prevents large asymmetric losses
+                    min_target_rr = 2.0
+                    asym_rr = 3.2
+                elif is_forex:
+                    max_swing_sl = 1.25 * atr  # Tight Forex SL ensures positive payoff after commission
+                    min_target_rr = 2.2
+                    asym_rr = 3.6
+                elif is_gold:
+                    max_swing_sl = 2.80 * atr  # Retain winning commodity runner parameters
+                    min_target_rr = 2.5
+                    asym_rr = 4.2
+                else:  # Crypto
+                    max_swing_sl = 2.00 * atr
+                    min_target_rr = 2.5
+                    asym_rr = 4.0
+
+                sl_dist = min(max_swing_sl + spread_dist, max(0.65 * atr if (is_index or is_forex) else 0.75 * atr, struct_sl_dist))
 
             sl_price = round(entry_price + sl_dist, digits)
             risk_dist = max(spec.pip_size * 5, abs(sl_price - entry_price))
@@ -293,10 +352,10 @@ class DynamicRiskAndLevelsEngine:
 
             if valid_targets:
                 target_cand = max(valid_targets)
-                max_tp_mult = asym_rr * (1.25 if is_strong_trend else 1.0)
+                max_tp_mult = asym_rr * (1.25 if is_strong_trend else (0.85 if is_ranging else 1.0))
                 tp_dist = min(entry_price - target_cand, risk_dist * max_tp_mult)
             else:
-                tp_dist = risk_dist * asym_rr
+                tp_dist = risk_dist * (2.2 if is_ranging else asym_rr)
 
             tp_price = round(entry_price - tp_dist, digits)
             rr_ratio = round(tp_dist / (risk_dist + 1e-9), 2)

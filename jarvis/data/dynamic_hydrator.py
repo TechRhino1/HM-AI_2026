@@ -175,7 +175,7 @@ class DynamicMarketDataHydrator:
             if cache_key in self._profile_cache:
                 cached_time = self._profile_cache_time.get(cache_key, 0.0)
                 if (now - cached_time) < self._cache_ttl_sec:
-                    return copy.deepcopy(self._profile_cache[cache_key])
+                    return self._profile_cache[cache_key].copy()
 
         # If not cached or expired, perform hydration
         batch_res = self.hydrate_batch([sym_clean], market=m_norm)
@@ -221,7 +221,7 @@ class DynamicMarketDataHydrator:
                 if cache_key in self._profile_cache:
                     cached_time = self._profile_cache_time.get(cache_key, 0.0)
                     if (now - cached_time) < self._cache_ttl_sec:
-                        results[s] = copy.deepcopy(self._profile_cache[cache_key])
+                        results[s] = self._profile_cache[cache_key].copy()
                         continue
                 uncached.append(s)
 

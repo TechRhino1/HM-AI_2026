@@ -138,7 +138,7 @@ class IndiaMarketsService:
                 except Exception as exc:
                     logger.debug("Failed scanning symbol %s: %s", sym, exc)
 
-        self._last_full_scan_time = now
+        self._last_full_scan_time = time.time()
         self._cached_scanner_results.clear()
 
     def get_scanner_data(
@@ -249,6 +249,7 @@ class IndiaMarketsService:
             "ai_recommended_buys": ai_buys,
             "scanned_at": datetime.now(timezone.utc).isoformat()
         }
+        self._last_full_scan_time = time.time()
         self._cached_scanner_results[cache_key] = result
         return result
 

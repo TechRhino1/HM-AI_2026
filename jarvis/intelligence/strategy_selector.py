@@ -152,7 +152,7 @@ class StrategySelector:
             prior_weights["RANGE_MEAN_REVERSION"] *= (2.2 + reg_conf)
             prior_weights["LIQUIDITY_SWEEP_REVERSAL"] *= (1.8 + reg_conf)
             prior_weights["TREND_FOLLOWING"] = 0.0
-            prior_weights["TREND_PULLBACK"] *= 0.2
+            prior_weights["TREND_PULLBACK"] = 0.0
             prior_weights["BREAKOUT_EXPANSION"] = 0.0
             prior_weights["CHOCH_STRUCTURAL_REVERSAL"] *= 0.4
 
