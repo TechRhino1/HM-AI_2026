@@ -357,7 +357,7 @@ class InstitutionalEntryEngine:
         is_index = ("US500" in sym_name) or ("NAS100" in sym_name) or ("US30" in sym_name) or (getattr(spec, "asset_class", "").upper() == "INDEX")
         is_forex = (getattr(spec, "asset_class", "").upper() == "FOREX") and not (is_gold or is_crypto or is_index)
 
-        max_risk_cap = 1.15 * d1_atr if is_index else (1.25 * d1_atr if is_forex else (2.0 * d1_atr if is_crypto else 2.80 * d1_atr))
+        max_risk_cap = 1.15 * d1_atr if is_index else (1.25 * d1_atr if is_forex else (2.40 * d1_atr if is_crypto else 2.80 * d1_atr))
         if risk_dist > max_risk_cap:
             risk_dist = max_risk_cap
             if bias == "BUY":

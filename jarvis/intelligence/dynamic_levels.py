@@ -181,21 +181,21 @@ class DynamicRiskAndLevelsEngine:
                     asym_rr = 2.8
             else:  # SWING
                 if is_index:
-                    max_swing_sl = 1.15 * atr  # Tighter index SL prevents large asymmetric losses
+                    max_swing_sl = 1.65 * atr  # Calibrated index SL provides noise buffer while preserving RR
+                    min_target_rr = 1.8 if is_ranging else 2.2
+                    asym_rr = 2.5 if is_ranging else 3.6
+                elif is_forex:
+                    max_swing_sl = 1.80 * atr  # Forex SL buffer prevents 2-bar noise stopouts
                     min_target_rr = 2.0
                     asym_rr = 3.2
-                elif is_forex:
-                    max_swing_sl = 1.25 * atr  # Tight Forex SL ensures positive payoff after commission
-                    min_target_rr = 2.2
-                    asym_rr = 3.6
                 elif is_gold:
                     max_swing_sl = 2.80 * atr  # Retain winning commodity runner parameters
                     min_target_rr = 2.0 if is_ranging else 2.5
                     asym_rr = 2.2 if is_ranging else 4.2
                 else:  # Crypto
-                    max_swing_sl = 2.00 * atr
+                    max_swing_sl = 2.60 * atr  # Wide breathing room prevents crypto wick stopouts
                     min_target_rr = 2.0 if is_ranging else 2.5
-                    asym_rr = 2.8 if is_ranging else 4.0
+                    asym_rr = 2.8 if is_ranging else 4.2
 
                 sl_dist = min(max_swing_sl, max(0.65 * atr if (is_index or is_forex) else 0.75 * atr, struct_sl_dist))
 
@@ -300,21 +300,21 @@ class DynamicRiskAndLevelsEngine:
                     asym_rr = 2.8
             else:  # SWING
                 if is_index:
-                    max_swing_sl = 1.15 * atr  # Tighter index SL prevents large asymmetric losses
+                    max_swing_sl = 1.65 * atr  # Calibrated index SL provides noise buffer while preserving RR
+                    min_target_rr = 1.8 if is_ranging else 2.2
+                    asym_rr = 2.5 if is_ranging else 3.6
+                elif is_forex:
+                    max_swing_sl = 1.80 * atr  # Forex SL buffer prevents 2-bar noise stopouts
                     min_target_rr = 2.0
                     asym_rr = 3.2
-                elif is_forex:
-                    max_swing_sl = 1.25 * atr  # Tight Forex SL ensures positive payoff after commission
-                    min_target_rr = 2.2
-                    asym_rr = 3.6
                 elif is_gold:
                     max_swing_sl = 2.80 * atr  # Retain winning commodity runner parameters
-                    min_target_rr = 2.5
-                    asym_rr = 4.2
+                    min_target_rr = 2.0 if is_ranging else 2.5
+                    asym_rr = 2.2 if is_ranging else 4.2
                 else:  # Crypto
-                    max_swing_sl = 2.00 * atr
-                    min_target_rr = 2.5
-                    asym_rr = 4.0
+                    max_swing_sl = 2.60 * atr  # Wide breathing room prevents crypto wick stopouts
+                    min_target_rr = 2.0 if is_ranging else 2.5
+                    asym_rr = 2.8 if is_ranging else 4.2
 
                 sl_dist = min(max_swing_sl + spread_dist, max(0.65 * atr if (is_index or is_forex) else 0.75 * atr, struct_sl_dist))
 

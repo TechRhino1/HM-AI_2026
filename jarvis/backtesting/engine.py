@@ -184,9 +184,15 @@ class BacktestEngine:
                     open_trade = None
                     continue
 
-                # Master-Trader Dynamic Breakeven Lock: Advance SL to breakeven + buffer ONLY when price reaches >= +1.0R
+                # Master-Trader Dynamic Breakeven Lock: Advance SL to breakeven + buffer per asset class
+                sym_upper = symbol.upper()
+                is_index = ("US500" in sym_upper) or ("NAS100" in sym_upper) or ("US30" in sym_upper) or (getattr(spec, "asset_class", "").upper() == "INDEX")
+                is_crypto = getattr(spec, "is_crypto", False) or (getattr(spec, "asset_class", "").upper() == "CRYPTO") or any(k in sym_upper for k in ["BTC", "ETH", "SOL"])
+                is_gold = any(k in sym_upper for k in ["XAU", "GOLD", "WTI", "OIL"])
+                be_trigger_r = 1.05 if is_fx else (1.10 if is_index else (1.15 if is_crypto else 1.00))
+
                 if not open_trade.get("be_locked", False):
-                    if favorable >= (risk_dist * 1.00):
+                    if favorable >= (risk_dist * be_trigger_r):
                         open_trade["be_locked"] = True
                         be_buffer = max(spec.pip_size * 2.5, risk_dist * 0.08)
                         if open_trade["type"] == "BUY":
@@ -194,8 +200,8 @@ class BacktestEngine:
                         else:
                             open_trade["sl"] = min(open_trade["sl"], round(open_trade["entry"] - be_buffer, spec.digits))
 
-                # Master-Trader Stage 1 Fast Cash Lock: +1.15R for Forex, +1.0R for Gold/Indices/Crypto
-                fast_cash_r = 1.15 if is_fx else 1.00
+                # Master-Trader Stage 1 Fast Cash Lock: Bank 60% at 1.0R-1.15R across all asset classes
+                fast_cash_r = 1.05 if is_fx else (1.10 if is_index else (1.15 if is_crypto else 1.00))
                 fast_cash_dist = risk_dist * fast_cash_r
                 profit_floor_dist = max(spec.pip_size * 2.5, risk_dist * 0.10)
 
@@ -237,7 +243,8 @@ class BacktestEngine:
 
                 # Stage 2 (Dynamic Runner Trail): Trail remaining runner using runner_trail_distance_atr
                 if open_trade.get("partial_closed", False):
-                    trail_dist = atr * open_trade.get("runner_trail_distance_atr", 1.2)
+                    default_trail = 2.6 if is_gold else (2.4 if is_crypto else (2.2 if is_index else 1.8))
+                    trail_dist = atr * open_trade.get("runner_trail_distance_atr", default_trail)
                     runner_lock_r = 1.8 if (is_fx or is_jpy) else 2.5
                     if open_trade["type"] == "BUY":
                         new_sl = round(high - trail_dist, spec.digits)

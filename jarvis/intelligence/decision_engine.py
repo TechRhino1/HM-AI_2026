@@ -358,14 +358,25 @@ class DecisionEngine:
         h4_bias = mtf_align.get("H4", "NEUTRAL") if isinstance(mtf_align, dict) else "NEUTRAL"
         d1_bias = mtf_align.get("D1", "NEUTRAL") if isinstance(mtf_align, dict) else "NEUTRAL"
         
-        has_reversal_structure = bool(getattr(context.structure, "choch", False) or getattr(context.liquidity, "sweep_detected", False))
+        is_index_sym = getattr(spec, "asset_class", "") == "INDEX" or any(k in context.symbol.upper() for k in ["US500", "NAS100", "US30", "SPX", "NDX", "DJ"])
+        is_crypto_sym = getattr(spec, "is_crypto", False) or (getattr(spec, "asset_class", "").upper() == "CRYPTO") or any(k in context.symbol.upper() for k in ["BTC", "ETH", "SOL"])
+
         mtf_counter_trend = False
-        if tentative_bias == "BUY" and (h4_bias == "BEARISH" or d1_bias == "BEARISH"):
-            if not (has_reversal_structure and ai_score >= 82.0 and calibrated_win_p >= 0.60):
+        if is_index_sym or is_crypto_sym:
+            # Indices and Crypto: Strictly follow H4/D1 institutional macro flow (zero knife-catching)
+            if tentative_bias == "BUY" and (h4_bias == "BEARISH" or d1_bias == "BEARISH"):
                 mtf_counter_trend = True
-        elif tentative_bias == "SELL" and (h4_bias == "BULLISH" or d1_bias == "BULLISH"):
-            if not (has_reversal_structure and ai_score >= 82.0 and calibrated_win_p >= 0.60):
+            elif tentative_bias == "SELL" and (h4_bias == "BULLISH" or d1_bias == "BULLISH"):
                 mtf_counter_trend = True
+        else:
+            if tentative_bias == "BUY" and (h4_bias == "BEARISH" or d1_bias == "BEARISH"):
+                has_choch = bool(getattr(context.structure, "choch", False) and getattr(context.structure, "choch_type", "") == "BULLISH")
+                if not (has_choch and ai_score >= 82.0 and calibrated_win_p >= 0.62):
+                    mtf_counter_trend = True
+            elif tentative_bias == "SELL" and (h4_bias == "BULLISH" or d1_bias == "BULLISH"):
+                has_choch = bool(getattr(context.structure, "choch", False) and getattr(context.structure, "choch_type", "") == "BEARISH")
+                if not (has_choch and ai_score >= 82.0 and calibrated_win_p >= 0.62):
+                    mtf_counter_trend = True
 
         # 5. Dynamic RSI Exhaustion Bounds based on ADX and regime: 70 +- 15 * TrendPower
         adx_val = getattr(context.momentum, "adx", 20.0) if hasattr(context, "momentum") else 20.0
@@ -417,12 +428,9 @@ class DecisionEngine:
             is_prime_session_valid = (
                 kz_active
                 or (context.session.is_prime_session if hasattr(context, "session") and context.session else False)
-                or (spread <= spec.typical_spread_pips * 1.5)
-                or (regime.primary_regime in (MarketRegime.RANGE, MarketRegime.LOW_VOLATILITY, MarketRegime.CONSOLIDATION))
                 or is_micro_mode
                 or "SCALP" in t_style_check
-                or (calibrated_win_p >= 0.52 and ev > 0)
-                or ai_score >= 68.0
+                or (spread <= spec.typical_spread_pips * 1.2 and ai_score >= 75.0 and calibrated_win_p >= 0.58)
             )
 
         # 6. Gold (XAUUSD) Trend Following Gate: Require sweep confirmation or pullback to discount/premium
@@ -443,13 +451,19 @@ class DecisionEngine:
                 if not (sweep_confirmed or st_zone in ("PREMIUM", "EQUILIBRIUM") or bos_active or (strong_expansion and ts < 0)):
                     gold_trend_following_valid = False
 
-        # 7. Crypto Macro Trend Filter: Prevent buying into severe macro bear structural downtrends
+        # 7. Crypto Macro Trend Filter: Prevent buying into severe macro bear downtrends or shorting macro bull runs
         crypto_macro_trend_valid = True
-        if is_crypto and tentative_bias == "BUY":
-            if regime.primary_regime in (MarketRegime.STRONG_TREND_BEAR, MarketRegime.TREND_BEAR):
-                has_reversal = bool(getattr(context.structure, "choch", False) and getattr(context.liquidity, "sweep_detected", False))
-                if not (has_reversal and ai_score >= 78.0 and calibrated_win_p >= 0.60):
-                    crypto_macro_trend_valid = False
+        if is_crypto:
+            if tentative_bias == "BUY":
+                if regime.primary_regime in (MarketRegime.STRONG_TREND_BEAR, MarketRegime.TREND_BEAR):
+                    has_reversal = bool(getattr(context.structure, "choch", False) and getattr(context.liquidity, "sweep_detected", False))
+                    if not (has_reversal and ai_score >= 78.0 and calibrated_win_p >= 0.60):
+                        crypto_macro_trend_valid = False
+            elif tentative_bias == "SELL":
+                if regime.primary_regime in (MarketRegime.STRONG_TREND_BULL, MarketRegime.TREND_BULL):
+                    has_reversal = bool(getattr(context.structure, "choch", False) and getattr(context.liquidity, "sweep_detected", False))
+                    if not (has_reversal and ai_score >= 78.0 and calibrated_win_p >= 0.60):
+                        crypto_macro_trend_valid = False
 
         # Institutional Quality Gate Matrix
         regime_viable = regime.primary_regime != MarketRegime.EVENT_RISK
