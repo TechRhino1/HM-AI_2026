@@ -20,6 +20,7 @@ from jarvis.data.schemas import (
 )
 from jarvis.data.symbol_registry import resolve as resolve_symbol
 from jarvis.intelligence.institutional_entry_engine import InstitutionalEntryEngine, INSTITUTIONAL_ENTRY_ENGINE
+from jarvis.intelligence.symbol_profile_config import get_symbol_profile_config
 
 
 class DynamicRiskAndLevelsEngine:
@@ -102,14 +103,11 @@ class DynamicRiskAndLevelsEngine:
         is_forex = (getattr(spec, "asset_class", "").upper() == "FOREX") and not (is_gold or is_crypto or is_index)
 
         # Anti-Wick Shield: Asset-specific buffer to absorb stop-hunts and wick probes
+        cfg = get_symbol_profile_config(sym_name)
         if is_gold:
-            anti_wick_mult = 0.35
-        elif is_crypto:
-            anti_wick_mult = 0.50
-        elif is_index:
-            anti_wick_mult = 0.10
-        else:  # Forex
-            anti_wick_mult = 0.15
+            anti_wick_mult = 0.35  # 100% UNCHANGED
+        else:
+            anti_wick_mult = cfg.anti_wick_buffer_atr
 
         anti_wick_buffer = atr * anti_wick_mult
         effective_buffer = max(dynamic_buffer, anti_wick_buffer)
@@ -180,22 +178,14 @@ class DynamicRiskAndLevelsEngine:
                     min_target_rr = 1.8
                     asym_rr = 2.8
             else:  # SWING
-                if is_index:
-                    max_swing_sl = 1.65 * atr  # Calibrated index SL provides noise buffer while preserving RR
-                    min_target_rr = 1.8 if is_ranging else 2.2
-                    asym_rr = 2.5 if is_ranging else 3.6
-                elif is_forex:
-                    max_swing_sl = 1.80 * atr  # Forex SL buffer prevents 2-bar noise stopouts
-                    min_target_rr = 2.0
-                    asym_rr = 3.2
-                elif is_gold:
-                    max_swing_sl = 2.80 * atr  # Retain winning commodity runner parameters
+                if is_gold:
+                    max_swing_sl = 2.80 * atr  # Retain winning commodity runner parameters (100% UNCHANGED)
                     min_target_rr = 2.0 if is_ranging else 2.5
                     asym_rr = 2.2 if is_ranging else 4.2
-                else:  # Crypto
-                    max_swing_sl = 2.60 * atr  # Wide breathing room prevents crypto wick stopouts
-                    min_target_rr = 2.0 if is_ranging else 2.5
-                    asym_rr = 2.8 if is_ranging else 4.2
+                else:
+                    max_swing_sl = cfg.sl_atr_multiplier * atr
+                    min_target_rr = cfg.min_target_rr if not is_ranging else max(1.5, cfg.min_target_rr - 0.3)
+                    asym_rr = cfg.asym_rr if not is_ranging else max(2.2, cfg.asym_rr - 0.6)
 
                 sl_dist = min(max_swing_sl, max(0.65 * atr if (is_index or is_forex) else 0.75 * atr, struct_sl_dist))
 
@@ -246,7 +236,7 @@ class DynamicRiskAndLevelsEngine:
             if minor_resistance:
                 first_target_price = round(min(minor_resistance), digits)
             else:
-                first_target_price = round(entry_price + (risk_dist * 1.0), digits)
+                first_target_price = round(entry_price + (risk_dist * (0.90 if (is_forex and any(k in sym_name for k in ["AUD", "CHF"])) else 1.0)), digits)
 
         elif tentative_bias == "SELL":
             entry_price = round(context.bid, digits)
@@ -299,22 +289,14 @@ class DynamicRiskAndLevelsEngine:
                     min_target_rr = 1.8
                     asym_rr = 2.8
             else:  # SWING
-                if is_index:
-                    max_swing_sl = 1.65 * atr  # Calibrated index SL provides noise buffer while preserving RR
-                    min_target_rr = 1.8 if is_ranging else 2.2
-                    asym_rr = 2.5 if is_ranging else 3.6
-                elif is_forex:
-                    max_swing_sl = 1.80 * atr  # Forex SL buffer prevents 2-bar noise stopouts
-                    min_target_rr = 2.0
-                    asym_rr = 3.2
-                elif is_gold:
-                    max_swing_sl = 2.80 * atr  # Retain winning commodity runner parameters
+                if is_gold:
+                    max_swing_sl = 2.80 * atr  # Retain winning commodity runner parameters (100% UNCHANGED)
                     min_target_rr = 2.0 if is_ranging else 2.5
                     asym_rr = 2.2 if is_ranging else 4.2
-                else:  # Crypto
-                    max_swing_sl = 2.60 * atr  # Wide breathing room prevents crypto wick stopouts
-                    min_target_rr = 2.0 if is_ranging else 2.5
-                    asym_rr = 2.8 if is_ranging else 4.2
+                else:
+                    max_swing_sl = cfg.sl_atr_multiplier * atr
+                    min_target_rr = cfg.min_target_rr if not is_ranging else max(1.5, cfg.min_target_rr - 0.3)
+                    asym_rr = cfg.asym_rr if not is_ranging else max(2.2, cfg.asym_rr - 0.6)
 
                 sl_dist = min(max_swing_sl + spread_dist, max(0.65 * atr if (is_index or is_forex) else 0.75 * atr, struct_sl_dist))
 
@@ -365,7 +347,7 @@ class DynamicRiskAndLevelsEngine:
             if minor_support:
                 first_target_price = round(max(minor_support), digits)
             else:
-                first_target_price = round(entry_price - (risk_dist * 1.0), digits)
+                first_target_price = round(entry_price - (risk_dist * (0.90 if (is_forex and any(k in sym_name for k in ["AUD", "CHF"])) else 1.0)), digits)
 
         else:
             # Bias is HOLD / MONITOR — compute a structural reference bracket

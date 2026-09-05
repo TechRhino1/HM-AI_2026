@@ -238,6 +238,8 @@ class DecisionEngine:
         is_crypto = ("BTC" in sym_name) or spec.is_crypto
         is_gold = ("XAU" in sym_name) or ("GOLD" in sym_name) or (getattr(spec, "asset_class", "") == "COMMODITY")
         is_fx = _is_forex(context.symbol) and not is_jpy
+        is_index_asset = getattr(spec, "asset_class", "") == "INDEX" or any(k in sym_name for k in ["US500", "NAS100", "US30", "SPX", "NDX", "DJ"])
+        is_oil_asset = any(k in sym_name for k in ["WTI", "OIL", "CRUDE"])
 
         # 1. Dynamic Confluence Count
         confluence_count = 0
@@ -353,6 +355,9 @@ class DecisionEngine:
             required_win_p = max(floor_win_p_opt, min(0.65, required_win_p))
             min_score = max(floor_score_opt, min(80.0, min_score))
 
+        if is_index_asset:
+            min_score = max(min_score, 72.0)
+
         # 4. Macro MTF Confluence Guard
         mtf_align = getattr(context, "mtf_alignment", {})
         h4_bias = mtf_align.get("H4", "NEUTRAL") if isinstance(mtf_align, dict) else "NEUTRAL"
@@ -417,11 +422,12 @@ class DecisionEngine:
         is_of_trap = (tentative_bias == "BUY" and of_trap == "BUYER_ABSORPTION_TRAP") or (tentative_bias == "SELL" and of_trap == "SELLER_ABSORPTION_TRAP")
         kz_active = SessionEngine.is_forex_killzone_active(getattr(context, "timestamp", None))
         
-        is_index_asset = getattr(spec, "asset_class", "") == "INDEX" or any(k in context.symbol.upper() for k in ["US500", "NAS100", "US30", "SPX", "NDX", "DJ"])
-        is_oil_asset = any(k in context.symbol.upper() for k in ["WTI", "OIL", "CRUDE"])
 
-        if is_crypto or is_gold or is_index_asset or is_oil_asset:
+
+        if is_crypto or is_gold or is_oil_asset:
             is_prime_session_valid = True
+        elif is_index_asset:
+            is_prime_session_valid = SessionEngine.is_index_prime_session(getattr(context, "timestamp", None))
         elif is_jpy:
             is_prime_session_valid = kz_active or (context.session.is_prime_session if hasattr(context, "session") and context.session else False) or (spread <= spec.typical_spread_pips * 1.5) or is_micro_mode or "SCALP" in t_style_check
         else:
@@ -465,6 +471,58 @@ class DecisionEngine:
                     if not (has_reversal and ai_score >= 78.0 and calibrated_win_p >= 0.60):
                         crypto_macro_trend_valid = False
 
+        # 8. Forex False Breakout Guard: Prevent trading false breakout expansions on choppy Forex pairs
+        forex_breakout_valid = True
+        if _is_forex(context.symbol) and not is_gold:
+            if regime.primary_regime in (MarketRegime.BREAKOUT, MarketRegime.POST_BREAKOUT, MarketRegime.HIGH_VOLATILITY):
+                adx_v = getattr(context.momentum, "adx", 0.0) if hasattr(context, "momentum") else 0.0
+                bos_v = getattr(context.structure, "bos", False) if hasattr(context, "structure") else False
+                if not (adx_v >= 30.0 and bos_v):
+                    forex_breakout_valid = False
+
+        # 9. Index Bull Run Counter-Trend Shorting Guard: Never short equity indices during bull runs without structural shift
+        index_counter_trend_valid = True
+        if is_index_asset:
+            if tentative_bias == "SELL" and regime.primary_regime in (MarketRegime.STRONG_TREND_BULL, MarketRegime.TREND_BULL):
+                d1_b = mtf_align.get("D1", "NEUTRAL") if isinstance(mtf_align, dict) else "NEUTRAL"
+                has_rev = bool(getattr(context.structure, "choch", False) and getattr(context.structure, "choch_type", "") == "BEARISH")
+                if not (d1_b == "BEARISH" or has_rev):
+                    index_counter_trend_valid = False
+
+        # 10. Low-Beta FX (AUDUSD, USDCHF, NZDUSD, USDCAD) Macro Alignment Guard
+        low_beta_fx_macro_valid = True
+        if any(k in sym_name for k in ["AUD", "CHF", "NZD", "CAD"]) and not is_gold:
+            d1_b = mtf_align.get("D1", "NEUTRAL") if isinstance(mtf_align, dict) else "NEUTRAL"
+            h4_b = mtf_align.get("H4", "NEUTRAL") if isinstance(mtf_align, dict) else "NEUTRAL"
+            if tentative_bias == "BUY" and (d1_b == "BEARISH" or h4_b == "BEARISH"):
+                low_beta_fx_macro_valid = False
+            elif tentative_bias == "SELL" and (d1_b == "BULLISH" or h4_b == "BULLISH"):
+                low_beta_fx_macro_valid = False
+
+        # 11. JPY Secular Bull/Carry Alignment: USDJPY is driven by US/JP rate differential; block counter-trend shorts unless D1 is decisively bearish
+        jpy_momentum_valid = True
+        if is_jpy:
+            d1_b = mtf_align.get("D1", "NEUTRAL") if isinstance(mtf_align, dict) else "NEUTRAL"
+            ts_v = getattr(context.momentum, "trend_score", 0.0) if hasattr(context, "momentum") else 0.0
+            if tentative_bias == "SELL" and not (d1_b == "BEARISH" and ts_v <= -30.0):
+                jpy_momentum_valid = False
+            else:
+                adx_v = getattr(context.momentum, "adx", 0.0) if hasattr(context, "momentum") else 0.0
+                if adx_v < 18.0 and abs(ts_v) < 15.0:
+                    jpy_momentum_valid = False
+
+        # 12. High-Beta Crypto (SOLUSD) Confluence Guard
+        sol_confluence_valid = True
+        if "SOL" in sym_name:
+            if confluence_count < 2 or ai_score < 72.0:
+                sol_confluence_valid = False
+
+        # 13. US30 Industrial Index Confluence Guard
+        us30_confluence_valid = True
+        if "US30" in sym_name:
+            if confluence_count < 2 or ai_score < 74.0:
+                us30_confluence_valid = False
+
         # Institutional Quality Gate Matrix
         regime_viable = regime.primary_regime != MarketRegime.EVENT_RISK
         if regime.primary_regime == MarketRegime.WEAK_TREND:
@@ -492,6 +550,12 @@ class DecisionEngine:
             "Forex Prime Session": is_prime_session_valid,
             "Gold Trend Following Alignment": gold_trend_following_valid,
             "Crypto Macro Trend Filter": crypto_macro_trend_valid,
+            "Forex Breakout Guard": forex_breakout_valid,
+            "Index Trend Alignment": index_counter_trend_valid,
+            "Low-Beta FX Macro Alignment": low_beta_fx_macro_valid,
+            "JPY Momentum Guard": jpy_momentum_valid,
+            "SOL Confluence Guard": sol_confluence_valid,
+            "US30 Confluence Guard": us30_confluence_valid,
             "Margin Capacity Limit": account_balance >= 10.0 and planned_risk_dollars > 0
         }
 
@@ -736,10 +800,21 @@ class DecisionEngine:
         _spread_cost = context.volatility.current_spread_pips * _spec.pip_value_per_lot * _est_lots
         _slippage = (context.volatility.atr * 0.02) * _est_lots
 
+        is_gold_asset = any(k in context.symbol.upper() for k in ["XAU", "GOLD"])
+        is_oil_asset = any(k in context.symbol.upper() for k in ["WTI", "OIL", "CRUDE"])
+
         for strat in candidate_strategies:
             strat_weight = strategy_probs.get(strat, 0.0)
             strat_p = final_win_p
             strat_rr = rr_ratio
+
+            # Prerequisite trigger validation for non-benchmark assets:
+            # A reversal strategy requires actual structural or liquidity trigger evidence
+            if not (is_gold_asset or is_oil_asset):
+                if strat == "CHOCH_STRUCTURAL_REVERSAL" and not bool(getattr(context.structure, "choch", False)):
+                    continue
+                if strat == "LIQUIDITY_SWEEP_REVERSAL" and not bool(getattr(context.liquidity, "sweep_detected", False)):
+                    continue
 
             # Strategy-specific edge & RR adjustments
             if strat == "RANGE_MEAN_REVERSION":
@@ -780,6 +855,16 @@ class DecisionEngine:
                 "ev": round(strat_ev, 2),
                 "fitness": fitness,
                 "weight": strat_weight
+            }
+
+        if not strategy_evaluations:
+            fallback_strat = "TREND_PULLBACK" if "TREND_PULLBACK" in candidate_strategies else candidate_strategies[0]
+            strategy_evaluations[fallback_strat] = {
+                "win_p": final_win_p,
+                "rr": rr_ratio,
+                "ev": 0.0,
+                "fitness": -1e6,
+                "weight": 0.1
             }
 
         # Select strategy with highest validated fitness / EV

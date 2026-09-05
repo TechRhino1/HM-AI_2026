@@ -15,6 +15,7 @@ from jarvis.data.symbol_registry import resolve as resolve_symbol
 from jarvis.backtesting.metrics import PerformanceMetricsCalculator
 from jarvis.risk.loss_cooldown import LossCooldownManager
 from jarvis.historical.historical_engine import HISTORICAL_DATA_ENGINE
+from jarvis.intelligence.symbol_profile_config import get_symbol_profile_config
 
 class BacktestEngine:
     def __init__(
@@ -34,6 +35,15 @@ class BacktestEngine:
         self.analyst_cluster = ParallelAnalystCluster(parallel=False)
         self.decision_engine = DecisionEngine()
         self.risk_engine = RiskEngine(max_risk_per_trade_pct=risk_per_trade_pct, is_backtest=True)
+
+    def _calc_commission(self, symbol: str, lots: float, price: float = 0.0) -> float:
+        sym_upper = symbol.upper()
+        # Commodities (Gold & WTI): $5.00/lot standard (100% UNCHANGED)
+        if any(k in sym_upper for k in ["XAU", "GOLD", "WTI", "OIL"]):
+            return round(lots * self.commission_per_lot, 4)
+        cfg = get_symbol_profile_config(symbol)
+        # XM Ultra Low Standard specifications: $0.00 commission for Crypto, Indices, Forex
+        return round(lots * cfg.commission_per_lot, 4)
 
     def run_backtest(
         self,
@@ -153,12 +163,13 @@ class BacktestEngine:
                 if risk_dist <= 0:
                     risk_dist = max(0.001, abs(open_trade["entry"] - open_trade["sl"]))
 
-                # Master-Trader Stagnation Time Stop: Close at market if bars_held >= 8 and mfe < (risk_dist * 0.35)
-                if open_trade["bars_held"] >= 8 and open_trade["mfe"] < (risk_dist * 0.35):
+                # Master-Trader Stagnation Time Stop: Close at market if bars_held >= stag_limit and mfe < (risk_dist * 0.35)
+                stag_limit = 16 if is_crypto else 8
+                if open_trade["bars_held"] >= stag_limit and open_trade["mfe"] < (risk_dist * 0.35):
                     exit_price = float(current_bar["close"])
                     pips = ((exit_price - open_trade["entry"]) if open_trade["type"] == "BUY" else (open_trade["entry"] - exit_price)) / spec.pip_size
                     pnl_raw = pips * spec.pip_value_per_lot * open_trade["lots"]
-                    comm = open_trade["lots"] * self.commission_per_lot
+                    comm = self._calc_commission(symbol, open_trade["lots"], exit_price)
                     pnl_remaining = pnl_raw - comm
                     pnl_net = pnl_remaining + open_trade.get("realized_pnl", 0.0)
                     balance += pnl_remaining
@@ -169,11 +180,11 @@ class BacktestEngine:
                         "symbol": symbol, "type": open_trade["type"],
                         "open_time": open_trade.get("open_time"),
                         "exit_time": bar_time,
-                        "bars_held": open_trade.get("bars_held", 8),
+                        "bars_held": open_trade.get("bars_held", stag_limit),
                         "entry": open_trade["entry"], "exit": exit_price,
                         "sl": open_trade["sl"], "tp": open_trade["tp"],
                         "lots": open_trade.get("initial_lots", open_trade["lots"]),
-                        "pnl": round(pnl_net, 2), "result": "STAGNATION_TIME_STOP_8BAR",
+                        "pnl": round(pnl_net, 2), "result": f"STAGNATION_TIME_STOP_{stag_limit}BAR",
                         "strategy": open_trade["strategy"], "regime": open_trade["regime"],
                         "score": open_trade["score"],
                         "planned_rr": open_trade.get("planned_rr", 0.0),
@@ -189,7 +200,8 @@ class BacktestEngine:
                 is_index = ("US500" in sym_upper) or ("NAS100" in sym_upper) or ("US30" in sym_upper) or (getattr(spec, "asset_class", "").upper() == "INDEX")
                 is_crypto = getattr(spec, "is_crypto", False) or (getattr(spec, "asset_class", "").upper() == "CRYPTO") or any(k in sym_upper for k in ["BTC", "ETH", "SOL"])
                 is_gold = any(k in sym_upper for k in ["XAU", "GOLD", "WTI", "OIL"])
-                be_trigger_r = 1.05 if is_fx else (1.10 if is_index else (1.15 if is_crypto else 1.00))
+                cfg = get_symbol_profile_config(symbol)
+                be_trigger_r = 1.00 if is_gold else cfg.be_trigger_r
 
                 if not open_trade.get("be_locked", False):
                     if favorable >= (risk_dist * be_trigger_r):
@@ -200,10 +212,10 @@ class BacktestEngine:
                         else:
                             open_trade["sl"] = min(open_trade["sl"], round(open_trade["entry"] - be_buffer, spec.digits))
 
-                # Master-Trader Stage 1 Fast Cash Lock: Bank 60% at 1.0R-1.15R across all asset classes
-                fast_cash_r = 1.05 if is_fx else (1.10 if is_index else (1.15 if is_crypto else 1.00))
+                # Master-Trader Stage 1 Fast Cash Lock: Bank 60% (Gold/Oil) or profile pct (others)
+                fast_cash_r = 1.00 if is_gold else cfg.fast_cash_r
                 fast_cash_dist = risk_dist * fast_cash_r
-                profit_floor_dist = max(spec.pip_size * 2.5, risk_dist * 0.10)
+                profit_floor_dist = max(spec.pip_size * 2.5, risk_dist * 0.10) if is_gold else max(spec.pip_size * 2.0, risk_dist * cfg.be_buffer_pct)
 
                 if not open_trade.get("partial_closed", False) and open_trade["lots"] >= 0.01:
                     is_target_hit = False
@@ -216,24 +228,27 @@ class BacktestEngine:
                         partial_exit_p = open_trade["entry"] - fast_cash_dist
 
                     if is_target_hit:
-                        # Bank 60% volume into realized cash
-                        partial_lots = round(open_trade["lots"] * 0.60, 2)
+                        # Bank volume into realized cash: 60% for Gold/Oil, profile pct for others
+                        partial_ratio = 0.60 if is_gold else cfg.fast_cash_volume_pct
+                        partial_lots = round(open_trade["lots"] * partial_ratio, 2)
                         if partial_lots >= 0.01 and open_trade["lots"] > partial_lots:
                             pips_p = ((partial_exit_p - open_trade["entry"]) if open_trade["type"] == "BUY" else (open_trade["entry"] - partial_exit_p)) / spec.pip_size
-                            pnl_p = (pips_p * spec.pip_value_per_lot * partial_lots) - (partial_lots * self.commission_per_lot)
+                            comm_p = self._calc_commission(symbol, partial_lots, partial_exit_p)
+                            pnl_p = (pips_p * spec.pip_value_per_lot * partial_lots) - comm_p
                             balance += pnl_p
                             open_trade["realized_pnl"] = open_trade.get("realized_pnl", 0.0) + pnl_p
                             open_trade["lots"] = round(open_trade["lots"] - partial_lots, 2)
                         elif partial_lots >= 0.01:
                             pips_p = ((partial_exit_p - open_trade["entry"]) if open_trade["type"] == "BUY" else (open_trade["entry"] - partial_exit_p)) / spec.pip_size
-                            pnl_p = (pips_p * spec.pip_value_per_lot * open_trade["lots"]) - (open_trade["lots"] * self.commission_per_lot)
+                            comm_p = self._calc_commission(symbol, open_trade["lots"], partial_exit_p)
+                            pnl_p = (pips_p * spec.pip_value_per_lot * open_trade["lots"]) - comm_p
                             balance += pnl_p
                             open_trade["realized_pnl"] = open_trade.get("realized_pnl", 0.0) + pnl_p
 
                         open_trade["partial_closed"] = True
                         open_trade["be_locked"] = True
 
-                        # Advance remaining SL to Entry + (0.10 * risk_dist) (guaranteed risk-free trade)
+                        # Advance remaining SL to Entry + profit_floor_dist (guaranteed risk-free trade)
                         if open_trade["type"] == "BUY":
                             runner_floor_sl = round(open_trade["entry"] + profit_floor_dist, spec.digits)
                             open_trade["sl"] = max(open_trade["sl"], runner_floor_sl)
@@ -243,8 +258,9 @@ class BacktestEngine:
 
                 # Stage 2 (Dynamic Runner Trail): Trail remaining runner using runner_trail_distance_atr
                 if open_trade.get("partial_closed", False):
-                    default_trail = 2.6 if is_gold else (2.4 if is_crypto else (2.2 if is_index else 1.8))
-                    trail_dist = atr * open_trade.get("runner_trail_distance_atr", default_trail)
+                    default_trail = 2.6 if is_gold else cfg.runner_trail_atr
+                    trail_mult = open_trade.get("runner_trail_distance_atr", 1.2) if is_gold else default_trail
+                    trail_dist = atr * trail_mult
                     runner_lock_r = 1.8 if (is_fx or is_jpy) else 2.5
                     if open_trade["type"] == "BUY":
                         new_sl = round(high - trail_dist, spec.digits)
@@ -286,7 +302,7 @@ class BacktestEngine:
                 if closed:
                     pips = ((exit_price - open_trade["entry"]) if open_trade["type"] == "BUY" else (open_trade["entry"] - exit_price)) / spec.pip_size
                     pnl_raw = pips * spec.pip_value_per_lot * open_trade["lots"]
-                    comm = open_trade["lots"] * self.commission_per_lot
+                    comm = self._calc_commission(symbol, open_trade["lots"], exit_price)
                     pnl_remaining = pnl_raw - comm
                     pnl_net = pnl_remaining + open_trade.get("realized_pnl", 0.0)
                     balance += pnl_remaining
@@ -431,7 +447,7 @@ class BacktestEngine:
             spec = resolve_symbol(symbol)
             pips = ((exit_price - open_trade["entry"]) if open_trade["type"] == "BUY" else (open_trade["entry"] - exit_price)) / spec.pip_size
             pnl_raw = pips * spec.pip_value_per_lot * open_trade["lots"]
-            comm = open_trade["lots"] * self.commission_per_lot
+            comm = self._calc_commission(symbol, open_trade["lots"], exit_price)
             pnl_net = pnl_raw - comm + open_trade.get("realized_pnl", 0.0)
             balance += (pnl_raw - comm)
 

@@ -99,6 +99,18 @@ class SessionEngine:
         return kz["is_in_killzone"]
 
     @staticmethod
+    def is_index_prime_session(dt: Optional[datetime] = None) -> bool:
+        """Determines if the current time falls within US Equity Cash Market core liquidity hours (13:00 to 21:00 UTC).
+        Filters out low-liquidity overnight drift on US500, NAS100, US30."""
+        if dt is None:
+            dt = datetime.now(timezone.utc)
+        elif dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        # Core institutional trend liquidity hours: 16:00 to 19:59 UTC (11:00 AM - 3:00 PM EST)
+        # Avoids opening bell volatility traps (15:00 UTC / 9:30 AM EST) and closing bell imbalance whipsaws (20:00 UTC / 4:00 PM EST)
+        return dt.weekday() < 5 and (16 <= dt.hour <= 19)
+
+    @staticmethod
     def get_market_trading_status(symbol: str = "XAUUSD", dt: Optional[datetime] = None) -> Dict[str, Any]:
         """
         Determines exact market operational status, weekend closure, and opening schedules in IST & UTC.
