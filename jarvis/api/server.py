@@ -32,6 +32,7 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
     copilot: JarvisCopilot = JarvisCopilot(GLOBAL_STATE)
     _bg_thread_started: bool = False
     _bg_lock = threading.Lock()
+    _CANDLES_CACHE: Dict[str, Tuple[Dict[str, Any], float]] = {}
     
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     root_dir = os.path.dirname(base_dir)
@@ -296,28 +297,68 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                     if "time" in r:
                         r["time"] = str(r["time"])
                 self._send_json({"symbol": sym, "timeframe": tf, "count": len(records), "data": records})
+            elif path == "/api/tunnel_info":
+                tunnel_url = ""
+                provider = "None"
+                status = "DISCONNECTED"
+                tunnel_file = os.path.join(self.root_dir, "active_tunnel_url.txt")
+                if os.path.exists(tunnel_file):
+                    try:
+                        with open(tunnel_file, "r", encoding="utf-8") as f:
+                            tunnel_url = f.read().strip()
+                        if tunnel_url.startswith("http"):
+                            status = "CONNECTED"
+                            if "trycloudflare" in tunnel_url:
+                                provider = "Cloudflare Tunnel"
+                            elif "lhr.life" in tunnel_url:
+                                provider = "localhost.run"
+                            elif "pinggy" in tunnel_url:
+                                provider = "pinggy.io"
+                            elif "serveo" in tunnel_url:
+                                provider = "serveo.net"
+                    except Exception:
+                        pass
+                from HM_start import get_local_wifi_ip
+                local_ip = get_local_wifi_ip()
+                self._send_json({
+                    "url": tunnel_url,
+                    "status": status,
+                    "provider": provider,
+                    "local_ip": local_ip,
+                    "port": 8501
+                })
             elif path == "/api/candles":
                 sym = query.get("symbol", ["XAUUSD"])[0]
                 tf = query.get("tf", ["H1"])[0]
+                cache_key = f"{sym}_{tf}"
+                now = time.time()
+                cached = self._CANDLES_CACHE.get(cache_key)
+                if cached and (now - cached[1] < 1.0):
+                    self._send_json(cached[0])
+                    return
+
                 df = self.data_feed.fetch_rates(sym, timeframe=tf, num_bars=150, include_current_bar=True)
                 spec = resolve_symbol(sym)
                 digits = getattr(spec, "digits", 2 if "XAU" in sym or "BTC" in sym else 5)
                 candles = []
-                for _, r in df.iterrows():
-                    # Ensure timestamp is UTC UNIX seconds
-                    t_val = r["time"]
-                    if hasattr(t_val, "tzinfo") and t_val.tzinfo is None:
-                        t_val = t_val.tz_localize("UTC")
-                    
-                    candles.append({
-                        "time": int(t_val.timestamp()) if hasattr(t_val, "timestamp") else int(t_val),
-                        "open": round(float(r["open"]), digits),
-                        "high": round(float(r["high"]), digits),
-                        "low": round(float(r["low"]), digits),
-                        "close": round(float(r["close"]), digits),
-                        "volume": float(r["volume"])
-                    })
-                self._send_json({"symbol": sym, "timeframe": tf, "candles": candles})
+                if df is not None and not df.empty:
+                    records = df.to_dict(orient="records")
+                    for r in records:
+                        t_val = r["time"]
+                        if hasattr(t_val, "tzinfo") and t_val.tzinfo is None:
+                            t_val = t_val.tz_localize("UTC")
+                        ts = int(t_val.timestamp()) if hasattr(t_val, "timestamp") else int(t_val)
+                        candles.append({
+                            "time": ts,
+                            "open": round(float(r["open"]), digits),
+                            "high": round(float(r["high"]), digits),
+                            "low": round(float(r["low"]), digits),
+                            "close": round(float(r["close"]), digits),
+                            "volume": float(r.get("volume", 0.0))
+                        })
+                payload = {"symbol": sym, "timeframe": tf, "candles": candles}
+                self._CANDLES_CACHE[cache_key] = (payload, now)
+                self._send_json(payload)
             elif path == "/api/rates":
                 sym = query.get("symbol", ["XAUUSD"])[0]
                 tf = query.get("tf", query.get("timeframe", ["H1"]))[0]
@@ -430,9 +471,14 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                 })
             else:
                 self.send_error(404, "Endpoint not found")
+        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+            pass
         except Exception as e:
             logger.error(f"Error handling GET {path}: {e}", exc_info=True)
-            self._send_json({"error": str(e)}, status_code=500)
+            try:
+                self._send_json({"error": str(e)}, status_code=500)
+            except Exception:
+                pass
 
     def do_POST(self):
         parsed = urlparse(self.path)
@@ -621,37 +667,57 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                 self._send_json(res)
             else:
                 self.send_error(404, "Endpoint not found")
+        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+            pass
         except Exception as e:
             logger.error(f"Error handling POST {path}: {e}", exc_info=True)
-            self._send_json({"error": str(e)}, status_code=500)
+            try:
+                self._send_json({"error": str(e)}, status_code=500)
+            except Exception:
+                pass
 
     def _send_json(self, data: Any, status_code: int = 200, cookies: Optional[list] = None):
-        self.send_response(status_code)
-        self.send_header("Content-Type", "application/json")
-        cors_origin = os.environ.get("JARVIS_CORS_ORIGIN", "")
-        if cors_origin:
-            self.send_header("Access-Control-Allow-Origin", cors_origin)
-        if cookies:
-            for c in cookies:
-                if c:
-                    self.send_header("Set-Cookie", c)
-        self.end_headers()
-        payload = json.dumps(data, default=str)
-        self.wfile.write(payload.encode("utf-8"))
+        try:
+            payload = json.dumps(data, default=str).encode("utf-8")
+            self.send_response(status_code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            cors_origin = os.environ.get("JARVIS_CORS_ORIGIN", "")
+            if cors_origin:
+                self.send_header("Access-Control-Allow-Origin", cors_origin)
+            if cookies:
+                for c in cookies:
+                    if c:
+                        self.send_header("Set-Cookie", c)
+            self.end_headers()
+            self.wfile.write(payload)
+        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+            pass
+        except Exception as e:
+            logger.debug(f"Socket write exception (non-fatal): {e}")
 
     _STATIC_CACHE = {}
 
     def _serve_static_file(self, req_path: str):
         now = time.time()
+        is_vendor = "vendor" in req_path
+        cache_ttl = 3600.0 if is_vendor else 5.0
+
         if req_path in self._STATIC_CACHE:
             content, mime_type, ts = self._STATIC_CACHE[req_path]
-            if now - ts < 5.0:
-                self.send_response(200)
-                self.send_header("Content-Type", mime_type)
-                self.send_header("Content-Length", str(len(content)))
-                self.send_header("Cache-Control", "no-cache")
-                self.end_headers()
-                self.wfile.write(content)
+            if now - ts < cache_ttl:
+                try:
+                    self.send_response(200)
+                    self.send_header("Content-Type", mime_type)
+                    self.send_header("Content-Length", str(len(content)))
+                    if is_vendor:
+                        self.send_header("Cache-Control", "public, max-age=604800, immutable")
+                    else:
+                        self.send_header("Cache-Control", "no-cache, must-revalidate")
+                    self.end_headers()
+                    self.wfile.write(content)
+                except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+                    pass
                 return
 
         static_dir = os.path.abspath(os.path.join(self.base_dir, "ui", "static"))
@@ -675,14 +741,20 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
 
             self._STATIC_CACHE[req_path] = (content, mime_type, now)
 
-            self.send_response(200)
-            self.send_header("Content-Type", mime_type)
-            self.send_header("Content-Length", str(len(content)))
-            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
-            self.send_header("Pragma", "no-cache")
-            self.send_header("Expires", "0")
-            self.end_headers()
-            self.wfile.write(content)
+            try:
+                self.send_response(200)
+                self.send_header("Content-Type", mime_type)
+                self.send_header("Content-Length", str(len(content)))
+                if is_vendor:
+                    self.send_header("Cache-Control", "public, max-age=604800, immutable")
+                else:
+                    self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                    self.send_header("Pragma", "no-cache")
+                    self.send_header("Expires", "0")
+                self.end_headers()
+                self.wfile.write(content)
+            except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+                pass
         else:
             self.send_error(404, f"Static file {req_path} not found")
 
@@ -695,14 +767,17 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                 content = f.read()
             content_bytes = content.encode("utf-8")
 
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(content_bytes)))
-            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
-            self.send_header("Pragma", "no-cache")
-            self.send_header("Expires", "0")
-            self.end_headers()
-            self.wfile.write(content_bytes)
+            try:
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(content_bytes)))
+                self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+                self.send_header("Pragma", "no-cache")
+                self.send_header("Expires", "0")
+                self.end_headers()
+                self.wfile.write(content_bytes)
+            except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+                pass
         else:
             self.send_error(404, f"Template {template_name} not found")
 

@@ -48,6 +48,7 @@ trades_log.db
 jarvis_trade_memory.db
 jarvis.lock
 jarvis_bandit_state.json
+active_tunnel_url.txt
 .jarvis_secret_key
 *.secret_key
 .jarvis_admin_pass

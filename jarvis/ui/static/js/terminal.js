@@ -218,8 +218,8 @@
     function initTradingViewLightweightChart() {
         if (!el.tvLiveContainer) return;
         if (typeof LightweightCharts === "undefined") {
-            console.warn("TradingView Lightweight Charts library not yet loaded. Retrying...");
-            setTimeout(initTradingViewLightweightChart, 300);
+            console.warn("TradingView Lightweight Charts library not yet loaded. Retrying in 100ms...");
+            setTimeout(initTradingViewLightweightChart, 100);
             return;
         }
 
@@ -280,6 +280,8 @@
         state.tvChartInstance = chart;
         state.tvCandleSeries = candleSeries;
         state.tvVolumeSeries = volumeSeries;
+        state._tvChartHasData = false;
+        state._lastChartLoadedSymbol = "";
 
         // Automatically resize chart whenever container dimensions change
         if (window.ResizeObserver && el.tvLiveContainer) {
@@ -345,7 +347,11 @@
             }
         });
 
-        renderTradingViewChartData();
+        if (state.candles && state.candles.length > 0 && isSameSymbol(state.candleSymbol, state.symbol)) {
+            renderTradingViewChartData(true);
+        } else {
+            fetchCandles(true);
+        }
     }
 
     function calculateSupportResistance(candles) {
@@ -411,8 +417,10 @@
         const digits = firstClose > 100 ? 2 : (firstClose > 10 ? 3 : 5);
         const minMove = Math.pow(10, -digits);
 
-        if (isFullReset) {
-            // Full Reset on Symbol switch or Timeframe change
+        const needsFullSet = isFullReset || !state._tvChartHasData || (state._lastChartLoadedSymbol !== state.symbol);
+
+        if (needsFullSet) {
+            // Full Reset on Symbol switch, Timeframe change, or initial chart load
             if (state.tvCandleSeries) {
                 state.tvCandleSeries.applyOptions({
                     priceFormat: {
@@ -444,6 +452,8 @@
             if (state.tvChartInstance) {
                 state.tvChartInstance.timeScale().fitContent();
             }
+            state._tvChartHasData = true;
+            state._lastChartLoadedSymbol = state.symbol;
         } else {
             // Incremental Live Update: only update the last forming candle so user scroll/pan position is PRESERVED
             const last = sortedCandles[sortedCandles.length - 1];
@@ -2809,6 +2819,7 @@
 
     window.setTimeframe = function (tf) {
         state.timeframe = tf;
+        state._tvChartHasData = false;
         document.querySelectorAll(".tf-btn").forEach(btn => {
             btn.classList.toggle("active", btn.textContent.trim() === tf);
         });
@@ -2931,6 +2942,9 @@
                     width: el.tvLiveContainer.clientWidth || (window.innerWidth - 20),
                     height: el.tvLiveContainer.clientHeight || 300
                 });
+                if (!state._tvChartHasData && state.candles && state.candles.length > 0) {
+                    renderTradingViewChartData(true);
+                }
             }
         }, 80);
     };

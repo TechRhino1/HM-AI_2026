@@ -10,7 +10,9 @@ All in one single command!
 import os
 import sys
 import time
+import re
 import socket
+import shutil
 import threading
 import subprocess
 import logging
@@ -39,6 +41,7 @@ logger = logging.getLogger("HM_START")
 _TUNNEL_STATE = {
     "url": "establishing...",
     "status": "STARTING",
+    "provider": "None",
     "proc": None
 }
 
@@ -62,6 +65,21 @@ def get_local_wifi_ip():
         pass
     return "127.0.0.1"
 
+def find_cloudflared_binary():
+    """Locates the Cloudflare Tunnel executable on Windows / Linux."""
+    cand = shutil.which("cloudflared")
+    if cand and os.path.exists(cand):
+        return cand
+    for p in [
+        r"C:\Program Files (x86)\cloudflared\cloudflared.exe",
+        r"C:\Program Files\cloudflared\cloudflared.exe",
+        r"C:\cloudflared\cloudflared.exe",
+        os.path.expanduser("~\\cloudflared.exe")
+    ]:
+        if os.path.exists(p):
+            return p
+    return None
+
 def _cleanup_stale_processes():
     """Safely terminates previously tracked tunnel subprocesses."""
     proc = _TUNNEL_STATE.get("proc")
@@ -76,49 +94,159 @@ def _cleanup_stale_processes():
                 pass
         _TUNNEL_STATE["proc"] = None
 
-def _start_background_tunnel(port: int = 8501, custom_subdomain: str = "hm2026"):
-    """Starts persistent authenticated HTTPS mobile tunnel with automatic multi-provider fallback."""
+def _save_active_tunnel_url(url: str, provider: str = ""):
+    try:
+        target = os.path.join(BASE_DIR, "active_tunnel_url.txt")
+        with open(target, "w", encoding="utf-8") as f:
+            f.write(url.strip())
+    except Exception:
+        pass
+
+def _start_background_tunnel(port: int = 8501):
+    """
+    Starts persistent authenticated HTTPS mobile tunnel with automatic multi-provider fallback.
+    Priority 1: Cloudflare Tunnel (trycloudflare.com) — zero drops, CDN-accelerated, sub-second latency.
+    Priority 2: localhost.run (SSH tunnel with aggressive keepalive).
+    Priority 3: pinggy.io (SSH tunnel over port 443).
+    Priority 4: serveo.net (SSH tunnel).
+    """
     _cleanup_stale_processes()
     key_path = os.path.expanduser("~/.ssh/id_ed25519")
+    local_ip = get_local_wifi_ip()
 
-    providers = [
-        ("serveo.net", ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=10", "-o", "ExitOnForwardFailure=yes", "-R", f"{custom_subdomain}:80:127.0.0.1:{port}", "serveo.net"]),
-        ("localhost.run", ["ssh", "-o", "StrictHostKeyChecking=no", "-o", "ServerAliveInterval=15", "-o", "ExitOnForwardFailure=yes", "-R", f"80:127.0.0.1:{port}", "localhost.run"]),
-    ]
+    cloudflared_bin = find_cloudflared_binary()
+
+    providers = []
+    if cloudflared_bin:
+        providers.append(("Cloudflare Tunnel", [cloudflared_bin, "tunnel", "--url", f"http://127.0.0.1:{port}"]))
+
+    providers.append(("localhost.run", [
+        "ssh", "-o", "StrictHostKeyChecking=no",
+        "-o", "ServerAliveInterval=10",
+        "-o", "ServerAliveCountMax=3",
+        "-o", "TCPKeepAlive=yes",
+        "-o", "ExitOnForwardFailure=yes",
+        "-R", f"80:127.0.0.1:{port}",
+        "nokey@localhost.run"
+    ]))
+
+    providers.append(("pinggy.io", [
+        "ssh", "-o", "StrictHostKeyChecking=no",
+        "-o", "ServerAliveInterval=10",
+        "-o", "ServerAliveCountMax=3",
+        "-o", "TCPKeepAlive=yes",
+        "-o", "ExitOnForwardFailure=yes",
+        "-p", "443",
+        "-R0:127.0.0.1:{port}",
+        "a.pinggy.io"
+    ]))
+
+    providers.append(("serveo.net", [
+        "ssh", "-o", "StrictHostKeyChecking=no",
+        "-o", "ServerAliveInterval=10",
+        "-o", "ServerAliveCountMax=3",
+        "-o", "TCPKeepAlive=yes",
+        "-o", "ExitOnForwardFailure=yes",
+        "-R", f"80:127.0.0.1:{port}",
+        "serveo.net"
+    ]))
 
     p_idx = 0
     while True:
         p_name, cmd = providers[p_idx % len(providers)]
-        if os.path.exists(key_path) and "-i" not in cmd:
+        if "ssh" in cmd[0] and os.path.exists(key_path) and "-i" not in cmd:
             cmd = [cmd[0], "-i", key_path] + cmd[1:]
-        
-        try:
-            logger.info(f"Establishing mobile HTTPS tunnel via {p_name}...")
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
-            _TUNNEL_STATE["proc"] = proc
-            _TUNNEL_STATE["status"] = "CONNECTED"
 
-            for _ in range(40):
+        try:
+            logger.info(f"Establishing high-speed mobile HTTPS tunnel via {p_name}...")
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace"
+            )
+            _TUNNEL_STATE["proc"] = proc
+            _TUNNEL_STATE["status"] = "INITIALIZING"
+            _TUNNEL_STATE["provider"] = p_name
+
+            url_found = False
+            start_t = time.time()
+
+            while time.time() - start_t < 25:
                 line = proc.stdout.readline()
                 if not line:
-                    line = proc.stderr.readline()
-                if not line:
-                    break
-                if "Forwarding HTTP traffic from" in line:
-                    _TUNNEL_STATE["url"] = line.split("Forwarding HTTP traffic from")[1].strip()
-                    logger.info(f"Mobile HTTPS Tunnel active: {_TUNNEL_STATE['url']}")
-                    break
-                elif "tunneled with tls termination," in line:
-                    parts = line.split("tunneled with tls termination,")
-                    if len(parts) > 1:
-                        _TUNNEL_STATE["url"] = parts[1].strip()
-                        logger.info(f"Mobile HTTPS Tunnel active: {_TUNNEL_STATE['url']}")
+                    if proc.poll() is not None:
                         break
-                time.sleep(0.2)
+                    time.sleep(0.1)
+                    continue
 
-            proc.wait()
+                clean_line = line.strip()
+
+                # 1. Cloudflare Tunnel regex
+                if "trycloudflare.com" in clean_line:
+                    m = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", clean_line)
+                    if m:
+                        url = m.group(0)
+                        _TUNNEL_STATE["url"] = url
+                        _TUNNEL_STATE["status"] = "CONNECTED"
+                        _save_active_tunnel_url(url, p_name)
+                        url_found = True
+                        break
+
+                # 2. localhost.run parsing
+                elif "tunneled with tls termination," in clean_line:
+                    parts = clean_line.split("tunneled with tls termination,")
+                    if len(parts) > 1:
+                        url = parts[1].strip()
+                        _TUNNEL_STATE["url"] = url
+                        _TUNNEL_STATE["status"] = "CONNECTED"
+                        _save_active_tunnel_url(url, p_name)
+                        url_found = True
+                        break
+
+                # 3. pinggy.io regex
+                elif "pinggy.link" in clean_line:
+                    m = re.search(r"https?://[a-zA-Z0-9-]+\.a\.free\.pinggy\.link", clean_line)
+                    if m:
+                        url = m.group(0).replace("http://", "https://")
+                        _TUNNEL_STATE["url"] = url
+                        _TUNNEL_STATE["status"] = "CONNECTED"
+                        _save_active_tunnel_url(url, p_name)
+                        url_found = True
+                        break
+
+                # 4. serveo.net parsing
+                elif "Forwarding HTTP traffic from" in clean_line:
+                    url = clean_line.split("Forwarding HTTP traffic from")[1].strip()
+                    _TUNNEL_STATE["url"] = url
+                    _TUNNEL_STATE["status"] = "CONNECTED"
+                    _save_active_tunnel_url(url, p_name)
+                    url_found = True
+                    break
+
+            if url_found:
+                active_url = _TUNNEL_STATE["url"]
+                logger.info(f"Mobile HTTPS Tunnel active: {active_url}")
+                print("\n" + "=" * 95, flush=True)
+                print(f" [HM_START] ⚡ SECURE CLOUD MOBILE TUNNEL ACTIVE: {active_url}", flush=True)
+                print(f"  -> Tunnel Provider       : {p_name}", flush=True)
+                print(f"  -> Permanent Local Wi-Fi : http://{local_ip}:{port}", flush=True)
+                print(f"  -> Remote Auth Login     : admin / admin (or Hms@2026)", flush=True)
+                print("=" * 95 + "\n", flush=True)
+
+                # Keep reading output so buffer doesn't fill up
+                while proc.poll() is None:
+                    line = proc.stdout.readline()
+                    if not line and proc.poll() is not None:
+                        break
+                    time.sleep(0.5)
+
+            # If reached here, process exited or timed out
+            ret = proc.poll()
+            logger.warning(f"Tunnel via {p_name} closed (code {ret}). Reconnecting in 2s...")
             _TUNNEL_STATE["status"] = "RECONNECTING"
-            logger.warning(f"Tunnel via {p_name} closed. Reconnecting to next provider in 2s...")
             p_idx += 1
             time.sleep(2)
         except Exception as e:

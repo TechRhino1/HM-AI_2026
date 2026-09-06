@@ -8,8 +8,9 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <!-- Lightweight Charts Library -->
-    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    <!-- TradingView Lightweight Charts Library (Local Fast Cache + CDN Fallback) -->
+    <script src="/static/js/vendor/lightweight-charts.standalone.production.js"></script>
+    <script>if(typeof LightweightCharts==='undefined'){document.write('<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"><\/script>');}</script>
     <!-- India Terminal Stylesheet -->
     <link rel="stylesheet" href="/static/css/india.css?v=20260826_v6">
     <link rel="stylesheet" href="/static/css/auth.css?v=20260826_v6">
