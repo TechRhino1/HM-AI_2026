@@ -173,8 +173,11 @@ def _cloudflare_worker(port: int = 8501):
                 m = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", line)
                 if m:
                     url = m.group(0)
+                    if "api.trycloudflare.com" in url:
+                        continue
                     _TUNNEL_STATE["cloudflare_url"] = url
                     _TUNNEL_STATE["cloudflare_status"] = "CONNECTED"
+                    _save_active_tunnel_url(url, "cloudflare")
                     logger.info(f"Cloudflare Edge Tunnel Active: {url}")
                     print(f"\n[HM_START] ⚡ CLOUDFLARE EDGE ACTIVE: {url}\n", flush=True)
                     break

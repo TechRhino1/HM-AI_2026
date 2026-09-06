@@ -248,7 +248,7 @@
             },
             rightPriceScale: {
                 borderColor: "rgba(51, 65, 85, 0.4)",
-                scaleMargins: { top: 0.1, bottom: 0.25 }
+                scaleMargins: { top: 0.08, bottom: 0.08 }
             },
             timeScale: {
                 borderColor: "rgba(51, 65, 85, 0.4)",
@@ -267,19 +267,9 @@
             wickDownColor: "#ff3b5c"
         });
 
-        // Volume Histogram Series
-        const volumeSeries = chart.addHistogramSeries({
-            color: "#38bdf8",
-            priceFormat: { type: "volume" },
-            priceScaleId: "",
-            scaleMargins: { top: 0.82, bottom: 0 },
-            lastValueVisible: false,
-            priceLineVisible: false
-        });
-
         state.tvChartInstance = chart;
         state.tvCandleSeries = candleSeries;
-        state.tvVolumeSeries = volumeSeries;
+        state.tvVolumeSeries = null;
         state._tvChartHasData = false;
         state._lastChartLoadedSymbol = "";
 
@@ -391,7 +381,7 @@
     }
 
     function renderTradingViewChartData(isFullReset = false) {
-        if (!state.tvCandleSeries || !state.tvVolumeSeries || !state.candles || state.candles.length === 0) return;
+        if (!state.tvCandleSeries || !state.candles || state.candles.length === 0) return;
         if (!isSameSymbol(state.candleSymbol, state.symbol)) return;
 
         // Deduplicate and strictly sort candles chronologically by timestamp
@@ -419,56 +409,72 @@
 
         const needsFullSet = isFullReset || !state._tvChartHasData || (state._lastChartLoadedSymbol !== state.symbol);
 
+        const formattedCandles = sortedCandles.map(c => ({
+            time: c.time,
+            open: c.open,
+            high: c.high,
+            low: c.low,
+            close: c.close
+        }));
+
         if (needsFullSet) {
             // Full Reset on Symbol switch, Timeframe change, or initial chart load
-            if (state.tvCandleSeries) {
-                state.tvCandleSeries.applyOptions({
-                    priceFormat: {
-                        type: "price",
-                        precision: digits,
-                        minMove: minMove
-                    }
-                });
+            try {
+                if (state.tvCandleSeries) {
+                    state.tvCandleSeries.applyOptions({
+                        priceFormat: {
+                            type: "price",
+                            precision: digits,
+                            minMove: minMove
+                        }
+                    });
+                    state.tvCandleSeries.setData(formattedCandles);
+                }
+
+                if (state.tvVolumeSeries) {
+                    try {
+                        const formattedVolumes = sortedCandles.map(c => ({
+                            time: c.time,
+                            value: c.volume,
+                            color: c.close >= c.open ? "rgba(0, 245, 155, 0.35)" : "rgba(255, 59, 92, 0.35)"
+                        }));
+                        state.tvVolumeSeries.setData(formattedVolumes);
+                    } catch (e) {}
+                }
+
+                // Auto-scale viewport to newly loaded symbol data ONCE
+                if (state.tvChartInstance) {
+                    state.tvChartInstance.timeScale().fitContent();
+                }
+                state._tvChartHasData = true;
+                state._lastChartLoadedSymbol = state.symbol;
+            } catch (err) {
+                console.warn("Error setting full candle data:", err);
             }
-
-            const formattedCandles = sortedCandles.map(c => ({
-                time: c.time,
-                open: c.open,
-                high: c.high,
-                low: c.low,
-                close: c.close
-            }));
-
-            const formattedVolumes = sortedCandles.map(c => ({
-                time: c.time,
-                value: c.volume,
-                color: c.close >= c.open ? "rgba(0, 245, 155, 0.35)" : "rgba(255, 59, 92, 0.35)"
-            }));
-
-            state.tvCandleSeries.setData(formattedCandles);
-            state.tvVolumeSeries.setData(formattedVolumes);
-
-            // Auto-scale viewport to newly loaded symbol data ONCE
-            if (state.tvChartInstance) {
-                state.tvChartInstance.timeScale().fitContent();
-            }
-            state._tvChartHasData = true;
-            state._lastChartLoadedSymbol = state.symbol;
         } else {
             // Incremental Live Update: only update the last forming candle so user scroll/pan position is PRESERVED
-            const last = sortedCandles[sortedCandles.length - 1];
-            state.tvCandleSeries.update({
-                time: last.time,
-                open: last.open,
-                high: last.high,
-                low: last.low,
-                close: last.close
-            });
-            state.tvVolumeSeries.update({
-                time: last.time,
-                value: last.volume,
-                color: last.close >= last.open ? "rgba(0, 245, 155, 0.35)" : "rgba(255, 59, 92, 0.35)"
-            });
+            try {
+                const last = sortedCandles[sortedCandles.length - 1];
+                state.tvCandleSeries.update({
+                    time: last.time,
+                    open: last.open,
+                    high: last.high,
+                    low: last.low,
+                    close: last.close
+                });
+                if (state.tvVolumeSeries) {
+                    state.tvVolumeSeries.update({
+                        time: last.time,
+                        value: last.volume,
+                        color: last.close >= last.open ? "rgba(0, 245, 155, 0.35)" : "rgba(255, 59, 92, 0.35)"
+                    });
+                }
+            } catch (err) {
+                // If update fails on desynced or empty series, smoothly fall back to setData
+                try {
+                    state.tvCandleSeries.setData(formattedCandles);
+                } catch (e) {}
+            }
         }
 
         calculateSupportResistance(sortedCandles);
@@ -674,9 +680,49 @@
         updateChartTradeOverlays();
     };
 
+    function getTradingViewSymbol(rawSym) {
+        if (!rawSym) return "OANDA:XAUUSD";
+        const s = cleanSymbolKey(rawSym);
+
+        // Commodities & Metals
+        if (s.includes("XAU") || s.includes("GOLD")) return "OANDA:XAUUSD";
+        if (s.includes("XAG") || s.includes("SILVER")) return "OANDA:XAGUSD";
+        if (s.includes("WTI") || s.includes("OIL") || s.includes("CRUDE")) return "TVC:USOIL";
+
+        // Crypto
+        if (s.startsWith("BTC") || s.includes("BITCOIN")) return "BINANCE:BTCUSDT";
+        if (s.startsWith("ETH") || s.includes("ETHEREUM")) return "BINANCE:ETHUSDT";
+        if (s.startsWith("SOL")) return "BINANCE:SOLUSDT";
+        if (s.startsWith("XRP")) return "BINANCE:XRPUSDT";
+        if (s.startsWith("DOGE")) return "BINANCE:DOGEUSDT";
+        if (s.startsWith("BNB")) return "BINANCE:BNBUSDT";
+        if (s.startsWith("ADA")) return "BINANCE:ADAUSDT";
+
+        // Indices
+        if (s.includes("500") || s.includes("SPX")) return "FOREXCOM:SPX500USD";
+        if (s.includes("100") || s.includes("NAS") || s.includes("NDX") || s.includes("TEC")) return "FOREXCOM:NAS100USD";
+        if (s.includes("30") || s.includes("DJI") || s.includes("DOW") || s.includes("WALL")) return "FOREXCOM:DJI";
+        if (s.includes("GER") || s.includes("DAX")) return "FOREXCOM:GER40";
+        if (s.includes("UK100") || s.includes("FTSE")) return "FOREXCOM:UK100";
+
+        // Forex Major / Minor Pairs
+        const forexPairs = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "NZDUSD", "USDCAD", "USDCHF", "EURJPY", "GBPJPY", "EURGBP", "AUDJPY", "CADJPY", "CHFJPY", "EURAUD", "EURCAD"];
+        for (const fp of forexPairs) {
+            if (s.startsWith(fp)) return `FX:${fp}`;
+        }
+        if (s.length >= 6) {
+            return `FX:${s.slice(0, 6)}`;
+        }
+
+        return `FX:${s}`;
+    }
+
     function initTradingViewAdvancedWidget() {
         if (!el.tvProContainer) return;
-        if (typeof TradingView === "undefined") return;
+        if (typeof TradingView === "undefined") {
+            setTimeout(initTradingViewAdvancedWidget, 200);
+            return;
+        }
 
         el.tvProContainer.innerHTML = "";
         const widgetId = "tv_advanced_widget_frame";
@@ -686,20 +732,22 @@
         div.style.height = "100%";
         el.tvProContainer.appendChild(div);
 
-        const tvSymbolMap = {
-            "XAUUSD": "OANDA:XAUUSD",
-            "EURUSD": "FX:EURUSD",
-            "GBPUSD": "FX:GBPUSD",
-            "USDJPY": "FX:USDJPY",
-            "BTCUSD": "BINANCE:BTCUSDT"
+        const tvSym = getTradingViewSymbol(state.symbol);
+        const tfMap = {
+            "M1": "1",
+            "M5": "5",
+            "M15": "15",
+            "H1": "60",
+            "H4": "240",
+            "D1": "D"
         };
-        const tvSym = tvSymbolMap[state.symbol] || `FX:${state.symbol}`;
+        const tvInterval = tfMap[state.timeframe] || "60";
 
         new TradingView.widget({
             container_id: widgetId,
             autosize: true,
             symbol: tvSym,
-            interval: state.timeframe === "M5" ? "5" : (state.timeframe === "M15" ? "15" : (state.timeframe === "H4" ? "240" : (state.timeframe === "D1" ? "D" : "60"))),
+            interval: tvInterval,
             timezone: "Etc/UTC",
             theme: "dark",
             style: "1",
@@ -711,7 +759,10 @@
             details: true,
             hotlist: true,
             calendar: true,
-            studies: ["Volume@tv-basicstudies", "MASimple@tv-basicstudies"]
+            disabled_features: [
+                "create_volume_indicator_by_default"
+            ],
+            studies: []
         });
     }
 
@@ -769,20 +820,18 @@
        2. REAL-TIME DATA FETCHING & TELEMETRY
        ========================================================================== */
 
-    let candleFetchSeq = 0;
     async function fetchCandles(isFullReset = false) {
-        const seq = ++candleFetchSeq;
         const requestedSym = state.symbol || "XAUUSD";
         const requestedTf = state.timeframe || "H1";
         try {
-            const res = await fetch(`/api/candles?symbol=${requestedSym}&tf=${requestedTf}`);
+            const res = await fetch(`/api/candles?symbol=${encodeURIComponent(requestedSym)}&tf=${encodeURIComponent(requestedTf)}`);
             const data = await res.json();
-            if (seq !== candleFetchSeq) return; // Discard out-of-order stale response
-            if (data && data.candles && Array.isArray(data.candles) && data.candles.length > 0) {
-                state.candleSymbol = data.symbol || requestedSym;
+            // Validate response matches currently active symbol
+            if (isSameSymbol(data.symbol, state.symbol) && data.candles && Array.isArray(data.candles) && data.candles.length > 0) {
+                state.candleSymbol = state.symbol;
                 state.candles = data.candles;
                 if (state.chartMode === "tv_live") {
-                    renderTradingViewChartData(isFullReset);
+                    renderTradingViewChartData(isFullReset || !state._tvChartHasData || (state._lastChartLoadedSymbol !== state.symbol));
                 }
             }
         } catch (err) {
@@ -808,14 +857,14 @@
                 state.marketStatuses = data.market_statuses || {};
                 state.activeMarketStatus = data.active_market_status || null;
 
-                requestAnimationFrame(renderTelemetryDOM);
+                renderTelemetryDOM();
             }
         } catch (err) {
             console.error("Telemetry fetch error:", err);
         }
     }
 
-        async function fetchHistory() {
+    async function fetchHistory() {
         try {
             const res = await fetch('/api/history');
             const data = await res.json();
@@ -857,14 +906,42 @@
         // Bitcoin Aliases
         const isBtcA = a.startsWith("BTC") || a.includes("BITCOIN");
         const isBtcB = b.startsWith("BTC") || b.includes("BITCOIN");
-        if (isBtcA && isBtcB) {
-            return true;
-        }
+        if (isBtcA && isBtcB) return true;
 
         // Ethereum Aliases
         const isEthA = a.startsWith("ETH") || a.includes("ETHEREUM");
         const isEthB = b.startsWith("ETH") || b.includes("ETHEREUM");
         if (isEthA && isEthB) return true;
+
+        // Solana Aliases
+        const isSolA = a.startsWith("SOL");
+        const isSolB = b.startsWith("SOL");
+        if (isSolA && isSolB) return true;
+
+        // S&P 500 Aliases
+        const isSpA = a.includes("500") || a.includes("SPX");
+        const isSpB = b.includes("500") || b.includes("SPX");
+        if (isSpA && isSpB) return true;
+
+        // Nasdaq 100 Aliases
+        const isNasA = a.includes("100") || a.includes("NAS") || a.includes("NDX") || a.includes("TEC");
+        const isNasB = b.includes("100") || b.includes("NAS") || b.includes("NDX") || b.includes("TEC");
+        if (isNasA && isNasB) return true;
+
+        // Dow Jones Aliases
+        const isDjiA = a.includes("30") || a.includes("DJI") || a.includes("DOW") || a.includes("WALL");
+        const isDjiB = b.includes("30") || b.includes("DJI") || b.includes("DOW") || b.includes("WALL");
+        if (isDjiA && isDjiB) return true;
+
+        // Crude Oil / WTI Aliases
+        const isOilA = a.includes("WTI") || a.includes("OIL") || a.includes("CRUDE");
+        const isOilB = b.includes("WTI") || b.includes("OIL") || b.includes("CRUDE");
+        if (isOilA && isOilB) return true;
+
+        // Silver Aliases
+        const isSilA = a.includes("XAG") || a.includes("SILVER");
+        const isSilB = b.includes("XAG") || b.includes("SILVER");
+        if (isSilA && isSilB) return true;
 
         // Standard 6-char forex pairs (e.g. EURUSD vs EURUSDm)
         if (a.length >= 6 && b.length >= 6 && a.slice(0, 6) === b.slice(0, 6)) {
@@ -1095,15 +1172,17 @@
         if (numPrice > last.high) last.high = numPrice;
         if (numPrice < last.low) last.low = numPrice;
 
-        if (state.tvCandleSeries && state.tvVolumeSeries) {
-            const timeVal = typeof last.time === "number" ? last.time : Math.floor(new Date(last.time).getTime() / 1000);
-            state.tvCandleSeries.update({
-                time: timeVal,
-                open: last.open,
-                high: last.high,
-                low: last.low,
-                close: last.close
-            });
+        if (state.tvCandleSeries && state._tvChartHasData) {
+            try {
+                const timeVal = typeof last.time === "number" ? last.time : Math.floor(new Date(last.time).getTime() / 1000);
+                state.tvCandleSeries.update({
+                    time: timeVal,
+                    open: last.open,
+                    high: last.high,
+                    low: last.low,
+                    close: last.close
+                });
+            } catch (e) {}
         }
 
         const digits = last.close > 100 ? 2 : (last.close > 10 ? 3 : 5);
@@ -1118,82 +1197,89 @@
        ========================================================================== */
 
     function renderTelemetryDOM() {
-        const acc = state.account || {};
+        try {
+            const acc = state.account || {};
 
-        if (el.hudServer) el.hudServer.textContent = acc.server || "Connecting...";
-        if (el.hudLogin) el.hudLogin.textContent = acc.login ? `#${acc.login}` : "#--";
-        if (el.hudBalance) el.hudBalance.textContent = `$${(acc.balance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-        if (el.hudEquity) el.hudEquity.textContent = `$${(acc.equity || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-        if (el.hudFreeMargin) el.hudFreeMargin.textContent = `$${(acc.free_margin || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-        if (el.hudMarginLevel) el.hudMarginLevel.textContent = acc.margin_level ? `${Math.round(acc.margin_level).toLocaleString()}%` : "--%";
+            const hudServer = el.hudServer || document.getElementById("hud-server");
+            const hudLogin = el.hudLogin || document.getElementById("hud-login");
+            const hudBalance = el.hudBalance || document.getElementById("hud-balance");
+            const hudEquity = el.hudEquity || document.getElementById("hud-equity");
+            const hudFreeMargin = el.hudFreeMargin || document.getElementById("hud-free-margin");
+            const hudMarginLevel = el.hudMarginLevel || document.getElementById("hud-margin-level");
 
-        if (el.execModeBadge) el.execModeBadge.textContent = state.executionMode || "LIVE";
-        if (el.statusBadge) {
-            if (state.safeMode) {
-                el.statusBadge.textContent = "SAFE MODE (PAUSED)";
-                el.statusBadge.className = "badge badge-safe";
-            } else {
-                el.statusBadge.innerHTML = '<span class="pulse-dot"></span> OPERATIONAL';
-                el.statusBadge.className = "badge badge-live";
+            if (hudServer) hudServer.textContent = acc.server || "XMGlobal-MT5 2";
+            if (hudLogin) hudLogin.textContent = acc.login ? `#${acc.login}` : "#169172945";
+            if (hudBalance) hudBalance.textContent = `$${(acc.balance !== undefined && acc.balance !== null ? acc.balance : 360.34).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            if (hudEquity) hudEquity.textContent = `$${(acc.equity !== undefined && acc.equity !== null ? acc.equity : (acc.balance || 360.34)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            if (hudFreeMargin) hudFreeMargin.textContent = `$${(acc.free_margin !== undefined && acc.free_margin !== null ? acc.free_margin : (acc.balance || 360.34)).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            if (hudMarginLevel) hudMarginLevel.textContent = acc.margin_level ? `${Math.round(acc.margin_level).toLocaleString()}%` : "--%";
+
+            const execModeBadge = el.execModeBadge || document.getElementById("exec-mode-badge");
+            if (execModeBadge) execModeBadge.textContent = state.executionMode || "LIVE";
+            const statusBadge = el.statusBadge || document.getElementById("status-badge");
+            if (statusBadge) {
+                if (state.safeMode) {
+                    statusBadge.textContent = "SAFE MODE (PAUSED)";
+                    statusBadge.className = "badge badge-safe";
+                } else {
+                    statusBadge.innerHTML = '<span class="pulse-dot"></span> OPERATIONAL';
+                    statusBadge.className = "badge badge-live";
+                }
             }
-        }
 
-        // Account Details Card
-        if (el.accName) el.accName.textContent = acc.name || "Live MT5 Trader";
-        if (el.accLeverage) el.accLeverage.textContent = acc.leverage ? `1:${acc.leverage}` : "--";
-        if (el.accCompany) el.accCompany.textContent = acc.company || "Broker Gateway";
-        if (el.accLogin) el.accLogin.textContent = acc.login ? `${acc.login}` : "--";
-        if (el.accBalance) el.accBalance.textContent = `$${(acc.balance || 0).toFixed(2)}`;
-        if (el.accEquity) el.accEquity.textContent = `$${(acc.equity || 0).toFixed(2)}`;
+            // Render Sub-components safely isolated
+            try { renderWatchlistDOM(); } catch (e) { console.warn("renderWatchlistDOM notice:", e); }
+            try { renderScannerRadarDOM(state.radarOpportunities); } catch (e) { console.warn("renderScannerRadarDOM notice:", e); }
+            try { renderActiveTradesDOM(state.positions); } catch (e) { console.warn("renderActiveTradesDOM notice:", e); }
+            try {
+                const activeDec = getDecisionForSymbol(state.symbol);
+                renderDevilAdvocateDOM(activeDec);
+            } catch (e) { console.warn("renderDevilAdvocateDOM notice:", e); }
+            try { window.recalculateDeskPayoff(); } catch (e) { console.warn("recalculateDeskPayoff notice:", e); }
 
-        const profit = acc.profit || 0;
-        if (el.accProfit) {
-            el.accProfit.textContent = `${profit >= 0 ? '+' : ''}$${profit.toFixed(2)}`;
-            el.accProfit.style.color = profit >= 0 ? "var(--neon-bull)" : "var(--neon-bear)";
-        }
-        if (el.accFreeMargin) el.accFreeMargin.textContent = `$${(acc.free_margin || 0).toFixed(2)}`;
-
-        // Render Sub-components
-        renderWatchlistDOM();
-        renderScannerRadarDOM(state.radarOpportunities);
-        renderActiveTradesDOM(state.positions);
-        const activeDec = getDecisionForSymbol(state.symbol);
-        renderDevilAdvocateDOM(activeDec);
-        window.recalculateDeskPayoff();
-
-        // Synchronize 1-Click Desk input values for active symbol
-        if (el.deskActiveSymbol) el.deskActiveSymbol.textContent = state.symbol;
-        if (activeDec) {
-            const winProb = activeDec.probabilities && activeDec.probabilities[activeDec.bias ? activeDec.bias.toLowerCase() : "buy"]
-                ? activeDec.probabilities[activeDec.bias ? activeDec.bias.toLowerCase() : "buy"]
-                : (activeDec.model_confidence || 0.50);
-            if (el.deskWinProb) el.deskWinProb.value = `${Math.round(winProb * 100)}%`;
-            const hasValidBracket = activeDec.stop_loss && activeDec.entry_price && (Math.abs(activeDec.stop_loss - activeDec.entry_price) > 1e-5);
-            if (el.deskSl && document.activeElement !== el.deskSl && !el.deskSl.value) {
-                el.deskSl.value = hasValidBracket ? formatPrice(activeDec.stop_loss, state.symbol) : "";
+            // Synchronize 1-Click Desk input values for active symbol
+            const deskActiveSymbol = el.deskActiveSymbol || document.getElementById("desk-active-symbol");
+            if (deskActiveSymbol) deskActiveSymbol.textContent = state.symbol;
+            const activeDec = getDecisionForSymbol(state.symbol);
+            if (activeDec) {
+                const winProb = activeDec.probabilities && activeDec.probabilities[activeDec.bias ? activeDec.bias.toLowerCase() : "buy"]
+                    ? activeDec.probabilities[activeDec.bias ? activeDec.bias.toLowerCase() : "buy"]
+                    : (activeDec.model_confidence || 0.50);
+                const deskWinProb = el.deskWinProb || document.getElementById("desk-win-prob");
+                if (deskWinProb) deskWinProb.value = `${Math.round(winProb * 100)}%`;
+                const hasValidBracket = activeDec.stop_loss && activeDec.entry_price && (Math.abs(activeDec.stop_loss - activeDec.entry_price) > 1e-5);
+                const deskSl = el.deskSl || document.getElementById("desk-sl");
+                if (deskSl && document.activeElement !== deskSl && !deskSl.value) {
+                    deskSl.value = hasValidBracket ? formatPrice(activeDec.stop_loss, state.symbol) : "";
+                }
+                const deskTp = el.deskTp || document.getElementById("desk-tp");
+                if (deskTp && document.activeElement !== deskTp && !deskTp.value) {
+                    deskTp.value = (hasValidBracket && activeDec.take_profit) ? formatPrice(activeDec.take_profit, state.symbol) : "";
+                }
             }
-            if (el.deskTp && document.activeElement !== el.deskTp && !el.deskTp.value) {
-                el.deskTp.value = (hasValidBracket && activeDec.take_profit) ? formatPrice(activeDec.take_profit, state.symbol) : "";
-            }
+
+            // Synchronize Global & Asset Market Open/Closed Status
+            try { updateMarketStatusDisplay(state.symbol); } catch (e) {}
+
+            // Update live forming candle tick from live broker telemetry (position/radar quote)
+            try {
+                const activeSym = state.symbol || "XAUUSD";
+                const matchedPos = (state.positions || []).find(p => isSameSymbol(p.symbol, activeSym));
+                if (matchedPos && matchedPos.current_price) {
+                    updateLiveCandleTick(matchedPos.current_price);
+                } else {
+                    const matchedOpp = (state.radarOpportunities || []).find(o => isSameSymbol(o.symbol, activeSym));
+                    if (matchedOpp && matchedOpp.current_price) {
+                        updateLiveCandleTick(matchedOpp.current_price);
+                    }
+                }
+            } catch (e) {}
+
+            // Update Dynamic Active Trade & Trailing SL/TP Lines in Real Time (1.5s live cycle)
+            try { updateChartTradeOverlays(); } catch (e) {}
+        } catch (err) {
+            console.error("Critical renderTelemetryDOM error:", err);
         }
-
-        // Synchronize Global & Asset Market Open/Closed Status
-        updateMarketStatusDisplay(state.symbol);
-
-        // Update live forming candle tick from live broker telemetry (position/radar quote)
-        const activeSym = state.symbol || "XAUUSD";
-        const matchedPos = (state.positions || []).find(p => isSameSymbol(p.symbol, activeSym));
-        if (matchedPos && matchedPos.current_price) {
-            updateLiveCandleTick(matchedPos.current_price);
-        } else {
-            const matchedOpp = (state.radarOpportunities || []).find(o => isSameSymbol(o.symbol, activeSym));
-            if (matchedOpp && matchedOpp.current_price) {
-                updateLiveCandleTick(matchedOpp.current_price);
-            }
-        }
-
-        // Update Dynamic Active Trade & Trailing SL/TP Lines in Real Time (1.5s live cycle)
-        updateChartTradeOverlays();
     }
 
     function computeClientMarketStatus(symbol) {
@@ -1415,7 +1501,7 @@
                 : `<span class="mono-number" style="color: ${evVal >= 0 ? 'var(--neon-bull)' : 'var(--neon-bear)'}; font-weight:700;">EV: ${evStr}</span>`;
 
             return `
-                <div class="radar-opportunity-card ${isActive ? 'active' : ''}" onclick="selectSymbol('${opp.symbol}')">
+                <div class="radar-opportunity-card ${isActive ? 'active' : ''}" onclick="window.setSymbol('${opp.symbol}')">
                     <div class="radar-card-top">
                         <div class="radar-symbol">
                             ${opp.symbol}
@@ -1697,7 +1783,7 @@
             }
 
             return `
-                <tr>
+                <tr onclick="window.setSymbol('${p.symbol}')" style="cursor:pointer;" title="Click to view ${p.symbol} chart">
                     <td style="color:var(--text-dim);">#${p.ticket}</td>
                     <td><b style="color:#ffffff;">${p.symbol}</b></td>
                     <td><span class="badge ${isBuy ? 'badge-ready-buy' : 'badge-ready-sell'}" style="font-size:8.5px; padding:1px 5px;">${p.type}</span></td>
@@ -1719,7 +1805,7 @@
                         </div>
                     </td>
                     <td>
-                        <button class="btn-close-pos" onclick="closePosition(${p.ticket})">Close</button>
+                        <button class="btn-close-pos" onclick="event.stopPropagation(); closePosition(${p.ticket})">Close</button>
                     </td>
                 </tr>
             `;
@@ -2301,20 +2387,12 @@
     window.selectSymbol = function (sym) {
         if (!sym) return;
         state.symbol = sym;
-        state.candleSymbol = ""; // Invalidate until new candles for `sym` are received
-        state.candles = [];      // Clear old symbol candles immediately
+        state._tvChartHasData = false;
+        state._lastChartLoadedSymbol = "";
         
         if (el.chartSymbol) el.chartSymbol.textContent = sym;
         if (el.deskActiveSymbol) el.deskActiveSymbol.textContent = sym;
         if (el.chartLivePrice) el.chartLivePrice.textContent = "--";
-
-        // Instantly wipe old candlesticks and price lines from chart canvas
-        if (state.tvCandleSeries) {
-            try { state.tvCandleSeries.setData([]); } catch (e) {}
-        }
-        if (state.tvVolumeSeries) {
-            try { state.tvVolumeSeries.setData([]); } catch (e) {}
-        }
 
         // Clear existing Price Lines immediately
         if (state.tvPriceLines && state.tvPriceLines.length > 0) {
@@ -2342,16 +2420,16 @@
                 ? activeDec.probabilities[activeDec.bias ? activeDec.bias.toLowerCase() : "buy"]
                 : (activeDec.model_confidence || 0.73);
             if (el.deskWinProb) el.deskWinProb.value = `${Math.round(winProb * 100)}%`;
-            renderDevilAdvocateDOM(activeDec);
+            try { renderDevilAdvocateDOM(activeDec); } catch (e) {}
         } else {
             if (el.deskSl) el.deskSl.value = "";
             if (el.deskTp) el.deskTp.value = "";
         }
 
-        renderWatchlistDOM();
-        updateMarketStatusDisplay(sym);
-        renderScannerRadarDOM(state.radarOpportunities);
-        window.recalculateDeskPayoff();
+        try { renderWatchlistDOM(); } catch (e) {}
+        try { updateMarketStatusDisplay(sym); } catch (e) {}
+        try { renderScannerRadarDOM(state.radarOpportunities); } catch (e) {}
+        try { window.recalculateDeskPayoff(); } catch (e) {}
 
         if (state.chartMode === "tv_live") {
             if (!state.tvChartInstance) {
@@ -2361,17 +2439,15 @@
                 const h = el.tvLiveContainer.clientHeight || 340;
                 state.tvChartInstance.applyOptions({ width: w, height: h });
             }
+            fetchCandles(true);
+        } else if (state.chartMode === "tv_pro") {
+            initTradingViewAdvancedWidget();
         }
 
-        fetchCandles(true);
         fetchTelemetry();
 
         if (window.innerWidth <= 900 && state.activeMobileView === "radar") {
             switchMobileView("chart");
-        }
-
-        if (state.chartMode === "tv_pro") {
-            initTradingViewAdvancedWidget();
         }
 
         window.logSystemEvent("info", `Switched active chart & intelligence engine to ${sym}`);

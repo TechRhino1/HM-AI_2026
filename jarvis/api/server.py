@@ -256,7 +256,7 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                 from jarvis.india.india_service import INDIA_SERVICE
                 if not INDIA_SERVICE.handle_request(path, query, self):
                     self.send_error(404, f"India API {path} not found")
-            elif path == "/api/telemetry_state":
+            elif path in ("/api/telemetry_state", "/api/telemetry"):
                 snap = self.state_manager.get_state_snapshot()
                 if not snap.get("account"):
                     acc = self.mt5_client.get_account_snapshot()
@@ -409,9 +409,49 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
             elif path == "/api/history":
                 try:
                     from jarvis.data.database import TRADE_DB
-                    trades = TRADE_DB.fetch_recent_trades(limit=15)
-                    self._send_json(trades)
+                    trades = TRADE_DB.fetch_recent_trades(limit=50) or []
+                    
+                    # Also fetch live closed deals from MT5 broker account
+                    if hasattr(self, "mt5_client") and self.mt5_client and getattr(self.mt5_client, "is_connected", False):
+                        import MetaTrader5 as _mt5
+                        from datetime import datetime, timedelta, timezone
+                        mt5_deals = _mt5.history_deals_get(datetime.now() - timedelta(days=60), datetime.now())
+                        if mt5_deals:
+                            existing_tickets = {int(t.get("ticket", 0)) for t in trades if t.get("ticket")}
+                            for d in reversed(list(mt5_deals)):
+                                if getattr(d, "entry", 0) == 1 and getattr(d, "symbol", ""):
+                                    if int(d.ticket) not in existing_tickets:
+                                        sym_clean = str(d.symbol).replace("#", "").replace(".m", "").replace("m", "")
+                                        comm = str(getattr(d, "comment", "") or "")
+                                        if "[sl" in comm.lower():
+                                            exec_tag = "SL EXIT"
+                                        elif "[tp" in comm.lower():
+                                            exec_tag = "TP EXIT"
+                                        elif "jarvis" in comm.lower():
+                                            exec_tag = "BOT (AI)"
+                                        else:
+                                            exec_tag = "MT5 BROKER"
+                                            
+                                        # In MT5: entry 1 with type 1 (SELL) closed a BUY position; type 0 (BUY) closed a SELL position
+                                        orig_action = "BUY" if d.type == 1 else ("SELL" if d.type == 0 else "CLOSE")
+                                        trades.append({
+                                            "id": int(d.ticket),
+                                            "ticket": int(d.ticket),
+                                            "symbol": sym_clean,
+                                            "action": orig_action,
+                                            "type": orig_action,
+                                            "entry_price": float(d.price),
+                                            "volume": float(d.volume),
+                                            "timestamp": datetime.fromtimestamp(d.time, tz=timezone.utc).isoformat(),
+                                            "executor": exec_tag,
+                                            "realized_pnl": round(float(d.profit), 2),
+                                            "profit": round(float(d.profit), 2)
+                                        })
+                    # Sort newest first
+                    trades.sort(key=lambda x: str(x.get("timestamp", "")), reverse=True)
+                    self._send_json(trades[:50])
                 except Exception as e:
+                    logger.error(f"Error fetching trade history: {e}")
                     self._send_json({"error": str(e)})
             elif path == "/api/news":
                 # Real-Time Institutional Macro News & Economic Calendar
@@ -479,6 +519,17 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": str(e)}, status_code=500)
             except Exception:
                 pass
+
+    def do_OPTIONS(self):
+        try:
+            self.send_response(200)
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
+            self.send_header("Access-Control-Allow-Headers", "*")
+            self.send_header("Access-Control-Max-Age", "86400")
+            self.end_headers()
+        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+            pass
 
     def do_POST(self):
         parsed = urlparse(self.path)
@@ -682,9 +733,10 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
             self.send_response(status_code)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(payload)))
-            cors_origin = os.environ.get("JARVIS_CORS_ORIGIN", "")
-            if cors_origin:
-                self.send_header("Access-Control-Allow-Origin", cors_origin)
+            cors_origin = os.environ.get("JARVIS_CORS_ORIGIN", "*")
+            self.send_header("Access-Control-Allow-Origin", cors_origin)
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE")
+            self.send_header("Access-Control-Allow-Headers", "*")
             if cookies:
                 for c in cookies:
                     if c:
