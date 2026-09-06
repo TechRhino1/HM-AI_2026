@@ -27,6 +27,7 @@ from jarvis.learning.online_ml_predictor import OnlineMLPredictor
 from jarvis.market.news import GLOBAL_NEWS_ENGINE
 from jarvis.data.symbol_registry import resolve as resolve_symbol
 from jarvis.risk.account_tier import is_micro_account, get_effective_min_ev
+from jarvis.intelligence.symbol_profile_config import get_symbol_profile_config
 
 from jarvis.learning.fractional_diff import FractionalDifferentiationTransformer
 from jarvis.learning.ensemble_bandit import EnsembleStrategyBandit
@@ -222,7 +223,8 @@ class DecisionEngine:
         calibrated_win_p: float = 0.0,
         risk_dist: float = 0.0,
         planned_risk_dollars: float = 0.0,
-        strategy: str = ""
+        strategy: str = "",
+        of_res: Optional[Dict[str, Any]] = None
     ) -> TradeQualityGateResult:
         is_micro_mode = is_micro_account(account_balance)
         effective_min_ev = get_effective_min_ev(account_balance, planned_risk_dollars)
@@ -357,6 +359,8 @@ class DecisionEngine:
 
         if is_index_asset:
             min_score = max(min_score, 72.0)
+        elif "BTC" in sym_name:
+            min_score = max(min_score, 78.0)
 
         # 4. Macro MTF Confluence Guard
         mtf_align = getattr(context, "mtf_alignment", {})
@@ -514,14 +518,32 @@ class DecisionEngine:
         # 12. High-Beta Crypto (SOLUSD) Confluence Guard
         sol_confluence_valid = True
         if "SOL" in sym_name:
-            if confluence_count < 2 or ai_score < 72.0:
+            if confluence_count < 2 or ai_score < 60.0:
                 sol_confluence_valid = False
 
         # 13. US30 Industrial Index Confluence Guard
         us30_confluence_valid = True
         if "US30" in sym_name:
-            if confluence_count < 2 or ai_score < 74.0:
+            if confluence_count < 2 or ai_score < 70.0:
                 us30_confluence_valid = False
+
+        # 14. Institutional Order Flow Alignment Guard (Strictly preserves Gold)
+        order_flow_aligned = True
+        if of_res and not is_gold:
+            if of_res.get("institutional_activity", False) and of_res.get("signal") not in ("NEUTRAL", tentative_bias):
+                order_flow_aligned = False
+            trap = of_res.get("absorption_trap")
+            if trap == "BUYER_ABSORPTION_TRAP" and tentative_bias == "BUY":
+                order_flow_aligned = False
+            elif trap == "SELLER_ABSORPTION_TRAP" and tentative_bias == "SELL":
+                order_flow_aligned = False
+
+        # 15. Strategy Viability Guard (Strictly preserves Gold)
+        strategy_viable = True
+        if strategy and not is_gold:
+            cfg = get_symbol_profile_config(sym_name)
+            if strategy in cfg.banned_strategies:
+                strategy_viable = False
 
         # Institutional Quality Gate Matrix
         regime_viable = regime.primary_regime != MarketRegime.EVENT_RISK
@@ -534,6 +556,7 @@ class DecisionEngine:
             "Drawdown Safety Guard": current_drawdown_pct <= 10.0,
             "Regime Viability": regime_viable,
             "Directional Bias": tentative_bias in ["BUY", "SELL"],
+            "Strategy Viable": strategy_viable,
             "Risk/Reward >= 1.5": rr_ratio >= min_rr,
             "Positive Expected Value": ev > 0 and ev >= effective_min_ev,
             "Spread Protection": spread <= max_spread and not context.volatility.is_excessive_spread,
@@ -544,6 +567,7 @@ class DecisionEngine:
             "Premium/Discount Alignment": premium_discount_valid,
             "No Active Macro Shock": regime.primary_regime != MarketRegime.EVENT_RISK,
             "Order Flow Momentum": abs(context.momentum.trend_score) >= 10 or context.structure.bos or context.liquidity.sweep_detected,
+            "Order Flow Alignment": order_flow_aligned,
             "Macro MTF Alignment": not mtf_counter_trend,
             "Trend Not Exhausted": not is_exhausted,
             "No Order Flow Absorption Trap": not is_of_trap,
@@ -617,10 +641,10 @@ class DecisionEngine:
             
             if of_res["institutional_activity"] and of_res["signal"] == tentative_bias:
                 ai_score = min(100.0, ai_score + (of_res["strength"] * 10.0))
-                logger.info(f"[{context.symbol}] Institutional Order Flow aligns with {tentative_bias}! Boosting AI score to {ai_score:.1f}")
+                logger.debug(f"[{context.symbol}] Institutional Order Flow aligns with {tentative_bias}! Boosting AI score to {ai_score:.1f}")
             elif of_res["institutional_activity"] and of_res["signal"] != "NEUTRAL":
                 ai_score = max(0.0, ai_score - (of_res["strength"] * 10.0))
-                logger.warning(f"[{context.symbol}] Institutional Order Flow opposes {tentative_bias}! Penalizing AI score to {ai_score:.1f}")
+                logger.debug(f"[{context.symbol}] Institutional Order Flow opposes {tentative_bias}! Penalizing AI score to {ai_score:.1f}")
 
         final_win_p, loss_p, ev, hypotheses, calibrated_win_p = self._compute_blended_probability(
             context, regime, analyst_reports, devil_report, tentative_bias, rr_ratio, risk_dist, account_balance, risk_per_trade_pct
@@ -905,7 +929,7 @@ class DecisionEngine:
             premium_discount_valid=premium_discount_valid, account_balance=account_balance,
             current_drawdown_pct=current_drawdown_pct, tentative_bias=tentative_bias,
             calibrated_win_p=calibrated_win_p, risk_dist=risk_dist, planned_risk_dollars=planned_risk_dollars,
-            strategy=best_strategy
+            strategy=best_strategy, of_res=of_res
         )
         
         from jarvis.market.sessions import SessionEngine

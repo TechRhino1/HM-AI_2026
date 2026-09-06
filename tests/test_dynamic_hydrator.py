@@ -144,8 +144,11 @@ class TestDynamicMarketDataHydrator(unittest.TestCase):
 
     def test_cache_hit_latency(self):
         """Validates that cached profile lookups execute in < 0.1ms."""
+        self.hydrator._cache_ttl_sec = 600.0
         # Prime cache
         self.hydrator.get_profile("AAPL", market="US")
+        with self.hydrator._cache_lock:
+            self.hydrator._profile_cache_time["US:AAPL"] = time.time()
 
         t0 = time.perf_counter()
         n_iters = 5000

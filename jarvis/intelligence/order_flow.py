@@ -54,10 +54,10 @@ class InstitutionalVolumeOrderFlowEngine:
         absorption_trap = None
         if is_bullish and latest_delta < (-0.20 * current_vol) and is_institutional_vol:
             absorption_trap = "SELLER_ABSORPTION_TRAP"
-            logger.warning(f"⚠️ Order Flow: SELLER_ABSORPTION_TRAP detected! Bullish candle with negative delta ({latest_delta:.1f}).")
+            logger.debug(f"Order Flow: SELLER_ABSORPTION_TRAP detected! Bullish candle with negative delta ({latest_delta:.1f}).")
         elif (not is_bullish) and latest_delta > (0.20 * current_vol) and is_institutional_vol:
             absorption_trap = "BUYER_ABSORPTION_TRAP"
-            logger.warning(f"⚠️ Order Flow: BUYER_ABSORPTION_TRAP detected! Bearish candle with positive delta (+{latest_delta:.1f}).")
+            logger.debug(f"Order Flow: BUYER_ABSORPTION_TRAP detected! Bearish candle with positive delta (+{latest_delta:.1f}).")
 
         signal = 'NEUTRAL'
         strength = 0.0

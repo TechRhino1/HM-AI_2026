@@ -107,7 +107,7 @@ class SessionEngine:
         elif dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         # Core institutional trend liquidity hours: 16:00 to 19:59 UTC (11:00 AM - 3:00 PM EST)
-        # Avoids opening bell volatility traps (15:00 UTC / 9:30 AM EST) and closing bell imbalance whipsaws (20:00 UTC / 4:00 PM EST)
+        # Avoids opening bell volatility traps (13:00-15:00 UTC) and closing bell imbalance whipsaws (20:00 UTC)
         return dt.weekday() < 5 and (16 <= dt.hour <= 19)
 
     @staticmethod
