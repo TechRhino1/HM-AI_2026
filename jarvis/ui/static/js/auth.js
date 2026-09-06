@@ -313,6 +313,8 @@
                     errEl.textContent = res.error || "Invalid username or password";
                     errEl.style.display = "block";
                 }
+            }
+        }
     };
 
     // Global token getter helper
