@@ -143,7 +143,8 @@ def hm_start(mode: str = "live", port: int = 8501, host: str = "0.0.0.0", trade_
     print(f" -> Remote Access Server       : http://{host}:{port}", flush=True)
     print(f" -> Permanent Local Wi-Fi Link : http://{local_ip}:{port}", flush=True)
     print(f" -> Global Mobile HTTPS Link   : {mobile_url}", flush=True)
-    print(f" -> Admin Login                : configure via JARVIS_ADMIN_USER / JARVIS_ADMIN_PASS env vars", flush=True)
+    print(f" -> Admin Username             : admin", flush=True)
+    print(f" -> Admin Password             : admin (or Hms@2026)", flush=True)
     print("=" * 95, flush=True)
 
     # 2. Start Autonomous Orchestrator

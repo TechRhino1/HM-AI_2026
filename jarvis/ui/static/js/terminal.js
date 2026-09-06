@@ -2964,12 +2964,43 @@
     });
 
     window.getAuthToken = function() {
-        return localStorage.getItem("jarvis_auth_token") || "";
+        if (window.HM_AUTH && typeof window.HM_AUTH.getToken === "function") {
+            return window.HM_AUTH.getToken();
+        }
+        let token = "";
+        try { token = localStorage.getItem("jarvis_auth_token") || ""; } catch (e) {}
+        if (!token) {
+            try { token = sessionStorage.getItem("jarvis_auth_token") || ""; } catch (e) {}
+        }
+        if (!token && typeof document !== "undefined" && document.cookie) {
+            try {
+                const match = document.cookie.match(/(?:^|; )jarvis_auth_token=([^;]*)/);
+                if (match) token = decodeURIComponent(match[1]);
+            } catch (e) {}
+        }
+        return token;
+    };
+
+    window.toggleRemotePasswordVisibility = function() {
+        const passEl = document.getElementById("login-password");
+        if (passEl) {
+            passEl.type = passEl.type === "password" ? "text" : "password";
+        }
     };
 
     window.checkRemoteAuth = async function() {
-        const token = getAuthToken();
+        const token = window.getAuthToken();
         const modal = document.getElementById("remote-login-modal");
+
+        // Pre-fill remembered username
+        const userEl = document.getElementById("login-username");
+        if (userEl && !userEl.value) {
+            try {
+                const rem = localStorage.getItem("jarvis_remembered_user") || "";
+                if (rem) userEl.value = rem;
+            } catch (e) {}
+        }
+
         if (!token) {
             if (modal) modal.style.display = "flex";
             return false;
@@ -2979,12 +3010,25 @@
                 method: "POST",
                 headers: { "Authorization": `Bearer ${token}` }
             });
+            if (res.status === 401) {
+                if (window.HM_AUTH) window.HM_AUTH.clearSession();
+                if (modal) modal.style.display = "flex";
+                return false;
+            }
             const data = await res.json();
             if (data && data.valid) {
+                if (window.HM_AUTH && data.user) {
+                    window.HM_AUTH.updateHeaderUI(data.user);
+                }
                 if (modal) modal.style.display = "none";
                 return true;
             }
-        } catch (e) {}
+        } catch (e) {
+            // Transient network error (e.g. cloud tunnel reconnect) — preserve session
+            console.warn("checkRemoteAuth transient network notice:", e);
+            if (modal) modal.style.display = "none";
+            return true;
+        }
         if (modal) modal.style.display = "flex";
         return false;
     };
@@ -2993,17 +3037,24 @@
         if (event) event.preventDefault();
         const userEl = document.getElementById("login-username");
         const passEl = document.getElementById("login-password");
+        const rememberEl = document.getElementById("login-remember-me");
         const user = userEl ? userEl.value.trim() : "";
         const pass = passEl ? passEl.value.trim() : "";
         const errMsg = document.getElementById("login-error-msg");
         const modal = document.getElementById("remote-login-modal");
+        const submitBtn = event && event.target ? event.target.querySelector("button[type=submit]") : null;
 
         if (!user || !pass) {
             if (errMsg) {
-                errMsg.textContent = "Please enter your username and password";
+                errMsg.textContent = "Please enter both username and password";
                 errMsg.style.display = "block";
             }
             return;
+        }
+
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = "AUTHENTICATING...";
         }
 
         try {
@@ -3013,17 +3064,48 @@
                 body: JSON.stringify({ username: user, password: pass })
             });
             const data = await res.json();
-            if (data && data.token) {
-                localStorage.setItem("jarvis_auth_token", data.token);
-                document.cookie = "jarvis_auth_token=" + data.token + "; path=/; max-age=86400";
+
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = "UNLOCK REMOTE TERMINAL ➔";
+            }
+
+            if (res.ok && data && data.token) {
+                // Multi-storage persistence via HM_AUTH
+                if (window.HM_AUTH) {
+                    window.HM_AUTH.saveSession(data);
+                } else {
+                    try { localStorage.setItem("jarvis_auth_token", data.token); } catch (e) {}
+                    try { sessionStorage.setItem("jarvis_auth_token", data.token); } catch (e) {}
+                    try { document.cookie = "jarvis_auth_token=" + encodeURIComponent(data.token) + "; path=/; max-age=2592000; SameSite=Lax"; } catch (e) {}
+                }
+
+                if (!rememberEl || rememberEl.checked) {
+                    try { localStorage.setItem("jarvis_remembered_user", user); } catch (e) {}
+                }
+
                 if (errMsg) errMsg.style.display = "none";
                 if (modal) modal.style.display = "none";
                 fetchTelemetry();
                 fetchHistory();
+                if (typeof fetchRadar === "function") fetchRadar(state.tradeStyle);
                 return;
+            } else {
+                if (errMsg) {
+                    errMsg.textContent = data.error || "Invalid username or password";
+                    errMsg.style.display = "block";
+                }
             }
-        } catch (e) {}
-        if (errMsg) errMsg.style.display = "block";
+        } catch (e) {
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.textContent = "UNLOCK REMOTE TERMINAL ➔";
+            }
+            if (errMsg) {
+                errMsg.textContent = "Network error connecting to authentication server";
+                errMsg.style.display = "block";
+            }
+        }
     };
 
 

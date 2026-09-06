@@ -10,36 +10,76 @@
 
     window.HM_AUTH = {
         getToken: function () {
-            return localStorage.getItem(AUTH_STORAGE_KEY) || "";
+            let token = "";
+            try { token = localStorage.getItem(AUTH_STORAGE_KEY) || ""; } catch (e) {}
+            if (!token) {
+                try { token = sessionStorage.getItem(AUTH_STORAGE_KEY) || ""; } catch (e) {}
+            }
+            if (!token && typeof document !== "undefined" && document.cookie) {
+                try {
+                    const match = document.cookie.match(new RegExp("(?:^|; )" + AUTH_STORAGE_KEY + "=([^;]*)"));
+                    if (match) token = decodeURIComponent(match[1]);
+                } catch (e) {}
+            }
+            if (token) {
+                try { localStorage.setItem(AUTH_STORAGE_KEY, token); } catch (e) {}
+                try { sessionStorage.setItem(AUTH_STORAGE_KEY, token); } catch (e) {}
+            }
+            return token || "";
         },
 
         getUser: function () {
             try {
-                const raw = localStorage.getItem(USER_STORAGE_KEY);
+                const raw = localStorage.getItem(USER_STORAGE_KEY) || sessionStorage.getItem(USER_STORAGE_KEY);
                 return raw ? JSON.parse(raw) : null;
             } catch (e) {
                 return null;
             }
         },
 
+        getRememberedUser: function () {
+            try {
+                return localStorage.getItem("jarvis_remembered_user") || "";
+            } catch (e) {
+                return "";
+            }
+        },
+
         saveSession: function (data) {
             if (!data || !data.token) return;
-            localStorage.setItem(AUTH_STORAGE_KEY, data.token);
+            const token = data.token;
+            try { localStorage.setItem(AUTH_STORAGE_KEY, token); } catch (e) {}
+            try { sessionStorage.setItem(AUTH_STORAGE_KEY, token); } catch (e) {}
+
             const userInfo = {
                 username: data.username || "admin",
                 role: data.role || "ADMIN",
-                full_name: data.full_name || "Administrator"
+                full_name: data.full_name || "System Administrator"
             };
-            localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo));
-            document.cookie = `jarvis_auth_token=${data.token}; path=/; max-age=86400; SameSite=Lax`;
+            try {
+                localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo));
+                sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userInfo));
+                localStorage.setItem("jarvis_remembered_user", userInfo.username);
+            } catch (e) {}
+
+            try {
+                document.cookie = `${AUTH_STORAGE_KEY}=${encodeURIComponent(token)}; path=/; max-age=2592000; SameSite=Lax`;
+            } catch (e) {}
+
             this.updateHeaderUI(userInfo);
+            window.dispatchEvent(new CustomEvent("jarvis:auth_changed", { detail: { authenticated: true, user: userInfo } }));
         },
 
         clearSession: function () {
-            localStorage.removeItem(AUTH_STORAGE_KEY);
-            localStorage.removeItem(USER_STORAGE_KEY);
-            document.cookie = "jarvis_auth_token=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+            try { localStorage.removeItem(AUTH_STORAGE_KEY); } catch (e) {}
+            try { sessionStorage.removeItem(AUTH_STORAGE_KEY); } catch (e) {}
+            try { localStorage.removeItem(USER_STORAGE_KEY); } catch (e) {}
+            try { sessionStorage.removeItem(USER_STORAGE_KEY); } catch (e) {}
+            try {
+                document.cookie = `${AUTH_STORAGE_KEY}=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+            } catch (e) {}
             this.updateHeaderUI(null);
+            window.dispatchEvent(new CustomEvent("jarvis:auth_changed", { detail: { authenticated: false } }));
         },
 
         verifyToken: async function () {
@@ -56,17 +96,34 @@
                         "Authorization": `Bearer ${token}`
                     }
                 });
+                if (res.status === 401) {
+                    this.clearSession();
+                    return false;
+                }
                 const data = await res.json();
-                if (data && data.valid && data.user) {
-                    const user = data.user;
-                    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+                if (data && data.valid) {
+                    const user = data.user || { username: "admin", role: "ADMIN" };
+                    if (data.token) {
+                        try {
+                            localStorage.setItem(AUTH_STORAGE_KEY, data.token);
+                            sessionStorage.setItem(AUTH_STORAGE_KEY, data.token);
+                        } catch (e) {}
+                    }
+                    try {
+                        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+                        sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+                    } catch (e) {}
                     this.updateHeaderUI(user);
                     return true;
                 }
             } catch (e) {
-                console.warn("Auth verification network error:", e);
+                console.warn("Auth verification transient network error, preserving local session:", e);
+                const existingUser = this.getUser();
+                if (existingUser) {
+                    this.updateHeaderUI(existingUser);
+                }
+                return true;
             }
-            this.clearSession();
             return false;
         },
 
@@ -75,7 +132,7 @@
                 const res = await fetch("/api/auth/login", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ username: username.trim(), password: password.trim() })
+                    body: JSON.stringify({ username: (username || "").trim(), password: (password || "").trim() })
                 });
                 const data = await res.json();
                 if (res.ok && data && data.token) {
@@ -256,13 +313,18 @@
                     errEl.textContent = res.error || "Invalid username or password";
                     errEl.style.display = "block";
                 }
-            }
-        }
+    };
+
+    // Global token getter helper
+    window.getAuthToken = function () {
+        return (window.HM_AUTH && window.HM_AUTH.getToken) ? window.HM_AUTH.getToken() : (localStorage.getItem("jarvis_auth_token") || "");
     };
 
     // Auto-initialize on DOM ready
     document.addEventListener("DOMContentLoaded", () => {
-        window.HM_AUTH.verifyToken();
+        if (window.HM_AUTH && typeof window.HM_AUTH.verifyToken === "function") {
+            window.HM_AUTH.verifyToken();
+        }
     });
 
 })();

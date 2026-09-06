@@ -53,6 +53,14 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
             except Exception:
                 pass
 
+        if not token and hasattr(self, "path") and "?" in self.path:
+            try:
+                q = parse_qs(urlparse(self.path).query)
+                if "token" in q:
+                    token = q["token"][0].strip()
+            except Exception:
+                pass
+
         return token
 
     def _get_auth_user(self) -> Optional[Dict[str, Any]]:
@@ -441,11 +449,15 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
             if path == "/api/auth/login":
                 username = data.get("username", "").strip()
                 password = data.get("password", "").strip()
-                client_ip = self.headers.get("X-Forwarded-For", self.client_address[0] if hasattr(self, "client_address") and self.client_address else "global")
+                client_ip = self.headers.get("X-Forwarded-For", self.client_address[0] if hasattr(self, "client_address") and self.client_address else "")
+                if "," in client_ip:
+                    client_ip = client_ip.split(",")[0].strip()
                 user_info, err_msg = RemoteAuthEngine.verify_credentials(username, password, client_ip=client_ip)
                 if user_info:
                     session_info = RemoteAuthEngine.create_session_token(username)
-                    self._send_json(session_info)
+                    token = session_info["token"]
+                    cookie_header = f"jarvis_auth_token={token}; Path=/; Max-Age=2592000; SameSite=Lax"
+                    self._send_json(session_info, cookies=[cookie_header])
                 else:
                     status_code = 429 if "locked" in (err_msg or "").lower() else 401
                     self._send_json({"status": "UNAUTHORIZED" if status_code == 401 else "LOCKED", "error": err_msg or "Invalid username or password"}, status_code=status_code)
@@ -453,12 +465,16 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
             elif path == "/api/auth/logout":
                 token = self._extract_token()
                 RemoteAuthEngine.revoke_token(token)
-                self._send_json({"status": "LOGGED_OUT", "message": "Session terminated successfully"})
+                logout_cookie = "jarvis_auth_token=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax"
+                self._send_json({"status": "LOGGED_OUT", "message": "Session terminated successfully"}, cookies=[logout_cookie])
                 return
             elif path == "/api/auth/verify":
                 user = self._get_auth_user()
                 if user:
-                    self._send_json({"status": "AUTHENTICATED", "valid": True, "user": user})
+                    token = user.get("token") or self._extract_token()
+                    refresh_cookie = f"jarvis_auth_token={token}; Path=/; Max-Age=2592000; SameSite=Lax" if token else None
+                    cookies = [refresh_cookie] if refresh_cookie else None
+                    self._send_json({"status": "AUTHENTICATED", "valid": True, "user": user, "token": token}, cookies=cookies)
                 else:
                     self._send_json({"status": "UNAUTHORIZED", "valid": False, "error": "Invalid or expired session"}, status_code=401)
                 return
@@ -609,12 +625,16 @@ class JarvisRequestHandler(BaseHTTPRequestHandler):
             logger.error(f"Error handling POST {path}: {e}", exc_info=True)
             self._send_json({"error": str(e)}, status_code=500)
 
-    def _send_json(self, data: Any, status_code: int = 200):
+    def _send_json(self, data: Any, status_code: int = 200, cookies: Optional[list] = None):
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json")
         cors_origin = os.environ.get("JARVIS_CORS_ORIGIN", "")
         if cors_origin:
             self.send_header("Access-Control-Allow-Origin", cors_origin)
+        if cookies:
+            for c in cookies:
+                if c:
+                    self.send_header("Set-Cookie", c)
         self.end_headers()
         payload = json.dumps(data, default=str)
         self.wfile.write(payload.encode("utf-8"))

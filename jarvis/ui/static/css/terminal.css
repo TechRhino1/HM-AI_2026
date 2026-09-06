@@ -545,9 +545,12 @@ header.terminal-hud {
     display: flex;
     align-items: center;
     justify-content: center;
-    flex: 1;
+    flex: 1 1 auto;
     min-width: 0;
-    padding: 0 8px;
+    max-width: fit-content;
+    margin: 0 auto;
+    padding: 0 10px;
+    overflow: hidden;
 }
 
 .hud-telemetry-pill {
@@ -559,6 +562,8 @@ header.terminal-hud {
     border-radius: 7px;
     padding: 3px 12px;
     max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
     box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);
     user-select: none;
 }
@@ -2746,6 +2751,17 @@ header.terminal-hud {
 /* ==========================================================================
    RESPONSIVE MEDIA QUERIES (DESKTOP, TABLET & MOBILE VIEWPORTS)
    ========================================================================== */
+
+/* 0. STANDARD DESKTOPS & LAPTOPS (<= 1550px) */
+@media (max-width: 1550px) {
+    .hide-medium {
+        display: none !important;
+    }
+    .hud-telemetry-pill {
+        gap: 8px;
+        padding: 3px 9px;
+    }
+}
 
 /* 1. LARGE LAPTOPS & COMPACT DESKTOPS (1025px - 1280px) */
 @media (max-width: 1280px) {
