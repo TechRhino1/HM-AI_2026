@@ -39,10 +39,13 @@ logging.basicConfig(
 logger = logging.getLogger("HM_START")
 
 _TUNNEL_STATE = {
-    "url": "establishing...",
+    "serveo_url": "https://hm2026.serveousercontent.com",
+    "serveo_status": "CONNECTING",
+    "cloudflare_url": "establishing...",
+    "cloudflare_status": "STARTING",
+    "url": "https://hm2026.serveousercontent.com",
     "status": "STARTING",
-    "provider": "None",
-    "proc": None
+    "provider": "Dual Tunnel (Serveo + Cloudflare)"
 }
 
 def get_local_wifi_ip():
@@ -80,20 +83,6 @@ def find_cloudflared_binary():
             return p
     return None
 
-def _cleanup_stale_processes():
-    """Safely terminates previously tracked tunnel subprocesses."""
-    proc = _TUNNEL_STATE.get("proc")
-    if proc:
-        try:
-            proc.terminate()
-            proc.wait(timeout=2.0)
-        except Exception:
-            try:
-                proc.kill()
-            except Exception:
-                pass
-        _TUNNEL_STATE["proc"] = None
-
 def _save_active_tunnel_url(url: str, provider: str = ""):
     try:
         target = os.path.join(BASE_DIR, "active_tunnel_url.txt")
@@ -102,63 +91,24 @@ def _save_active_tunnel_url(url: str, provider: str = ""):
     except Exception:
         pass
 
-def _start_background_tunnel(port: int = 8501):
-    """
-    Starts persistent authenticated HTTPS mobile tunnel with automatic multi-provider fallback.
-    Priority 1: Cloudflare Tunnel (trycloudflare.com) — zero drops, CDN-accelerated, sub-second latency.
-    Priority 2: localhost.run (SSH tunnel with aggressive keepalive).
-    Priority 3: pinggy.io (SSH tunnel over port 443).
-    Priority 4: serveo.net (SSH tunnel).
-    """
-    _cleanup_stale_processes()
-    key_path = os.path.expanduser("~/.ssh/id_ed25519")
-    local_ip = get_local_wifi_ip()
-
-    cloudflared_bin = find_cloudflared_binary()
-
-    providers = []
-    if cloudflared_bin:
-        providers.append(("Cloudflare Tunnel", [cloudflared_bin, "tunnel", "--url", f"http://127.0.0.1:{port}"]))
-
-    providers.append(("localhost.run", [
+def _serveo_worker(port: int = 8501, custom_subdomain: str = "hm2026"):
+    """Dedicated persistent worker for https://hm2026.serveousercontent.com with auto-reconnect."""
+    cmd = [
         "ssh", "-o", "StrictHostKeyChecking=no",
         "-o", "ServerAliveInterval=10",
         "-o", "ServerAliveCountMax=3",
         "-o", "TCPKeepAlive=yes",
         "-o", "ExitOnForwardFailure=yes",
-        "-R", f"80:127.0.0.1:{port}",
-        "nokey@localhost.run"
-    ]))
-
-    providers.append(("pinggy.io", [
-        "ssh", "-o", "StrictHostKeyChecking=no",
-        "-o", "ServerAliveInterval=10",
-        "-o", "ServerAliveCountMax=3",
-        "-o", "TCPKeepAlive=yes",
-        "-o", "ExitOnForwardFailure=yes",
-        "-p", "443",
-        "-R0:127.0.0.1:{port}",
-        "a.pinggy.io"
-    ]))
-
-    providers.append(("serveo.net", [
-        "ssh", "-o", "StrictHostKeyChecking=no",
-        "-o", "ServerAliveInterval=10",
-        "-o", "ServerAliveCountMax=3",
-        "-o", "TCPKeepAlive=yes",
-        "-o", "ExitOnForwardFailure=yes",
-        "-R", f"80:127.0.0.1:{port}",
+        "-R", f"{custom_subdomain}:80:127.0.0.1:{port}",
         "serveo.net"
-    ]))
+    ]
+    key_path = os.path.expanduser("~/.ssh/id_ed25519")
+    if os.path.exists(key_path):
+        cmd = [cmd[0], "-i", key_path] + cmd[1:]
 
-    p_idx = 0
     while True:
-        p_name, cmd = providers[p_idx % len(providers)]
-        if "ssh" in cmd[0] and os.path.exists(key_path) and "-i" not in cmd:
-            cmd = [cmd[0], "-i", key_path] + cmd[1:]
-
         try:
-            logger.info(f"Establishing high-speed mobile HTTPS tunnel via {p_name}...")
+            logger.info(f"Connecting Custom Subdomain HTTPS via serveo.net ({custom_subdomain})...")
             proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
@@ -167,99 +117,91 @@ def _start_background_tunnel(port: int = 8501):
                 encoding="utf-8",
                 errors="replace"
             )
-            _TUNNEL_STATE["proc"] = proc
-            _TUNNEL_STATE["status"] = "INITIALIZING"
-            _TUNNEL_STATE["provider"] = p_name
-
-            url_found = False
-            start_t = time.time()
-
-            while time.time() - start_t < 25:
+            for _ in range(40):
                 line = proc.stdout.readline()
                 if not line:
                     if proc.poll() is not None:
                         break
                     time.sleep(0.1)
                     continue
-
-                clean_line = line.strip()
-
-                # 1. Cloudflare Tunnel regex
-                if "trycloudflare.com" in clean_line:
-                    m = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", clean_line)
-                    if m:
-                        url = m.group(0)
-                        _TUNNEL_STATE["url"] = url
-                        _TUNNEL_STATE["status"] = "CONNECTED"
-                        _save_active_tunnel_url(url, p_name)
-                        url_found = True
-                        break
-
-                # 2. localhost.run parsing
-                elif "tunneled with tls termination," in clean_line:
-                    parts = clean_line.split("tunneled with tls termination,")
-                    if len(parts) > 1:
-                        url = parts[1].strip()
-                        _TUNNEL_STATE["url"] = url
-                        _TUNNEL_STATE["status"] = "CONNECTED"
-                        _save_active_tunnel_url(url, p_name)
-                        url_found = True
-                        break
-
-                # 3. pinggy.io regex
-                elif "pinggy.link" in clean_line:
-                    m = re.search(r"https?://[a-zA-Z0-9-]+\.a\.free\.pinggy\.link", clean_line)
-                    if m:
-                        url = m.group(0).replace("http://", "https://")
-                        _TUNNEL_STATE["url"] = url
-                        _TUNNEL_STATE["status"] = "CONNECTED"
-                        _save_active_tunnel_url(url, p_name)
-                        url_found = True
-                        break
-
-                # 4. serveo.net parsing
-                elif "Forwarding HTTP traffic from" in clean_line:
-                    url = clean_line.split("Forwarding HTTP traffic from")[1].strip()
-                    _TUNNEL_STATE["url"] = url
-                    _TUNNEL_STATE["status"] = "CONNECTED"
-                    _save_active_tunnel_url(url, p_name)
-                    url_found = True
+                if "Forwarding HTTP traffic from" in line:
+                    _TUNNEL_STATE["serveo_url"] = f"https://{custom_subdomain}.serveousercontent.com"
+                    _TUNNEL_STATE["serveo_status"] = "CONNECTED"
+                    _TUNNEL_STATE["url"] = _TUNNEL_STATE["serveo_url"]
+                    _save_active_tunnel_url(_TUNNEL_STATE["serveo_url"], "serveo")
+                    logger.info(f"Custom Subdomain Active: {_TUNNEL_STATE['serveo_url']}")
+                    print(f"\n[HM_START] 🌐 CUSTOM SUBDOMAIN ACTIVE: {_TUNNEL_STATE['serveo_url']}\n", flush=True)
                     break
-
-            if url_found:
-                active_url = _TUNNEL_STATE["url"]
-                logger.info(f"Mobile HTTPS Tunnel active: {active_url}")
-                print("\n" + "=" * 95, flush=True)
-                print(f" [HM_START] ⚡ SECURE CLOUD MOBILE TUNNEL ACTIVE: {active_url}", flush=True)
-                print(f"  -> Tunnel Provider       : {p_name}", flush=True)
-                print(f"  -> Permanent Local Wi-Fi : http://{local_ip}:{port}", flush=True)
-                print(f"  -> Remote Auth Login     : admin / admin (or Hms@2026)", flush=True)
-                print("=" * 95 + "\n", flush=True)
-
-                # Keep reading output so buffer doesn't fill up
-                while proc.poll() is None:
-                    line = proc.stdout.readline()
-                    if not line and proc.poll() is not None:
-                        break
-                    time.sleep(0.5)
-
-            # If reached here, process exited or timed out
-            ret = proc.poll()
-            logger.warning(f"Tunnel via {p_name} closed (code {ret}). Reconnecting in 2s...")
-            _TUNNEL_STATE["status"] = "RECONNECTING"
-            p_idx += 1
-            time.sleep(2)
-        except Exception as e:
-            _TUNNEL_STATE["status"] = f"ERROR: {e}"
-            logger.error(f"Tunnel error ({p_name}): {e}. Trying next provider...")
-            p_idx += 1
+            while proc.poll() is None:
+                line = proc.stdout.readline()
+                if not line and proc.poll() is not None:
+                    break
+                time.sleep(1.0)
+            logger.warning("Serveo custom tunnel closed. Auto-reconnecting in 3s...")
+            _TUNNEL_STATE["serveo_status"] = "RECONNECTING"
             time.sleep(3)
+        except Exception as e:
+            logger.error(f"Serveo worker error: {e}. Reconnecting in 5s...")
+            time.sleep(5)
+
+def _cloudflare_worker(port: int = 8501):
+    """Dedicated worker for Cloudflare Edge Tunnel with zero drops."""
+    cloudflared_bin = find_cloudflared_binary()
+    if not cloudflared_bin:
+        logger.warning("cloudflared binary not found; skipping secondary edge tunnel.")
+        return
+
+    cmd = [cloudflared_bin, "tunnel", "--url", f"http://127.0.0.1:{port}"]
+    while True:
+        try:
+            logger.info("Connecting High-Speed Cloudflare Edge Tunnel...")
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace"
+            )
+            for _ in range(50):
+                line = proc.stdout.readline()
+                if not line:
+                    if proc.poll() is not None:
+                        break
+                    time.sleep(0.1)
+                    continue
+                m = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", line)
+                if m:
+                    url = m.group(0)
+                    _TUNNEL_STATE["cloudflare_url"] = url
+                    _TUNNEL_STATE["cloudflare_status"] = "CONNECTED"
+                    logger.info(f"Cloudflare Edge Tunnel Active: {url}")
+                    print(f"\n[HM_START] ⚡ CLOUDFLARE EDGE ACTIVE: {url}\n", flush=True)
+                    break
+            while proc.poll() is None:
+                line = proc.stdout.readline()
+                if not line and proc.poll() is not None:
+                    break
+                time.sleep(1.0)
+            logger.warning("Cloudflare edge tunnel closed. Auto-reconnecting in 3s...")
+            _TUNNEL_STATE["cloudflare_status"] = "RECONNECTING"
+            time.sleep(3)
+        except Exception as e:
+            logger.error(f"Cloudflare worker error: {e}. Reconnecting in 5s...")
+            time.sleep(5)
+
+def _start_background_tunnel(port: int = 8501):
+    """Launches both Serveo (custom domain hm2026) and Cloudflare (fast edge) in parallel."""
+    t_serveo = threading.Thread(target=_serveo_worker, args=(port, "hm2026"), daemon=True, name="hm_tunnel_serveo")
+    t_serveo.start()
+
+    t_cf = threading.Thread(target=_cloudflare_worker, args=(port,), daemon=True, name="hm_tunnel_cf")
+    t_cf.start()
 
 def hm_start(mode: str = "live", port: int = 8501, host: str = "0.0.0.0", trade_style: str = "ALL"):
     local_ip = get_local_wifi_ip()
-    mobile_url = _TUNNEL_STATE["url"]
 
-    # 1. Launch Mobile Tunnel Background Worker
+    # 1. Launch Parallel Mobile Tunnels
     tunnel_thread = threading.Thread(target=_start_background_tunnel, args=(port,), daemon=True, name="hm_mobile_tunnel")
     tunnel_thread.start()
 
@@ -270,7 +212,8 @@ def hm_start(mode: str = "live", port: int = 8501, host: str = "0.0.0.0", trade_
     print(f" -> Trade Style                : {trade_style.upper()}", flush=True)
     print(f" -> Remote Access Server       : http://{host}:{port}", flush=True)
     print(f" -> Permanent Local Wi-Fi Link : http://{local_ip}:{port}", flush=True)
-    print(f" -> Global Mobile HTTPS Link   : {mobile_url}", flush=True)
+    print(f" -> Custom Subdomain HTTPS     : https://hm2026.serveousercontent.com", flush=True)
+    print(f" -> High-Speed Cloudflare Edge : establishing...", flush=True)
     print(f" -> Admin Username             : admin", flush=True)
     print(f" -> Admin Password             : admin (or Hms@2026)", flush=True)
     print("=" * 95, flush=True)
